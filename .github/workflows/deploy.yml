@@ -25,6 +25,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # Enables GitHub Pages via the API if it isn't already, so the deploy
+      # step doesn't 404 on a repo where Pages was never turned on.
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
