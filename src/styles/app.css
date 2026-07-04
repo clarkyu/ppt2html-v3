@@ -366,6 +366,11 @@ button { font-family: inherit; }
 .outline__theme { display: flex; align-items: center; gap: 12px; }
 .outline__theme > span { font-size: 13px; color: var(--text-dim); }
 
+/* Intent recap ("我的理解") at the structure step */
+.understand { display: flex; flex-direction: column; gap: 6px; margin: 18px 0 6px; }
+.understand > label { font-size: 13px; font-weight: 650; color: var(--brand); }
+.understand__text { resize: vertical; line-height: 1.5; min-height: 52px; }
+
 .outline__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 
 /* Each row carries a family accent (--fam) driven by its [data-fam]. */

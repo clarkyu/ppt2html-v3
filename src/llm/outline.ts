@@ -3,7 +3,9 @@ import {
   type GenerateOptions,
   type Outline,
   type OutlineSlide,
+  type Section,
   type SlideLayout,
+  type Structure,
   type ThemeName,
   LAYOUTS,
   THEMES,
@@ -16,58 +18,120 @@ import { DECK_SCHEMA_GUIDE, contextBlock } from './prompt'
 const LAYOUT_SET = new Set<string>(LAYOUTS)
 const THEME_SET = new Set<string>(THEMES)
 
-/* ------------------------------ outline ------------------------------ */
+function asStr(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : ''
+}
+function asObj(v: unknown): Record<string, unknown> {
+  return v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
+}
+function coerceLayout(v: unknown, fallback: SlideLayout = 'bullets'): SlideLayout {
+  return typeof v === 'string' && LAYOUT_SET.has(v) ? (v as SlideLayout) : fallback
+}
+function coerceTheme(v: unknown, hint?: ThemeName): ThemeName {
+  return typeof v === 'string' && THEME_SET.has(v) ? (v as ThemeName) : hint ?? 'aurora'
+}
 
-const OUTLINE_SYSTEM = `你是课件结构规划专家。根据主题（及补充信息），先规划一份「幻灯片大纲」，供用户确认后再生成完整课件。
+/* ------------------------- step 1: overall structure ------------------------- */
+
+const STRUCTURE_SYSTEM = `你是课件结构规划专家。这是**第一步**：先规划课件的「整体结构」（分成哪几个部分），供用户确认后，再细化每一页。
+
+严格只输出一个 JSON 对象，不要解释或代码块标记：
+{ "understanding": "一句话还原用户想要的课件：讲给谁、达到什么目的、重点是什么",
+  "title": "课件标题", "subtitle": "副标题",
+  "theme": "aurora|ink|sunrise|forest|noir",
+  "sections": [ { "title": "部分标题", "brief": "这一部分讲什么（一句话）" } ] }
+
+规则：
+1. understanding：用一句话**准确复述用户意图**（结合主题与引导回答），像在向用户确认"你是想要……对吗"。要具体、贴合，不空泛。
+2. sections：把课件分成 **2~5 个循序渐进的部分**，只列**内容部分**（不含封面与结束页），不要展开到每一页。
+3. 部分数量与分享时长匹配：时间越长，部分越多、越细。
+4. title/subtitle 精炼有力；theme 依主题气质选择（科技/商业→aurora 或 noir；人文/教育→ink 或 sunrise；自然/健康→forest）。
+5. 语言与主题保持一致。`
+
+export async function generateStructure(
+  topic: string,
+  opts: GenerateOptions,
+  settings: LlmSettings,
+  signal?: AbortSignal,
+): Promise<Structure> {
+  const user = `${contextBlock(topic, opts)}\n\n请先输出「整体结构」JSON（只列几个部分，不要展开到每一页）。只输出 JSON。`
+  const text = await requestText(STRUCTURE_SYSTEM, user, settings, { signal, maxTokens: 1200 })
+  return normalizeStructure(extractJson(text), topic, opts.theme)
+}
+
+function normalizeStructure(raw: unknown, topic: string, themeHint?: ThemeName): Structure {
+  const o = asObj(raw)
+  const rawSecs = Array.isArray(o.sections) ? o.sections : []
+
+  const sections: Section[] = []
+  for (const item of rawSecs) {
+    const s = asObj(item)
+    const title = asStr(s.title)
+    const brief = asStr(s.brief) || undefined
+    if (!title && !brief) continue
+    sections.push({ title: title || (brief as string), brief: title ? brief : undefined })
+    if (sections.length >= 8) break
+  }
+  if (!sections.length) {
+    sections.push({ title: '背景与概念' }, { title: '核心内容' }, { title: '应用与小结' })
+  }
+
+  const title = asStr(o.title) || topic.slice(0, 40)
+  return {
+    understanding: asStr(o.understanding) || undefined,
+    title,
+    subtitle: asStr(o.subtitle) || undefined,
+    theme: coerceTheme(o.theme, themeHint),
+    sections,
+  }
+}
+
+/* --------------- step 2: page-level outline from confirmed structure --------------- */
+
+const FROM_STRUCTURE_SYSTEM = `你是课件结构规划专家。下面给你一份**用户已确认的整体结构**（若干部分）。这是**第二步**：把它细化成完整的「逐页大纲」，供用户确认后再生成课件。
 
 严格只输出一个 JSON 对象，不要解释或代码块标记：
 { "title": "课件标题", "subtitle": "副标题", "theme": "aurora|ink|sunrise|forest|noir",
   "slides": [ { "layout": "版式", "title": "该页标题", "brief": "一句话说明这页讲什么/要点" } ] }
 
-版式(layout)从下列中选，并**刻意用多样化的版式**：
-cover(封面·第一页) / section(章节分隔) / bullets(要点) / two-col(两栏对照) / big-number(关键数字) / quote(金句) / comparison(对比卡片) / timeline(流程或时间线) / code(代码) / image-text(图文) / end(结束·最后一页)
+版式(layout)取值：cover / section / bullets / two-col / big-number / quote / comparison / timeline / code / image-text / end
 
 规则：
 1. 第一页必须是 cover，最后一页必须是 end。
-2. 共 8~12 页；用 section 把内容分成 2~4 个部分，让讲解有节奏。
-3. 版式必须多样：整份至少用到 4 种不同的内容版式；**不要出现连续超过 2 页的 bullets**；在合适处主动使用 big-number / quote / comparison / timeline / two-col。
-4. brief 用一句话概括该页内容或要点，简短具体。
-5. theme 依主题气质选择（科技/商业→aurora 或 noir；人文/教育→ink 或 sunrise；自然/健康→forest）。
-6. 语言与主题保持一致。`
+2. **严格按给定部分的顺序展开**：每个部分前放一页 section 分隔页，其后是该部分的 2~4 页内容页。
+3. **不要新增、删除或重排部分**；可为每个部分安排合适的内容页数（与分享时长匹配）。
+4. 版式必须多样：整份至少用到 4 种不同的内容版式；**不要连续超过 2 页 bullets**；在合适处主动用 big-number / quote / comparison / timeline / two-col。
+5. brief 用一句话概括该页要点，简短具体。
+6. 沿用给定的 title / subtitle / theme。语言与主题保持一致。`
 
-export async function generateOutline(
+export async function generateOutlineFromStructure(
   topic: string,
   opts: GenerateOptions,
+  structure: Structure,
   settings: LlmSettings,
   signal?: AbortSignal,
 ): Promise<Outline> {
-  const user = `${contextBlock(topic, opts)}\n\n请先输出「大纲」JSON（不是完整课件）。只输出 JSON。`
-  const text = await requestText(OUTLINE_SYSTEM, user, settings, { signal, maxTokens: 2000 })
-  return normalizeOutline(extractJson(text), topic, opts.theme)
-}
-
-function coerceLayout(v: unknown, fallback: SlideLayout = 'bullets'): SlideLayout {
-  return typeof v === 'string' && LAYOUT_SET.has(v) ? (v as SlideLayout) : fallback
-}
-
-function asStr(v: unknown): string {
-  return typeof v === 'string' ? v.trim() : ''
+  const user =
+    `${contextBlock(topic, opts)}\n\n` +
+    `已确认的整体结构（请据此细化为逐页大纲，部分顺序与数量保持一致）：\n${JSON.stringify(structure)}\n\n` +
+    `请输出「逐页大纲」JSON。只输出 JSON。`
+  const text = await requestText(FROM_STRUCTURE_SYSTEM, user, settings, { signal, maxTokens: 2400 })
+  return normalizeOutline(extractJson(text), topic, structure.theme ?? opts.theme)
 }
 
 function normalizeOutline(raw: unknown, topic: string, themeHint?: ThemeName): Outline {
-  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const o = asObj(raw)
   const rawSlides = Array.isArray(o.slides) ? o.slides : []
 
   const slides: OutlineSlide[] = []
   for (const item of rawSlides) {
-    if (!item || typeof item !== 'object') continue
-    const s = item as Record<string, unknown>
+    const s = asObj(item)
     const layout = coerceLayout(s.layout)
     const title = asStr(s.title)
     const brief = asStr(s.brief) || undefined
     if (!title && !brief && layout !== 'end') continue
     slides.push({ layout, title, brief })
-    if (slides.length >= 20) break
+    if (slides.length >= 24) break
   }
 
   const title = asStr(o.title) || slides.find((s) => s.layout === 'cover')?.title || topic.slice(0, 40)
@@ -78,11 +142,15 @@ function normalizeOutline(raw: unknown, topic: string, themeHint?: ThemeName): O
     slides.push({ layout: 'end', title: '谢谢观看' })
   }
 
-  const theme = typeof o.theme === 'string' && THEME_SET.has(o.theme) ? (o.theme as ThemeName) : themeHint ?? 'aurora'
-  return { title, subtitle: asStr(o.subtitle) || undefined, theme, slides }
+  return {
+    title,
+    subtitle: asStr(o.subtitle) || undefined,
+    theme: coerceTheme(o.theme, themeHint),
+    slides,
+  }
 }
 
-/* ----------------------- deck from confirmed outline ----------------------- */
+/* ----------------------- deck from confirmed page outline ----------------------- */
 
 const FROM_OUTLINE_SYSTEM = `${DECK_SCHEMA_GUIDE}
 
