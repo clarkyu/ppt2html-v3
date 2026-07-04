@@ -49,6 +49,14 @@ export function buildUserPrompt(topic: string, opts: GenerateOptions): string {
   if (opts.slideCount) lines.push(`期望页数：约 ${opts.slideCount} 页`)
   if (opts.language) lines.push(`输出语言：${opts.language}`)
   if (opts.theme) lines.push(`指定主题配色：${opts.theme}`)
+
+  if (opts.clarifications?.length) {
+    lines.push('', '用户对引导问题的补充回答（请据此定制内容）：')
+    for (const c of opts.clarifications) {
+      lines.push(`- ${c.question} → ${c.answer}`)
+    }
+  }
+
   lines.push('', '请输出符合上述 schema 的 JSON 课件。只输出 JSON。')
   return lines.join('\n')
 }

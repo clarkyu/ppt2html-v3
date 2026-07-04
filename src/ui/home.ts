@@ -4,7 +4,7 @@ import { listDecks } from '../store/db'
 import { mountThumb } from '../render/preview'
 import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
-import { generateAndPlay } from './generating'
+import { startGuidedGeneration } from './guided'
 import type { GenerateOptions, ThemeName } from '../types'
 
 const EXAMPLES = [
@@ -89,7 +89,7 @@ export function renderHome(view: HTMLElement): () => void {
     tone: toneEl.value || undefined,
   })
 
-  const submit = () => generateAndPlay(topicEl.value, collectOptions())
+  const submit = () => startGuidedGeneration(topicEl.value, collectOptions())
 
   view.querySelector('[data-generate]')!.addEventListener('click', submit)
   view.querySelector('[data-sample]')!.addEventListener('click', () => navigate('#/play/sample'))
