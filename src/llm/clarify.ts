@@ -3,13 +3,14 @@ import type { LlmSettings } from './settings'
 import { requestText } from './client'
 import { extractJson } from './extractJson'
 
-const CLARIFY_SYSTEM = `你是课件需求分析助手。用户给出一个较粗略的主题，你要提出 3~4 个最能澄清需求、显著提升课件质量的**简明**问题，引导用户把需求说清楚。
+const CLARIFY_SYSTEM = `你是课件需求分析助手。用户给出一个较粗略的主题，你只提出 **1~2 个最关键**的问题——问那些最能改变课件方向、缺了就没法动笔的点，其余一律不问。
 
 要求：
-- 每个问题给 2~4 个**简短**的建议选项，方便用户快速点选；用户也可自行补充或跳过。
-- 聚焦这些维度（择要，不要都问）：目标受众及其基础水平、课件目的/使用场景、切入角度或范围侧重、必须覆盖的重点、期望的深浅。
-- 不要问配色、页数、语气（这些已单独设置）。
-- 问题与选项使用与主题相同的语言，尽量口语化、简短。
+- 最多 2 个问题；能用 1 个问清就只问 1 个。
+- 每个问题给 3~4 个**简短**的建议选项，方便一键点选；用户也可自行补充或跳过。
+- 通常最该问的是：**目标受众/基础水平** 与 **切入角度或用途**（二选一或合并）。
+- 不要问配色、页数、语气（已单独设置），也不要问宽泛无用的问题。
+- 问题与选项使用与主题相同的语言，口语化、简短。
 
 严格只输出一个 JSON 对象，不要任何解释或代码块标记：
 { "questions": [ { "question": "问题文本", "options": ["选项1", "选项2", "选项3"] } ] }`
@@ -45,7 +46,7 @@ export async function generateClarifyingQuestions(
       ? o.options.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean).slice(0, 4)
       : undefined
     questions.push({ question, options: options?.length ? options : undefined })
-    if (questions.length >= 4) break
+    if (questions.length >= 2) break
   }
   return questions
 }

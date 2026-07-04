@@ -1,14 +1,14 @@
 import { generateClarifyingQuestions } from '../llm/clarify'
 import { loadSettings, isConfigured } from '../llm/settings'
-import { generateAndPlay } from './generating'
+import { startOutline } from './outline'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { escapeHtml } from '../lib/markdown'
 import type { ClarifyQuestion, Clarification, GenerateOptions } from '../types'
 
 /**
- * Entry point from Home: ask the model a few clarifying questions, let the user
- * answer/skip, then generate the deck with those answers folded in.
+ * Entry point from Home: ask the model 1–2 key clarifying questions, then move
+ * on to the outline step (the answers are folded into outline generation).
  */
 export function startGuidedGeneration(topic: string, opts: GenerateOptions): void {
   const trimmed = topic.trim()
@@ -51,13 +51,13 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
         <h2 class="gen__error">引导问题生成失败</h2>
         <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>
         <div class="gen__actions">
-          <button class="btn btn--ghost" data-skip>跳过，直接生成</button>
+          <button class="btn btn--ghost" data-skip>跳过，直接看大纲</button>
           <button class="btn btn--primary" data-retry>重试</button>
         </div>
       </div>`
     body.querySelector('[data-skip]')!.addEventListener('click', () => {
       close()
-      generateAndPlay(trimmed, opts)
+      startOutline(trimmed, opts)
     })
     body.querySelector('[data-retry]')!.addEventListener('click', () => {
       controller = new AbortController()
@@ -68,17 +68,17 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
   const showQuestions = (questions: ClarifyQuestion[]) => {
     body.innerHTML = `
       <div class="clarify__head">
-        <h2>先聊两句，让课件更贴合你的需求</h2>
-        <p>点选建议或自行补充，答完点「开始生成」——每一项都可留空跳过。</p>
+        <h2>回答 1~2 个关键问题</h2>
+        <p>帮我把课件方向定准——选一选或补充即可，可跳过。下一步你还能确认并编辑大纲。</p>
       </div>
       <div class="clarify__list">
         ${questions.map(renderQuestion).join('')}
       </div>
       <div class="clarify__actions">
-        <button class="btn btn--ghost" data-skip>跳过引导，直接生成</button>
+        <button class="btn btn--ghost" data-skip>跳过，直接看大纲</button>
         <div class="clarify__actions-right">
           <button class="btn btn--ghost" data-cancel>取消</button>
-          <button class="btn btn--primary" data-go>开始生成 →</button>
+          <button class="btn btn--primary" data-go>下一步 →</button>
         </div>
       </div>`
 
@@ -91,12 +91,12 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     body.querySelector('[data-cancel]')!.addEventListener('click', close)
     body.querySelector('[data-skip]')!.addEventListener('click', () => {
       close()
-      generateAndPlay(trimmed, opts)
+      startOutline(trimmed, opts)
     })
     body.querySelector('[data-go]')!.addEventListener('click', () => {
       const clarifications = collectAnswers(body, questions)
       close()
-      generateAndPlay(trimmed, { ...opts, clarifications })
+      startOutline(trimmed, { ...opts, clarifications })
     })
   }
 
@@ -106,9 +106,9 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
       .then((questions) => {
         if (controller.signal.aborted) return
         if (!questions.length) {
-          // Nothing to ask — go straight to generation.
+          // Nothing to ask — go straight to the outline step.
           close()
-          generateAndPlay(trimmed, opts)
+          startOutline(trimmed, opts)
           return
         }
         showQuestions(questions)

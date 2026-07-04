@@ -102,3 +102,19 @@ export interface ClarifyQuestion {
   question: string
   options?: string[]
 }
+
+/** One slide in the pre-generation outline the user reviews and edits. */
+export interface OutlineSlide {
+  layout: SlideLayout
+  title: string
+  /** One-line summary of the slide's intended content. */
+  brief?: string
+}
+
+/** The deck outline shown for confirmation before full generation. */
+export interface Outline {
+  title: string
+  subtitle?: string
+  theme: ThemeName
+  slides: OutlineSlide[]
+}

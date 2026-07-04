@@ -14,12 +14,28 @@ const PROVIDER_HINTS: Record<Provider, { base: string; model: string; note: stri
   },
 }
 
+const PRESETS: Array<{ label: string; provider: Provider; baseUrl: string; model: string }> = [
+  { label: 'DeepSeek', provider: 'openai', baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
+  { label: '通义千问', provider: 'openai', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+  { label: 'Kimi', provider: 'openai', baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
+  { label: 'OpenAI', provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+  { label: 'Claude', provider: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'claude-opus-4-8' },
+]
+
 export function renderSettings(view: HTMLElement): () => void {
   const state: LlmSettings = loadSettings()
 
   view.innerHTML = `
     <div class="section-head"><h2>设置</h2></div>
     <div class="form">
+      <div class="form-group">
+        <label>快速预设</label>
+        <div class="chips" data-presets>
+          ${PRESETS.map((p, i) => `<button type="button" class="chip" data-preset="${i}">${p.label}</button>`).join('')}
+        </div>
+        <div class="hint">一键填好 base URL 与模型；再填入对应服务的 API Key 并保存即可。</div>
+      </div>
+
       <div class="form-group">
         <label>模型服务</label>
         <div class="seg" data-seg>
@@ -81,6 +97,17 @@ export function renderSettings(view: HTMLElement): () => void {
       paint()
     }),
   )
+
+  view.querySelector('[data-presets]')!.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-preset]')
+    if (!btn) return
+    const p = PRESETS[Number(btn.dataset.preset)]
+    state.provider = p.provider
+    state[p.provider].baseUrl = p.baseUrl
+    state[p.provider].model = p.model
+    paint()
+    toast(`已切到 ${p.label}，填好 API Key 后记得保存`)
+  })
   baseEl.addEventListener('input', () => (state[state.provider].baseUrl = baseEl.value))
   keyEl.addEventListener('input', () => (state[state.provider].apiKey = keyEl.value))
   modelEl.addEventListener('input', () => (state[state.provider].model = modelEl.value))
