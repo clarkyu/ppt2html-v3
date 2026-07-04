@@ -45,8 +45,10 @@ export function buildSystemPrompt(): string {
 /** Topic + options + clarification answers, shared by the outline and deck prompts. */
 export function contextBlock(topic: string, opts: GenerateOptions): string {
   const lines: string[] = [`主题：${topic}`]
+  if (opts.understanding) lines.push(`需求理解（请据此还原用户想法）：${opts.understanding}`)
   if (opts.audience) lines.push(`目标听众：${opts.audience}`)
   if (opts.tone) lines.push(`语气风格：${opts.tone}`)
+  if (opts.durationMinutes) lines.push(`分享时长：约 ${opts.durationMinutes} 分钟（据此把控信息量与节奏）`)
   if (opts.slideCount) lines.push(`期望页数：约 ${opts.slideCount} 页`)
   if (opts.language) lines.push(`输出语言：${opts.language}`)
   if (opts.theme) lines.push(`指定主题配色：${opts.theme}`)

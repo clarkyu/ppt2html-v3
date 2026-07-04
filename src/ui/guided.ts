@@ -1,7 +1,7 @@
 import { generateClarifyingQuestions, DEFAULT_QUESTIONS } from '../llm/clarify'
 import { loadSettings, saveSettings, type LlmSettings, type Provider } from '../llm/settings'
 import { MODEL_PRESETS, modelChoicesFor, presetFor } from '../llm/models'
-import { startOutline } from './outline'
+import { startStructure } from './structure'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { escapeHtml } from '../lib/markdown'
@@ -178,7 +178,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
       if (pf.resolved.length) showQuestions(pf.resolved, false)
       else {
         close()
-        startOutline(trimmed, opts)
+        startStructure(trimmed, opts)
       }
       return
     }
@@ -200,14 +200,14 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     body.innerHTML = `
       <div class="clarify__head">
         <h2>回答 1~2 个关键问题</h2>
-        <p>帮我把课件方向定准——选一选或补充即可，可跳过。下一步你还能确认并编辑大纲。</p>
+        <p>帮我把课件方向定准——选一选或补充即可，可跳过。下一步会先跟你确认整体结构。</p>
       </div>
       ${provisional ? `<div class="clarify__loading">正在按主题优化建议…</div>` : ''}
       <div class="clarify__list">
         ${questions.map(renderQuestion).join('')}
       </div>
       <div class="clarify__actions">
-        <button class="btn btn--ghost" data-skip>跳过，直接看大纲</button>
+        <button class="btn btn--ghost" data-skip>跳过，看整体结构</button>
         <div class="clarify__actions-right">
           <button class="btn btn--ghost" data-cancel>取消</button>
           <button class="btn btn--primary" data-go>下一步 →</button>
@@ -227,12 +227,12 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     body.querySelector('[data-cancel]')!.addEventListener('click', close)
     body.querySelector('[data-skip]')!.addEventListener('click', () => {
       close()
-      startOutline(trimmed, opts)
+      startStructure(trimmed, opts)
     })
     body.querySelector('[data-go]')!.addEventListener('click', () => {
       const clarifications = collectAnswers(body, questions)
       close()
-      startOutline(trimmed, { ...opts, clarifications })
+      startStructure(trimmed, { ...opts, clarifications })
     })
   }
 

@@ -91,10 +91,14 @@ export interface GenerateOptions {
   audience?: string
   tone?: string
   slideCount?: number
+  /** Intended talk length in minutes; the page count is estimated from this. */
+  durationMinutes?: number
   language?: string
   theme?: ThemeName
   /** User answers to the AI-generated clarifying questions. */
   clarifications?: Clarification[]
+  /** One-line restatement of the user's intent, confirmed at the structure step. */
+  understanding?: string
 }
 
 /** One AI-generated clarifying question with quick-pick suggestions. */
@@ -117,4 +121,21 @@ export interface Outline {
   subtitle?: string
   theme: ThemeName
   slides: OutlineSlide[]
+}
+
+/** One top-level part/chapter of the deck, confirmed before page-level detailing. */
+export interface Section {
+  title: string
+  /** One-line summary of what this part covers. */
+  brief?: string
+}
+
+/** The high-level structure the user reviews first (parts), before pages. */
+export interface Structure {
+  /** AI's one-line restatement of the user's intent (editable). */
+  understanding?: string
+  title: string
+  subtitle?: string
+  theme: ThemeName
+  sections: Section[]
 }

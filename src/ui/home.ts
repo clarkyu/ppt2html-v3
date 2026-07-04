@@ -5,6 +5,7 @@ import { mountThumb } from '../render/preview'
 import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
 import { startGuidedGeneration } from './guided'
+import { DURATION_OPTIONS, slidesForMinutes } from '../lib/duration'
 import type { GenerateOptions, ThemeName } from '../types'
 
 const EXAMPLES = [
@@ -43,13 +44,9 @@ export function renderHome(view: HTMLElement): () => void {
             ${THEME_OPTIONS.map((o) => `<option value="${o.value}">${o.label}</option>`).join('')}
           </select>
         </label>
-        <label class="field"><span>页数</span>
-          <select class="select" data-count>
-            <option value="">自动</option>
-            <option value="8">约 8 页</option>
-            <option value="10">约 10 页</option>
-            <option value="12">约 12 页</option>
-            <option value="14">约 14 页</option>
+        <label class="field"><span>分享时长</span>
+          <select class="select" data-duration>
+            ${DURATION_OPTIONS.map((o) => `<option value="${o.value}">${o.label}</option>`).join('')}
           </select>
         </label>
         <label class="field"><span>语气</span>
@@ -80,14 +77,18 @@ export function renderHome(view: HTMLElement): () => void {
 
   const topicEl = view.querySelector<HTMLTextAreaElement>('[data-topic]')!
   const themeEl = view.querySelector<HTMLSelectElement>('[data-theme]')!
-  const countEl = view.querySelector<HTMLSelectElement>('[data-count]')!
+  const durationEl = view.querySelector<HTMLSelectElement>('[data-duration]')!
   const toneEl = view.querySelector<HTMLSelectElement>('[data-tone]')!
 
-  const collectOptions = (): GenerateOptions => ({
-    theme: (themeEl.value || undefined) as ThemeName | undefined,
-    slideCount: countEl.value ? Number(countEl.value) : undefined,
-    tone: toneEl.value || undefined,
-  })
+  const collectOptions = (): GenerateOptions => {
+    const minutes = durationEl.value ? Number(durationEl.value) : undefined
+    return {
+      theme: (themeEl.value || undefined) as ThemeName | undefined,
+      durationMinutes: minutes,
+      slideCount: minutes ? slidesForMinutes(minutes) : undefined,
+      tone: toneEl.value || undefined,
+    }
+  }
 
   const submit = () => startGuidedGeneration(topicEl.value, collectOptions())
 
