@@ -1,8 +1,8 @@
 // Estimate a slide count from an intended talk length. Teaching decks run at
-// roughly one slide per ~1.4 minutes; clamp to a sane range.
+// roughly one slide per ~1.3 minutes; clamp to a sane range.
 export function slidesForMinutes(minutes: number): number {
-  const n = Math.round(minutes / 1.4)
-  return Math.max(5, Math.min(32, n))
+  const n = Math.round(minutes / 1.3)
+  return Math.max(5, Math.min(40, n))
 }
 
 export interface DurationOption {

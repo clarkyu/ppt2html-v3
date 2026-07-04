@@ -12,7 +12,7 @@ const PROVIDER_HINTS: Record<Provider, { base: string; model: string; note: stri
   openai: {
     base: 'https://api.openai.com/v1',
     model: 'gpt-4o-mini',
-    note: 'OpenAI 兼容端点。base URL 可改为 DeepSeek、通义千问等兼容服务；模型名填对应服务的模型 ID。',
+    note: 'OpenAI 兼容端点。base URL 可改为 Gemini / DeepSeek / 通义千问 / 智谱 / Grok / Mistral / OpenRouter 等兼容服务；模型名填对应服务的模型 ID。',
   },
 }
 
