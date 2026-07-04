@@ -1,4 +1,6 @@
 import { loadSettings, saveSettings, DEFAULT_SETTINGS, type LlmSettings, type Provider } from '../llm/settings'
+import { MODEL_PRESETS, modelChoicesFor } from '../llm/models'
+import { escapeHtml } from '../lib/markdown'
 import { toast } from '../lib/toast'
 
 const PROVIDER_HINTS: Record<Provider, { base: string; model: string; note: string }> = {
@@ -14,16 +16,12 @@ const PROVIDER_HINTS: Record<Provider, { base: string; model: string; note: stri
   },
 }
 
-const PRESETS: Array<{ label: string; provider: Provider; baseUrl: string; model: string }> = [
-  { label: 'DeepSeek', provider: 'openai', baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
-  { label: '通义千问', provider: 'openai', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
-  { label: 'Kimi', provider: 'openai', baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
-  { label: 'OpenAI', provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-  { label: 'Claude', provider: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'claude-opus-4-8' },
-]
+const CUSTOM_MODEL = '__custom__'
 
 export function renderSettings(view: HTMLElement): () => void {
   const state: LlmSettings = loadSettings()
+  // Whether the model field is in free-text "custom" mode (vs picking from the list).
+  let customModel = false
 
   view.innerHTML = `
     <div class="section-head"><h2>设置</h2></div>
@@ -31,7 +29,7 @@ export function renderSettings(view: HTMLElement): () => void {
       <div class="form-group">
         <label>快速预设</label>
         <div class="chips" data-presets>
-          ${PRESETS.map((p, i) => `<button type="button" class="chip" data-preset="${i}">${p.label}</button>`).join('')}
+          ${MODEL_PRESETS.map((p, i) => `<button type="button" class="chip" data-preset="${i}">${p.label}</button>`).join('')}
         </div>
         <div class="hint">一键填好 base URL 与模型；再填入对应服务的 API Key 并保存即可。</div>
       </div>
@@ -58,7 +56,9 @@ export function renderSettings(view: HTMLElement): () => void {
 
       <div class="form-group">
         <label>模型</label>
-        <input class="form-input" data-model placeholder="">
+        <select class="form-input" data-model-select></select>
+        <input class="form-input" data-model-custom placeholder="输入自定义模型 ID" style="display:none">
+        <div class="hint">从常见模型中选择；如需其它模型请选「自定义…」自行填写。</div>
       </div>
 
       <div class="notice notice--warn">
@@ -77,7 +77,25 @@ export function renderSettings(view: HTMLElement): () => void {
   const noteEl = view.querySelector<HTMLElement>('[data-note]')!
   const baseEl = view.querySelector<HTMLInputElement>('[data-base]')!
   const keyEl = view.querySelector<HTMLInputElement>('[data-key]')!
-  const modelEl = view.querySelector<HTMLInputElement>('[data-model]')!
+  const modelSelect = view.querySelector<HTMLSelectElement>('[data-model-select]')!
+  const modelCustom = view.querySelector<HTMLInputElement>('[data-model-custom]')!
+
+  const rebuildModels = () => {
+    const cfg = state[state.provider]
+    const choices = modelChoicesFor(state.provider, cfg.baseUrl, cfg.model)
+    modelSelect.innerHTML =
+      choices.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('') +
+      `<option value="${CUSTOM_MODEL}">自定义…</option>`
+    if (customModel) {
+      modelSelect.value = CUSTOM_MODEL
+      modelCustom.style.display = ''
+      modelCustom.value = cfg.model
+    } else {
+      if (!cfg.model || !choices.includes(cfg.model)) cfg.model = choices[0]
+      modelSelect.value = cfg.model
+      modelCustom.style.display = 'none'
+    }
+  }
 
   const paint = () => {
     const hint = PROVIDER_HINTS[state.provider]
@@ -87,13 +105,13 @@ export function renderSettings(view: HTMLElement): () => void {
     baseEl.value = cfg.baseUrl
     baseEl.placeholder = hint.base
     keyEl.value = cfg.apiKey
-    modelEl.value = cfg.model
-    modelEl.placeholder = hint.model
+    rebuildModels()
   }
 
   segBtns.forEach((b) =>
     b.addEventListener('click', () => {
       state.provider = b.dataset.provider as Provider
+      customModel = false
       paint()
     }),
   )
@@ -101,16 +119,33 @@ export function renderSettings(view: HTMLElement): () => void {
   view.querySelector('[data-presets]')!.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-preset]')
     if (!btn) return
-    const p = PRESETS[Number(btn.dataset.preset)]
+    const p = MODEL_PRESETS[Number(btn.dataset.preset)]
     state.provider = p.provider
     state[p.provider].baseUrl = p.baseUrl
-    state[p.provider].model = p.model
+    state[p.provider].model = p.models[0]
+    customModel = false
     paint()
     toast(`已切到 ${p.label}，填好 API Key 后记得保存`)
   })
-  baseEl.addEventListener('input', () => (state[state.provider].baseUrl = baseEl.value))
+
+  baseEl.addEventListener('input', () => {
+    state[state.provider].baseUrl = baseEl.value
+    if (!customModel) rebuildModels()
+  })
   keyEl.addEventListener('input', () => (state[state.provider].apiKey = keyEl.value))
-  modelEl.addEventListener('input', () => (state[state.provider].model = modelEl.value))
+  modelSelect.addEventListener('change', () => {
+    if (modelSelect.value === CUSTOM_MODEL) {
+      customModel = true
+      modelCustom.style.display = ''
+      modelCustom.value = state[state.provider].model
+      modelCustom.focus()
+    } else {
+      customModel = false
+      modelCustom.style.display = 'none'
+      state[state.provider].model = modelSelect.value
+    }
+  })
+  modelCustom.addEventListener('input', () => (state[state.provider].model = modelCustom.value))
 
   view.querySelector('[data-save]')!.addEventListener('click', () => {
     // Fall back to placeholder defaults for empty base/model.
@@ -118,6 +153,7 @@ export function renderSettings(view: HTMLElement): () => void {
     if (!state[state.provider].baseUrl.trim()) state[state.provider].baseUrl = hint.base
     if (!state[state.provider].model.trim()) state[state.provider].model = hint.model
     saveSettings(state)
+    customModel = false
     paint()
     toast('设置已保存')
   })
@@ -127,6 +163,7 @@ export function renderSettings(view: HTMLElement): () => void {
     fresh.provider = state.provider
     state.anthropic = fresh.anthropic
     state.openai = fresh.openai
+    customModel = false
     paint()
     toast('已恢复默认（未保存）')
   })
