@@ -82,10 +82,23 @@ export interface DeckSpec {
   slides?: Array<Partial<Slide> & { layout?: string }>
 }
 
+export interface Clarification {
+  question: string
+  answer: string
+}
+
 export interface GenerateOptions {
   audience?: string
   tone?: string
   slideCount?: number
   language?: string
   theme?: ThemeName
+  /** User answers to the AI-generated clarifying questions. */
+  clarifications?: Clarification[]
+}
+
+/** One AI-generated clarifying question with quick-pick suggestions. */
+export interface ClarifyQuestion {
+  question: string
+  options?: string[]
 }

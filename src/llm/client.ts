@@ -18,24 +18,35 @@ export async function generateDeckSpec(
   settings: LlmSettings,
   handlers: GenerateHandlers = {},
 ): Promise<DeckSpec> {
-  const cfg = activeConfig(settings)
-  if (!cfg.apiKey.trim()) {
-    throw new Error('尚未配置 API Key，请先在「设置」中填写。')
-  }
-
-  const system = buildSystemPrompt()
-  const user = buildUserPrompt(topic, opts)
-
-  const text =
-    settings.provider === 'anthropic'
-      ? await streamAnthropic(cfg, system, user, handlers)
-      : await streamOpenAI(cfg, system, user, handlers)
+  requireKey(settings)
+  const text = await streamText(buildSystemPrompt(), buildUserPrompt(topic, opts), settings, handlers)
 
   const spec = extractJson(text) as DeckSpec
   if (!spec || typeof spec !== 'object' || !Array.isArray(spec.slides) || !spec.slides.length) {
     throw new Error('模型返回的内容不是有效的课件结构，请重试。')
   }
   return spec
+}
+
+function requireKey(settings: LlmSettings): void {
+  if (!activeConfig(settings).apiKey.trim()) {
+    throw new Error('尚未配置 API Key，请先在「设置」中填写。')
+  }
+}
+
+/* ----------------------------- streaming ----------------------------- */
+
+/** Stream a chat completion and return the full accumulated text. */
+export async function streamText(
+  system: string,
+  user: string,
+  settings: LlmSettings,
+  handlers: GenerateHandlers = {},
+): Promise<string> {
+  const cfg = activeConfig(settings)
+  return settings.provider === 'anthropic'
+    ? streamAnthropic(cfg, system, user, handlers)
+    : streamOpenAI(cfg, system, user, handlers)
 }
 
 async function streamAnthropic(
@@ -47,12 +58,7 @@ async function streamAnthropic(
   const res = await fetch(joinUrl(cfg.baseUrl, '/v1/messages'), {
     method: 'POST',
     signal: handlers.signal,
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': cfg.apiKey.trim(),
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
+    headers: anthropicHeaders(cfg),
     body: JSON.stringify({
       model: cfg.model,
       max_tokens: MAX_TOKENS,
@@ -80,10 +86,7 @@ async function streamOpenAI(
   const res = await fetch(joinUrl(cfg.baseUrl, '/chat/completions'), {
     method: 'POST',
     signal: handlers.signal,
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${cfg.apiKey.trim()}`,
-    },
+    headers: openaiHeaders(cfg),
     body: JSON.stringify({
       model: cfg.model,
       stream: true,
@@ -100,6 +103,92 @@ async function streamOpenAI(
     const delta = d.choices?.[0]?.delta?.content
     return typeof delta === 'string' ? delta : ''
   })
+}
+
+/* --------------------------- non-streaming --------------------------- */
+
+/** One-shot chat completion (no streaming). Returns the response text. */
+export async function requestText(
+  system: string,
+  user: string,
+  settings: LlmSettings,
+  opts: { signal?: AbortSignal; maxTokens?: number; json?: boolean } = {},
+): Promise<string> {
+  requireKey(settings)
+  const cfg = activeConfig(settings)
+  const maxTokens = opts.maxTokens ?? 1024
+  return settings.provider === 'anthropic'
+    ? requestAnthropic(cfg, system, user, maxTokens, opts.signal)
+    : requestOpenAI(cfg, system, user, opts.json ?? true, opts.signal)
+}
+
+async function requestAnthropic(
+  cfg: ProviderConfig,
+  system: string,
+  user: string,
+  maxTokens: number,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await fetch(joinUrl(cfg.baseUrl, '/v1/messages'), {
+    method: 'POST',
+    signal,
+    headers: anthropicHeaders(cfg),
+    body: JSON.stringify({
+      model: cfg.model,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: 'user', content: user }],
+    }),
+  })
+  if (!res.ok) throw await httpError(res)
+  const data = (await res.json()) as { content?: Array<{ type?: string; text?: string }> }
+  return (data.content ?? [])
+    .filter((b) => b.type === 'text' && typeof b.text === 'string')
+    .map((b) => b.text)
+    .join('')
+}
+
+async function requestOpenAI(
+  cfg: ProviderConfig,
+  system: string,
+  user: string,
+  json: boolean,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await fetch(joinUrl(cfg.baseUrl, '/chat/completions'), {
+    method: 'POST',
+    signal,
+    headers: openaiHeaders(cfg),
+    body: JSON.stringify({
+      model: cfg.model,
+      ...(json ? { response_format: { type: 'json_object' } } : {}),
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+    }),
+  })
+  if (!res.ok) throw await httpError(res)
+  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
+  return data.choices?.[0]?.message?.content ?? ''
+}
+
+/* ------------------------------ helpers ------------------------------ */
+
+function anthropicHeaders(cfg: ProviderConfig): Record<string, string> {
+  return {
+    'content-type': 'application/json',
+    'x-api-key': cfg.apiKey.trim(),
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
+  }
+}
+
+function openaiHeaders(cfg: ProviderConfig): Record<string, string> {
+  return {
+    'content-type': 'application/json',
+    authorization: `Bearer ${cfg.apiKey.trim()}`,
+  }
 }
 
 /** Parse an SSE byte stream, accumulating text via `extract` per data event. */
