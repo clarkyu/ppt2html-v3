@@ -1,0 +1,109 @@
+/* ============================================================
+   Deck themes. Each `.theme-*` sets the palette; `.player` sets
+   shared typography. `--bg` is consumed by the player backdrop.
+   ============================================================ */
+
+.player {
+  --font-display: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: Georgia, "Songti SC", "Noto Serif SC", "Times New Roman", serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo, Consolas, monospace;
+  --pos: #22c55e;
+  --neg: #f04444;
+}
+
+/* ---- Aurora (default): deep space indigo → cyan ---- */
+.theme-aurora {
+  --bg:
+    radial-gradient(1200px 820px at 12% -5%, #1d275a 0%, transparent 58%),
+    radial-gradient(900px 700px at 100% 100%, #123244 0%, transparent 55%),
+    linear-gradient(160deg, #0b1020, #0e1330);
+  --fg: #e8ecff;
+  --fg-strong: #ffffff;
+  --muted: #a7b0d6;
+  --accent: #8b7cff;
+  --accent2: #22d3ee;
+  --accent-grad: linear-gradient(120deg, #8b7cff, #22d3ee);
+  --card: rgba(255, 255, 255, 0.045);
+  --card-border: rgba(255, 255, 255, 0.11);
+  --rule: rgba(255, 255, 255, 0.12);
+  --code-bg: #0c1230;
+  --code-fg: #dbe1f7;
+  --code-inline-bg: rgba(139, 124, 255, 0.16);
+}
+
+/* ---- Ink: light editorial paper ---- */
+.theme-ink {
+  --bg: linear-gradient(180deg, #fcfdff, #eef1f8);
+  --fg: #26304a;
+  --fg-strong: #0b1220;
+  --muted: #5a6478;
+  --accent: #3b5bdb;
+  --accent2: #7048e8;
+  --accent-grad: linear-gradient(120deg, #3b5bdb, #7048e8);
+  --card: #ffffff;
+  --card-border: #e4e7ef;
+  --rule: #e0e4ee;
+  --code-bg: #0f1526;
+  --code-fg: #e6e9f5;
+  --code-inline-bg: rgba(59, 91, 219, 0.1);
+}
+
+/* ---- Sunrise: warm coral & gold on plum ---- */
+.theme-sunrise {
+  --bg:
+    radial-gradient(1000px 760px at 88% 6%, #46203a 0%, transparent 58%),
+    radial-gradient(760px 620px at 5% 100%, #3a1a20 0%, transparent 55%),
+    linear-gradient(160deg, #160c1e, #241030);
+  --fg: #fbeae2;
+  --fg-strong: #ffffff;
+  --muted: #d8b5ac;
+  --accent: #ff7a5c;
+  --accent2: #ffc247;
+  --accent-grad: linear-gradient(120deg, #ff6a5c, #ffb443);
+  --card: rgba(255, 255, 255, 0.05);
+  --card-border: rgba(255, 190, 160, 0.2);
+  --rule: rgba(255, 200, 175, 0.2);
+  --code-bg: #241426;
+  --code-fg: #f6e3d9;
+  --code-inline-bg: rgba(255, 138, 92, 0.16);
+}
+
+/* ---- Forest: calm emerald & lime on deep teal ---- */
+.theme-forest {
+  --bg:
+    radial-gradient(1100px 780px at 16% -5%, #0e5245 0%, transparent 58%),
+    radial-gradient(820px 640px at 100% 100%, #123f22 0%, transparent 55%),
+    linear-gradient(160deg, #06231f, #0a3a30);
+  --fg: #e2f5ee;
+  --fg-strong: #ffffff;
+  --muted: #9ac9bc;
+  --accent: #2dd4a7;
+  --accent2: #a3e635;
+  --accent-grad: linear-gradient(120deg, #10b981, #84cc16);
+  --card: rgba(255, 255, 255, 0.045);
+  --card-border: rgba(160, 240, 210, 0.16);
+  --rule: rgba(160, 240, 210, 0.16);
+  --code-bg: #06271f;
+  --code-fg: #d7f2e7;
+  --code-inline-bg: rgba(45, 212, 167, 0.16);
+}
+
+/* ---- Noir: high-contrast mono + amber ---- */
+.theme-noir {
+  --bg:
+    radial-gradient(900px 640px at 82% -10%, #1d1d24 0%, transparent 58%),
+    linear-gradient(160deg, #0a0a0b, #121216);
+  --fg: #e7e7ea;
+  --fg-strong: #ffffff;
+  --muted: #9a9aa2;
+  --accent: #fbbf24;
+  --accent2: #f59e0b;
+  --accent-grad: linear-gradient(120deg, #fbbf24, #f59e0b);
+  --card: rgba(255, 255, 255, 0.035);
+  --card-border: rgba(255, 255, 255, 0.09);
+  --rule: rgba(255, 255, 255, 0.1);
+  --code-bg: #101013;
+  --code-fg: #ededf0;
+  --code-inline-bg: rgba(251, 191, 36, 0.16);
+}
