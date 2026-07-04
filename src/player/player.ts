@@ -1,0 +1,102 @@
+import Reveal from 'reveal.js'
+import RevealNotes from 'reveal.js/plugin/notes'
+import type { RevealApi } from 'reveal.js'
+import 'reveal.js/reveal.css'
+import '../render/themes.css'
+import '../render/slides.css'
+import './player.css'
+
+import type { Deck } from '../types'
+import { renderDeckSlides } from '../render/renderDeck'
+
+export interface PlayerHandle {
+  reveal: RevealApi
+  root: HTMLElement
+  destroy: () => void
+  toggleOverview: () => void
+  next: () => void
+  prev: () => void
+  getIndices: () => { h: number; v: number }
+  onSlideChange: (cb: (index: number, total: number) => void) => void
+}
+
+const REVEAL_CONFIG = {
+  embedded: false,
+  width: 1280,
+  height: 720,
+  margin: 0.04,
+  minScale: 0.2,
+  maxScale: 2.0,
+  controls: true,
+  controlsTutorial: false,
+  controlsLayout: 'bottom-right' as const,
+  progress: true,
+  slideNumber: 'c/t' as const,
+  hash: false,
+  respondToHashChanges: false,
+  history: false,
+  keyboard: true,
+  overview: true,
+  center: true,
+  touch: true,
+  hideInactiveCursor: true,
+  hideCursorTime: 3000,
+  transition: 'slide' as const,
+  transitionSpeed: 'default' as const,
+  backgroundTransition: 'fade' as const,
+}
+
+/**
+ * Mount a deck into `container` and start reveal.js.
+ * Returns a handle for control + teardown.
+ */
+export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
+  container.innerHTML = ''
+
+  const root = document.createElement('div')
+  root.className = `player theme-${deck.theme}`
+
+  const bg = document.createElement('div')
+  bg.className = 'player__bg'
+  root.appendChild(bg)
+
+  const revealEl = document.createElement('div')
+  revealEl.className = 'reveal deck'
+  const slidesEl = document.createElement('div')
+  slidesEl.className = 'slides'
+  slidesEl.innerHTML = renderDeckSlides(deck)
+  revealEl.appendChild(slidesEl)
+  root.appendChild(revealEl)
+  container.appendChild(root)
+
+  const reveal: RevealApi = new Reveal(revealEl, {
+    ...REVEAL_CONFIG,
+    plugins: [RevealNotes],
+  })
+  void reveal.initialize()
+
+  return {
+    reveal,
+    root,
+    destroy: () => {
+      try {
+        reveal.destroy()
+      } catch {
+        /* reveal may already be torn down */
+      }
+      container.innerHTML = ''
+    },
+    toggleOverview: () => reveal.toggleOverview(),
+    next: () => reveal.next(),
+    prev: () => reveal.prev(),
+    getIndices: () => {
+      const { h, v } = reveal.getIndices()
+      return { h, v }
+    },
+    onSlideChange: (cb) => {
+      const emit = () => cb(reveal.getSlidePastCount() + 1, reveal.getTotalSlides())
+      reveal.on('slidechanged', emit)
+      reveal.on('ready', emit)
+    },
+  }
+}

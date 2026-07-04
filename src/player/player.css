@@ -1,0 +1,98 @@
+/* Player chrome: backdrop + reveal.js control restyling to match the theme. */
+
+.player {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  --r-background-color: transparent;
+}
+
+.player__bg {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  z-index: 0;
+}
+
+.player .reveal {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+}
+.player .reveal-viewport {
+  background: transparent;
+}
+
+/* Navigation arrows */
+.player .reveal .controls {
+  color: var(--accent);
+  right: 18px;
+  bottom: 18px;
+}
+.player .reveal .controls button::after,
+.player .reveal .controls button::before {
+  opacity: 0.85;
+}
+
+/* Progress bar */
+.player .reveal .progress {
+  color: var(--accent2);
+  height: 5px;
+}
+
+/* Slide number pill */
+.player .reveal .slide-number {
+  right: 16px;
+  bottom: 16px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  background: color-mix(in srgb, var(--fg-strong) 12%, transparent);
+  color: var(--fg);
+  backdrop-filter: blur(6px);
+}
+
+/* Overview mode tint */
+.player .reveal.overview .slides section {
+  outline: 1px solid var(--card-border);
+}
+
+/* Print / export to PDF: lay every slide out one per page. */
+@media print {
+  @page { size: 1280px 720px; margin: 0; }
+  html, body { background: #fff !important; }
+  .appbar, .viewer__bar, .toast,
+  .reveal .controls, .reveal .progress, .reveal .slide-number, .reveal .backgrounds {
+    display: none !important;
+  }
+  .player { position: static !important; }
+  .player .reveal,
+  .player .reveal .slides {
+    position: static !important;
+    transform: none !important;
+    left: 0 !important; top: 0 !important;
+    width: 1280px !important; height: auto !important;
+    overflow: visible !important;
+  }
+  .player .reveal .slides > section {
+    display: block !important;
+    position: relative !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 1280px !important;
+    height: 720px !important;
+    transform: none !important;
+    left: 0 !important; top: 0 !important;
+    margin: 0 !important;
+    background: var(--bg);
+    page-break-after: always;
+    break-after: page;
+    overflow: hidden;
+  }
+  .player .reveal .slides > section .fragment {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+  }
+}
