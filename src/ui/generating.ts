@@ -1,11 +1,11 @@
-import { generateDeckSpec } from '../llm/client'
+import { generateDeckFromOutline } from '../llm/outline'
 import { loadSettings, isConfigured, activeConfig } from '../llm/settings'
 import { normalizeDeck } from '../render/normalize'
 import { saveDeck } from '../store/db'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { escapeHtml } from '../lib/markdown'
-import type { GenerateOptions } from '../types'
+import type { GenerateOptions, Outline } from '../types'
 
 interface Overlay {
   el: HTMLElement
@@ -14,14 +14,9 @@ interface Overlay {
   remove: () => void
 }
 
-/** Run generation with a full-screen progress overlay, then open the player. */
-export function generateAndPlay(topic: string, opts: GenerateOptions): void {
+/** Generate the full deck from the confirmed outline, then open the player. */
+export function generateAndPlay(topic: string, opts: GenerateOptions, outline: Outline): void {
   const trimmed = topic.trim()
-  if (!trimmed) {
-    toast('请先输入一句话主题')
-    return
-  }
-
   const settings = loadSettings()
   if (!isConfigured(settings)) {
     toast('请先在「设置」中填写 API Key')
@@ -30,17 +25,17 @@ export function generateAndPlay(topic: string, opts: GenerateOptions): void {
   }
 
   const controller = new AbortController()
-  const overlay = buildOverlay(trimmed, opts, () => controller.abort())
+  const overlay = buildOverlay(trimmed, opts, outline, () => controller.abort())
   document.body.appendChild(overlay.el)
 
   const model = activeConfig(settings).model
 
-  generateDeckSpec(trimmed, opts, settings, {
+  generateDeckFromOutline(trimmed, opts, outline, settings, {
     signal: controller.signal,
     onToken: (full) => overlay.setStream(full),
   })
     .then((spec) => {
-      const deck = normalizeDeck(spec, { prompt: trimmed, model, theme: opts.theme })
+      const deck = normalizeDeck(spec, { prompt: trimmed, model, theme: outline.theme })
       return saveDeck(deck).then(() => deck)
     })
     .then((deck) => {
@@ -56,14 +51,19 @@ export function generateAndPlay(topic: string, opts: GenerateOptions): void {
     })
 }
 
-function buildOverlay(topic: string, opts: GenerateOptions, onCancel: () => void): Overlay {
+function buildOverlay(
+  topic: string,
+  opts: GenerateOptions,
+  outline: Outline,
+  onCancel: () => void,
+): Overlay {
   const el = document.createElement('div')
   el.className = 'overlay'
   el.innerHTML = `
     <div class="gen card" style="padding:32px">
       <div class="gen__spinner"></div>
       <h2>正在生成课件…</h2>
-      <p>「${escapeHtml(topic)}」</p>
+      <p>「${escapeHtml(topic)}」 · ${outline.slides.length} 页</p>
       <div class="gen__stream" data-stream>正在连接模型…</div>
       <div class="gen__actions">
         <button class="btn btn--ghost" data-cancel>取消</button>
@@ -90,7 +90,7 @@ function buildOverlay(topic: string, opts: GenerateOptions, onCancel: () => void
       el.querySelector('[data-close]')!.addEventListener('click', () => el.remove())
       el.querySelector('[data-retry]')!.addEventListener('click', () => {
         el.remove()
-        generateAndPlay(topic, opts)
+        generateAndPlay(topic, opts, outline)
       })
     },
     remove: () => el.remove(),
