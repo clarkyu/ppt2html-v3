@@ -29,6 +29,23 @@ const THEME_LABELS: Array<{ value: ThemeName; label: string }> = [
   { value: 'noir', label: '深邃' },
 ]
 
+// Group layouts into visual families so each row gets a consistent accent
+// colour — makes the outline scannable at a glance.
+const LAYOUT_FAMILY: Record<SlideLayout, string> = {
+  cover: 'structure',
+  section: 'structure',
+  end: 'structure',
+  bullets: 'content',
+  'two-col': 'content',
+  'image-text': 'content',
+  'big-number': 'accent',
+  quote: 'accent',
+  comparison: 'compare',
+  timeline: 'compare',
+  code: 'code',
+}
+const famOf = (l: SlideLayout): string => LAYOUT_FAMILY[l] ?? 'content'
+
 /**
  * Fetch a deck outline, let the user review/edit/reorder it, then generate
  * the full deck from the confirmed outline.
@@ -128,17 +145,20 @@ function layoutOptions(selected: SlideLayout): string {
 
 function renderRow(s: OutlineSlide): string {
   return `
-    <li class="ol-row" data-row>
-      <div class="ol-row__main">
-        <select class="select ol-row__layout" data-layout>${layoutOptions(s.layout)}</select>
-        <input class="form-input ol-row__title" data-title value="${escapeHtml(s.title)}" placeholder="页标题">
-        <div class="ol-row__ops">
-          <button class="icon-btn" data-up title="上移">${icons.up}</button>
-          <button class="icon-btn" data-down title="下移">${icons.down}</button>
-          <button class="icon-btn" data-del title="删除">${icons.trash}</button>
+    <li class="ol-row" data-row data-fam="${famOf(s.layout)}">
+      <div class="ol-row__index" data-index></div>
+      <div class="ol-row__content">
+        <div class="ol-row__top">
+          <select class="ol-row__layout" data-layout title="选择版式">${layoutOptions(s.layout)}</select>
+          <input class="ol-row__title" data-title value="${escapeHtml(s.title)}" placeholder="这一页讲什么？">
+          <div class="ol-row__ops">
+            <button class="icon-btn" data-up title="上移">${icons.up}</button>
+            <button class="icon-btn" data-down title="下移">${icons.down}</button>
+            <button class="icon-btn" data-del title="删除">${icons.trash}</button>
+          </div>
         </div>
+        <input class="ol-row__brief" data-brief value="${escapeHtml(s.brief ?? '')}" placeholder="要点 / 内容简述（可选）">
       </div>
-      <input class="form-input ol-row__brief" data-brief value="${escapeHtml(s.brief ?? '')}" placeholder="要点 / 内容简述（可选）">
     </li>`
 }
 
@@ -150,8 +170,8 @@ function renderEditor(outline: Outline): string {
 
   return `
     <div class="outline__head">
-      <h2>确认课件大纲</h2>
-      <p>调整标题、每页版式、顺序与要点，满意后再生成完整课件（共 <span data-count>${outline.slides.length}</span> 页）。</p>
+      <h2>确认课件大纲 · 共 <span data-count>${outline.slides.length}</span> 页</h2>
+      <p>点文字即可改标题 / 要点，用 ↑↓ 调整顺序，左侧彩色标签选版式；满意后再生成完整课件。</p>
     </div>
     <div class="outline__meta">
       <input class="form-input" data-deck-title value="${escapeHtml(outline.title)}" placeholder="课件标题">
@@ -177,8 +197,19 @@ function wireEditor(
 ): void {
   const list = body.querySelector<HTMLElement>('[data-list]')!
   const countEl = body.querySelector<HTMLElement>('[data-count]')
-  const updateCount = () => {
-    if (countEl) countEl.textContent = String(list.querySelectorAll('[data-row]').length)
+
+  // Refresh page numbers and disable ↑ on the first row / ↓ on the last.
+  const renumber = () => {
+    const rows = list.querySelectorAll<HTMLElement>('[data-row]')
+    rows.forEach((row, i) => {
+      const idx = row.querySelector<HTMLElement>('[data-index]')
+      if (idx) idx.textContent = String(i + 1)
+      const up = row.querySelector<HTMLButtonElement>('[data-up]')
+      const down = row.querySelector<HTMLButtonElement>('[data-down]')
+      if (up) up.disabled = i === 0
+      if (down) down.disabled = i === rows.length - 1
+    })
+    if (countEl) countEl.textContent = String(rows.length)
   }
 
   list.addEventListener('click', (e) => {
@@ -188,17 +219,27 @@ function wireEditor(
     if (!row) return
     if (btn.dataset.up !== undefined && row.previousElementSibling) {
       list.insertBefore(row, row.previousElementSibling)
+      renumber()
     } else if (btn.dataset.down !== undefined && row.nextElementSibling) {
       list.insertBefore(row.nextElementSibling, row)
+      renumber()
     } else if (btn.dataset.del !== undefined) {
       row.remove()
-      updateCount()
+      renumber()
     }
+  })
+
+  // Recolour a row when its layout changes.
+  list.addEventListener('change', (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>('[data-layout]')
+    if (!sel) return
+    const row = sel.closest<HTMLElement>('[data-row]')
+    if (row) row.dataset.fam = famOf(sel.value as SlideLayout)
   })
 
   body.querySelector('[data-add]')!.addEventListener('click', () => {
     list.insertAdjacentHTML('beforeend', renderRow({ layout: 'bullets', title: '', brief: '' }))
-    updateCount()
+    renumber()
   })
 
   // Theme chips: single-select.
@@ -213,6 +254,8 @@ function wireEditor(
   body.querySelector('[data-cancel]')!.addEventListener('click', h.onCancel)
   body.querySelector('[data-regen]')!.addEventListener('click', h.onRegen)
   body.querySelector('[data-go]')!.addEventListener('click', h.onGenerate)
+
+  renumber()
 }
 
 function collectOutline(body: HTMLElement, topic: string): Outline {
