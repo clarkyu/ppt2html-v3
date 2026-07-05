@@ -566,6 +566,14 @@ textarea.form-input { resize: vertical; line-height: 1.5; }
 .ol-row__brief:focus { background: rgba(0, 0, 0, 0.28); border-color: color-mix(in srgb, var(--brand) 40%, transparent); color: var(--text); }
 
 .outline__add { margin: 14px 0 4px; }
+
+/* Overview grouped by 环节 */
+.ov-group { margin: 6px 0 16px; }
+.ov-group__head { display: flex; align-items: center; gap: 10px; margin: 6px 0 8px; }
+.ov-group__label { font-weight: 700; color: var(--text-strong); font-size: 15px; }
+.ov-group__count { font-size: 12.5px; color: var(--text-dim); }
+.ov-group__goto { margin-left: auto; }
+.ov-group .outline__list + .btn { margin-top: 8px; }
 .outline__actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 18px; flex-wrap: wrap; }
 .outline__actions [data-cancel] { margin-right: auto; }
 

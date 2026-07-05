@@ -222,12 +222,33 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
 
   /* ------------------------------ final overview ------------------------------ */
 
+  const groupLabel = (step: Step): string => {
+    if (step.kind === 'cover') return '封面'
+    if (step.kind === 'end') return '结束页'
+    return `第 ${step.index + 1} 部分 · ${structure.sections[step.index].title}`
+  }
+
+  // Sync any edits made in the overview back into the per-step results.
+  const syncOverviewIntoResults = () => {
+    body.querySelectorAll<HTMLElement>('.ov-group').forEach((g, i) => {
+      results[i] = collectRows(g)
+    })
+  }
+
   const showOverview = () => {
-    const outline = assembleOutline(structure, results.map((r) => r ?? []))
-    body.innerHTML = renderEditor(outline)
-    wireEditor(body, {
+    const groups = steps.map((step, i) => ({ label: groupLabel(step), slides: results[i] ?? [] }))
+    const title = assembleOutline(structure, results.map((r) => r ?? [])).title
+    body.innerHTML = renderOverview(structure, title, groups)
+    wireOverview(body, {
       onCancel: close,
-      onRegen: () => runStep(0),
+      onPrev: () => {
+        syncOverviewIntoResults()
+        runStep(steps.length - 1)
+      },
+      onGoto: (i) => {
+        syncOverviewIntoResults()
+        runStep(i)
+      },
       onGenerate: () => {
         const edited = collectOutline(body, trimmed)
         if (!edited.slides.length) {
@@ -270,29 +291,45 @@ function renderRow(s: OutlineSlide): string {
     </li>`
 }
 
-function renderEditor(outline: Outline): string {
+interface OvGroup {
+  label: string
+  slides: OutlineSlide[]
+}
+
+function renderOverview(structure: Structure, title: string, groups: OvGroup[]): string {
   const themeChips = THEME_LABELS.map(
     (t) =>
-      `<button type="button" class="chip${t.value === outline.theme ? ' active' : ''}" data-theme="${t.value}">${t.label}</button>`,
+      `<button type="button" class="chip${t.value === structure.theme ? ' active' : ''}" data-theme="${t.value}">${t.label}</button>`,
   ).join('')
+  const total = groups.reduce((n, g) => n + g.slides.length, 0)
 
   return `
     <div class="outline__head">
-      <h2>整份大纲总览 · 共 <span data-count>${outline.slides.length}</span> 页</h2>
-      <p>最后统一微调：点文字改标题 / 要点，用 ↑↓ 调整顺序，左侧彩色标签选版式；满意后再生成完整课件。</p>
+      <h2>整份大纲总览 · 共 <span data-count>${total}</span> 页</h2>
+      <p>按环节分类；可在此微调，或点某环节的「去修改」/ 底部「上一步」回到逐环节修改。满意后再生成完整课件。</p>
     </div>
     <div class="outline__meta">
-      <input class="form-input" data-deck-title value="${escapeHtml(outline.title)}" placeholder="课件标题">
-      <input class="form-input" data-deck-subtitle value="${escapeHtml(outline.subtitle ?? '')}" placeholder="副标题（可选）">
+      <input class="form-input" data-deck-title value="${escapeHtml(title)}" placeholder="课件标题">
+      <input class="form-input" data-deck-subtitle value="${escapeHtml(structure.subtitle ?? '')}" placeholder="副标题（可选）">
       <div class="outline__theme"><span>配色</span><div class="chips" data-theme-chips>${themeChips}</div></div>
     </div>
-    <ol class="outline__list" data-list>
-      ${outline.slides.map(renderRow).join('')}
-    </ol>
-    <button class="btn btn--ghost btn--sm outline__add" data-add>${icons.plus} 添加一页</button>
+    ${groups
+      .map(
+        (g, i) => `
+      <div class="ov-group" data-group="${i}">
+        <div class="ov-group__head">
+          <span class="ov-group__label">${escapeHtml(g.label)}</span>
+          <span class="ov-group__count">${g.slides.length} 页</span>
+          <button class="btn btn--ghost btn--sm ov-group__goto" data-goto="${i}">${icons.edit} 去修改</button>
+        </div>
+        <ol class="outline__list" data-list>${g.slides.map(renderRow).join('')}</ol>
+        <button class="btn btn--ghost btn--sm" data-add>${icons.plus} 在此环节加一页</button>
+      </div>`,
+      )
+      .join('')}
     <div class="outline__actions">
       <button class="btn btn--ghost" data-cancel>取消</button>
-      <button class="btn btn--ghost" data-regen>${icons.refresh} 重新细化</button>
+      <button class="btn btn--ghost" data-prev>← 上一步（逐环节修改）</button>
       <button class="btn btn--primary" data-go>生成课件 →</button>
     </div>`
 }
@@ -349,11 +386,65 @@ function wireRowList(body: HTMLElement): void {
   renumber()
 }
 
-function wireEditor(
+function wireOverview(
   body: HTMLElement,
-  h: { onCancel: () => void; onRegen: () => void; onGenerate: () => void },
+  h: { onCancel: () => void; onPrev: () => void; onGoto: (i: number) => void; onGenerate: () => void },
 ): void {
-  wireRowList(body)
+  // Global renumbering across all 环节 groups (page N of total).
+  const renumber = () => {
+    let idx = 0
+    body.querySelectorAll<HTMLElement>('.ov-group').forEach((group) => {
+      const rows = Array.from(group.querySelectorAll<HTMLElement>('[data-row]'))
+      rows.forEach((row, i) => {
+        idx++
+        const ix = row.querySelector<HTMLElement>('[data-index]')
+        if (ix) ix.textContent = String(idx)
+        const up = row.querySelector<HTMLButtonElement>('[data-up]')
+        const down = row.querySelector<HTMLButtonElement>('[data-down]')
+        if (up) up.disabled = i === 0
+        if (down) down.disabled = i === rows.length - 1
+      })
+      const c = group.querySelector<HTMLElement>('.ov-group__count')
+      if (c) c.textContent = `${rows.length} 页`
+    })
+    const total = body.querySelector<HTMLElement>('[data-count]')
+    if (total) total.textContent = String(idx)
+  }
+
+  body.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('button')
+    if (!btn) return
+    if (btn.dataset.goto !== undefined) return h.onGoto(Number(btn.dataset.goto))
+    if (btn.dataset.cancel !== undefined) return h.onCancel()
+    if (btn.dataset.prev !== undefined) return h.onPrev()
+    if (btn.dataset.go !== undefined) return h.onGenerate()
+    if (btn.dataset.add !== undefined) {
+      const list = btn.closest<HTMLElement>('.ov-group')?.querySelector<HTMLElement>('[data-list]')
+      list?.insertAdjacentHTML('beforeend', renderRow({ layout: 'bullets', title: '', brief: '' }))
+      renumber()
+      return
+    }
+    const row = btn.closest<HTMLElement>('[data-row]')
+    if (!row) return
+    const list = row.parentElement!
+    if (btn.dataset.up !== undefined && row.previousElementSibling) {
+      list.insertBefore(row, row.previousElementSibling)
+      renumber()
+    } else if (btn.dataset.down !== undefined && row.nextElementSibling) {
+      list.insertBefore(row.nextElementSibling, row)
+      renumber()
+    } else if (btn.dataset.del !== undefined) {
+      row.remove()
+      renumber()
+    }
+  })
+
+  body.addEventListener('change', (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>('[data-layout]')
+    if (!sel) return
+    const row = sel.closest<HTMLElement>('[data-row]')
+    if (row) row.dataset.fam = famOf(sel.value as SlideLayout)
+  })
 
   const themeChips = body.querySelector<HTMLElement>('[data-theme-chips]')
   themeChips?.addEventListener('click', (e) => {
@@ -363,9 +454,7 @@ function wireEditor(
     chip.classList.add('active')
   })
 
-  body.querySelector('[data-cancel]')!.addEventListener('click', h.onCancel)
-  body.querySelector('[data-regen]')!.addEventListener('click', h.onRegen)
-  body.querySelector('[data-go]')!.addEventListener('click', h.onGenerate)
+  renumber()
 }
 
 function collectRows(body: HTMLElement): OutlineSlide[] {
