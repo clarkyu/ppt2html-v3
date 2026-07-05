@@ -1,5 +1,6 @@
 import type { Deck, Slide, ThemeName } from '../types'
 import { renderSlideInner } from './layouts'
+import { fitHeadings } from './fit'
 import './themes.css'
 import './slides.css'
 
@@ -16,6 +17,8 @@ export function mountSlidePreview(container: HTMLElement, theme: ThemeName, slid
     `<div class="reveal deck"><div class="slides">` +
     `<section class="deck-slide" data-layout="${slide.layout}">${renderSlideInner(slide)}</section>` +
     `</div></div></div></div>`
+
+  fitHeadings(container)
 
   const stage = container.querySelector<HTMLElement>('.thumb__stage')!
   const fit = () => {
@@ -41,6 +44,8 @@ export function mountThumb(container: HTMLElement, deck: Deck): () => void {
     `<div class="reveal deck"><div class="slides">` +
     `<section class="deck-slide">${renderSlideInner(cover)}</section>` +
     `</div></div></div></div>`
+
+  fitHeadings(container)
 
   const stage = container.querySelector<HTMLElement>('.thumb__stage')!
   const fit = () => {

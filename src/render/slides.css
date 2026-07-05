@@ -378,3 +378,17 @@
 @media (max-width: 640px) {
   .reveal.deck .deck-slide { padding: 40px 44px; }
 }
+
+/* Balanced line breaks + safe wrapping for headings (paired with JS shrink-to-fit) */
+.reveal.deck .s-cover__title,
+.reveal.deck .s-cover__subtitle,
+.reveal.deck .s-section__title,
+.reveal.deck .s-section__subtitle,
+.reveal.deck .s-title,
+.reveal.deck .s-end__title,
+.reveal.deck .s-end__subtitle,
+.reveal.deck .s-big__caption,
+.reveal.deck .s-quote__text {
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
