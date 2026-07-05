@@ -15,6 +15,7 @@ import { requestText, streamText, type GenerateHandlers } from './client'
 import { extractJson } from './extractJson'
 import { DECK_SCHEMA_GUIDE, contextBlock } from './prompt'
 import { slidesForMinutes } from '../lib/duration'
+import { t } from '../i18n'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
 const THEME_SET = new Set<string>(THEMES)
@@ -266,7 +267,7 @@ export async function generateDeckFromOutline(
 
   const spec = (await genJson(() => streamText(FROM_OUTLINE_SYSTEM, user, settings, handlers))) as DeckSpec
   if (!spec || typeof spec !== 'object' || !Array.isArray(spec.slides) || !spec.slides.length) {
-    throw new Error('模型返回的内容不是有效的课件结构，请重试。')
+    throw new Error(t('err.invalidDeck'))
   }
   return spec
 }

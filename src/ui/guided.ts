@@ -1,4 +1,4 @@
-import { generateClarifyingQuestions, DEFAULT_QUESTIONS } from '../llm/clarify'
+import { generateClarifyingQuestions, defaultQuestions } from '../llm/clarify'
 import {
   loadSettings,
   saveSettings,
@@ -240,7 +240,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     // Still loading (or failed): show generic defaults instantly, then upgrade
     // to the AI-tailored questions once they arrive (unless the user engaged).
     touched = false
-    showQuestions(DEFAULT_QUESTIONS, true)
+    showQuestions(defaultQuestions(), true)
     pf?.promise
       .then((q) => {
         if (removed || touched || step !== 'questions' || !q.length) return

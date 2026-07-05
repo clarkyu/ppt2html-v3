@@ -8,6 +8,7 @@ import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
+import { t } from '../i18n'
 import {
   LAYOUTS,
   THEMES,
@@ -19,28 +20,20 @@ import {
   type ThemeName,
 } from '../types'
 
-const LAYOUT_LABELS: Record<SlideLayout, string> = {
-  cover: '封面',
-  section: '章节分隔',
-  bullets: '要点',
-  'two-col': '两栏对照',
-  'big-number': '大数字',
-  quote: '金句',
-  comparison: '对比卡片',
-  timeline: '时间线',
-  code: '代码',
-  'image-text': '图文',
-  end: '结束',
+const LAYOUT_KEYS: Record<SlideLayout, string> = {
+  cover: 'layout.cover',
+  section: 'layout.section',
+  bullets: 'layout.bullets',
+  'two-col': 'layout.twoCol',
+  'big-number': 'layout.bigNumber',
+  quote: 'layout.quote',
+  comparison: 'layout.comparison',
+  timeline: 'layout.timeline',
+  code: 'layout.code',
+  'image-text': 'layout.imageText',
+  end: 'layout.end',
 }
-const THEME_LABELS: Record<ThemeName, string> = {
-  aurora: '极光',
-  ink: '水墨',
-  sunrise: '暖阳',
-  forest: '森林',
-  noir: '深邃',
-  sand: '砂纸',
-  rose: '玫瑰',
-}
+const themeLabel = (name: ThemeName): string => t(`theme.${name}`)
 
 /** Deck content editor: every page shown with a live preview and editable fields. */
 export function renderDeckEditor(view: HTMLElement, id: string): () => void {
@@ -48,10 +41,10 @@ export function renderDeckEditor(view: HTMLElement, id: string): () => void {
 
   view.innerHTML = `
     <div class="section-head">
-      <h2>编辑课件</h2>
-      <a href="#/library">← 返回课件库</a>
+      <h2>${t('ed.title')}</h2>
+      <a href="#/library">${t('ed.backToLibrary')}</a>
     </div>
-    <div data-root><div class="empty"><p>加载中…</p></div></div>`
+    <div data-root><div class="empty"><p>${t('common.loading')}</p></div></div>`
   const root = view.querySelector<HTMLElement>('[data-root]')!
 
   const isSample = id === 'sample'
@@ -59,7 +52,7 @@ export function renderDeckEditor(view: HTMLElement, id: string): () => void {
   load
     .then((loaded) => {
       if (!loaded) {
-        root.innerHTML = `<div class="empty"><h3>课件不存在</h3><p>它可能已被删除。</p></div>`
+        root.innerHTML = `<div class="empty"><h3>${t('viewer.notFound')}</h3><p>${t('viewer.notFoundHint')}</p></div>`
         return
       }
       // Editing the built-in sample creates a fresh copy in the library.
@@ -69,7 +62,7 @@ export function renderDeckEditor(view: HTMLElement, id: string): () => void {
       mountEditor(root, deck, cleanups)
     })
     .catch(() => {
-      root.innerHTML = `<div class="empty"><h3>加载失败</h3></div>`
+      root.innerHTML = `<div class="empty"><h3>${t('viewer.loadError')}</h3></div>`
     })
 
   return () => cleanups.forEach((fn) => fn())
@@ -88,31 +81,31 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
 
     root.innerHTML = `
       <div class="ed-meta card">
-        <label class="f"><span>课件标题</span><input class="form-input" data-meta="title" value="${escapeHtml(deck.title)}"></label>
-        <label class="f"><span>副标题</span><input class="form-input" data-meta="subtitle" value="${escapeHtml(deck.subtitle ?? '')}"></label>
-        <label class="f"><span>配色主题</span>
+        <label class="f"><span>${t('struct.deckTitle')}</span><input class="form-input" data-meta="title" value="${escapeHtml(deck.title)}"></label>
+        <label class="f"><span>${t('ed.subtitle')}</span><input class="form-input" data-meta="subtitle" value="${escapeHtml(deck.subtitle ?? '')}"></label>
+        <label class="f"><span>${t('ed.theme')}</span>
           <select class="form-input" data-meta="theme">
-            ${THEMES.map((t) => `<option value="${t}"${t === deck.theme ? ' selected' : ''}>${THEME_LABELS[t]}</option>`).join('')}
+            ${THEMES.map((th) => `<option value="${th}"${th === deck.theme ? ' selected' : ''}>${themeLabel(th)}</option>`).join('')}
           </select>
         </label>
-        <label class="f"><span>演示者</span><input class="form-input" data-meta="brand.presenter" value="${escapeHtml(deck.branding?.presenter ?? '')}" placeholder="姓名"></label>
-        <label class="f"><span>单位</span><input class="form-input" data-meta="brand.org" value="${escapeHtml(deck.branding?.org ?? '')}" placeholder="单位 / 组织"></label>
-        <label class="f"><span>日期</span><input class="form-input" data-meta="brand.date" value="${escapeHtml(deck.branding?.date ?? '')}" placeholder="如 2026-07-05"></label>
+        <label class="f"><span>${t('settings.presenter')}</span><input class="form-input" data-meta="brand.presenter" value="${escapeHtml(deck.branding?.presenter ?? '')}" placeholder="${escapeHtml(t('ed.name'))}"></label>
+        <label class="f"><span>${t('ed.org')}</span><input class="form-input" data-meta="brand.org" value="${escapeHtml(deck.branding?.org ?? '')}" placeholder="${escapeHtml(t('settings.org'))}"></label>
+        <label class="f"><span>${t('ed.date')}</span><input class="form-input" data-meta="brand.date" value="${escapeHtml(deck.branding?.date ?? '')}" placeholder="${escapeHtml(t('ed.datePlaceholder'))}"></label>
         <label class="f"><span>Logo</span>
           <span style="display:flex; gap:8px">
-            <input class="form-input" data-meta="brand.logo" value="${escapeHtml(deck.branding?.logo ?? '')}" placeholder="图片网址，或点上传" style="flex:1; min-width:0">
-            <label class="btn btn--ghost btn--sm" style="flex:none">上传<input type="file" accept="image/*" data-brand-logo-file hidden></label>
+            <input class="form-input" data-meta="brand.logo" value="${escapeHtml(deck.branding?.logo ?? '')}" placeholder="${escapeHtml(t('ed.logoPlaceholder'))}" style="flex:1; min-width:0">
+            <label class="btn btn--ghost btn--sm" style="flex:none">${t('settings.upload')}<input type="file" accept="image/*" data-brand-logo-file hidden></label>
           </span>
         </label>
       </div>
       <div class="ed-list" data-list>
         ${deck.slides.map((s, i) => renderCard(s, i, deck.slides.length)).join('')}
       </div>
-      <button class="btn btn--ghost btn--sm ed-add" data-add-slide>${icons.plus} 添加一页</button>
+      <button class="btn btn--ghost btn--sm ed-add" data-add-slide>${icons.plus} ${t('ed.addSlide')}</button>
       <div class="ed-actions">
         <span class="ed-status" data-status></span>
-        <button class="btn btn--ghost" data-play>${icons.play} 播放</button>
-        <button class="btn btn--primary" data-save>${icons.save} 保存</button>
+        <button class="btn btn--ghost" data-play>${icons.play} ${t('ed.play')}</button>
+        <button class="btn btn--primary" data-save>${icons.save} ${t('common.save')}</button>
       </div>`
 
     root.querySelectorAll<HTMLElement>('[data-card]').forEach((card) => mountPreview(card))
@@ -148,7 +141,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       else if (key.startsWith('brand.')) {
         deck.branding = { ...deck.branding, [key.slice(6) as keyof Branding]: value.trim() || undefined }
       } else return // theme is a <select>, handled in the change listener
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
       return
     }
     const card = target.closest<HTMLElement>('[data-card]')
@@ -156,7 +149,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       const i = Number(card.dataset.i)
       deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       refreshPreview(card)
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
     }
   })
 
@@ -168,7 +161,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       const file = inp.files?.[0]
       if (!file) return
       if (file.size > 900_000) {
-        toast('Logo 图片太大，请用小于 ~900KB 的图片')
+        toast(t('settings.logoTooBig'))
         inp.value = ''
         return
       }
@@ -177,7 +170,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
         deck.branding = { ...deck.branding, logo: String(reader.result) }
         const urlInput = root.querySelector<HTMLInputElement>('[data-meta="brand.logo"]')
         if (urlInput) urlInput.value = deck.branding.logo ?? ''
-        setStatus('未保存')
+        setStatus(t('ed.unsaved'))
       }
       reader.readAsDataURL(file)
       inp.value = ''
@@ -186,7 +179,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     if (target.matches('[data-meta="theme"]')) {
       deck.theme = (target as HTMLSelectElement).value as ThemeName
       render() // re-render all previews with the new theme
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
       return
     }
     if (target.matches('[data-layout]')) {
@@ -197,7 +190,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       // Re-render just this card so its fields match the new layout.
       card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
       mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
     }
   })
 
@@ -210,8 +203,8 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     if (btn.dataset.save !== undefined) {
       deck.updatedAt = Date.now()
       saveDeck(deck).then(() => {
-        setStatus('已保存')
-        toast('已保存')
+        setStatus(t('ed.saved'))
+        toast(t('ed.saved'))
       })
       return
     }
@@ -221,9 +214,9 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       return
     }
     if (btn.dataset.addSlide !== undefined) {
-      deck.slides.push({ layout: 'bullets', title: '新的一页', bullets: ['要点一'] })
+      deck.slides.push({ layout: 'bullets', title: t('ed.newSlide'), bullets: [t('ed.newBullet')] })
       render()
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
       return
     }
     if (!card) return
@@ -232,31 +225,31 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     if (btn.dataset.regenSlide !== undefined) {
       const settings = loadSettings()
       if (!isConfigured(settings)) {
-        toast('请先在「设置」中填写 API Key')
+        toast(t('err.noKey'))
         navigate('#/settings')
         return
       }
       const instruction = card.querySelector<HTMLInputElement>('[data-instruct]')?.value.trim() ?? ''
       if (!instruction) {
-        toast('先写下想怎么改这一页')
+        toast(t('ed.writeInstruction'))
         return
       }
       // Persist current edits on this card before regenerating.
       deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       btn.setAttribute('disabled', '')
-      btn.textContent = 'AI 重写中…'
+      btn.textContent = t('ed.rewriting')
       regenerateSlide(deck, i, instruction, settings)
         .then((slide) => {
           deck.slides[i] = slide
           card.outerHTML = renderCard(slide, i, deck.slides.length)
           mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
-          setStatus('未保存')
-          toast('已重写这一页')
+          setStatus(t('ed.unsaved'))
+          toast(t('ed.rewritten'))
         })
         .catch((err: unknown) => {
-          toast('重写失败：' + (err instanceof Error ? err.message : String(err)))
+          toast(t('ed.rewriteFailed') + (err instanceof Error ? err.message : String(err)))
           btn.removeAttribute('disabled')
-          btn.textContent = 'AI 重写本页'
+          btn.textContent = t('ed.aiRewrite')
         })
       return
     }
@@ -267,14 +260,14 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       deck.slides[i] = slide
       card.outerHTML = renderCard(slide, i, deck.slides.length)
       mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
       return
     }
 
     if (btn.dataset.bgRefresh !== undefined) {
       const settings = loadSettings()
       if (!settings.images.enabled) {
-        toast('已在「设置」里关闭了背景图')
+        toast(t('ed.bgDisabled'))
         return
       }
       deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
@@ -284,18 +277,18 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       searchImage(queryForSlide(deck.slides[i], deck), settings, { exclude: used })
         .then((bg) => {
           if (!bg) {
-            toast('没找到合适的图片，换个说法或稍后再试')
+            toast(t('ed.noImage'))
             btn.removeAttribute('disabled')
             return
           }
           deck.slides[i].bg = bg
           card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
           mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
-          setStatus('未保存')
-          toast('已换背景图')
+          setStatus(t('ed.unsaved'))
+          toast(t('ed.bgChanged'))
         })
         .catch(() => {
-          toast('换背景图失败，请稍后再试')
+          toast(t('ed.bgFailed'))
           btn.removeAttribute('disabled')
         })
       return
@@ -304,39 +297,39 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     if (btn.dataset.up !== undefined && i > 0) {
       ;[deck.slides[i - 1], deck.slides[i]] = [deck.slides[i], deck.slides[i - 1]]
       render()
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
     } else if (btn.dataset.down !== undefined && i < deck.slides.length - 1) {
       ;[deck.slides[i + 1], deck.slides[i]] = [deck.slides[i], deck.slides[i + 1]]
       render()
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
     } else if (btn.dataset.del !== undefined) {
       if (deck.slides.length <= 1) {
-        toast('至少保留一页')
+        toast(t('outline.keepOnePage'))
         return
       }
       deck.slides.splice(i, 1)
       render()
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
     } else if (btn.dataset.addItem !== undefined) {
       const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
-      ;(slide.items ??= []).push({ heading: '新方案', points: [''] })
+      ;(slide.items ??= []).push({ heading: t('ed.newCard'), points: [''] })
       deck.slides[i] = slide
       card.outerHTML = renderCard(slide, i, deck.slides.length)
       mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
     } else if (btn.dataset.addStep !== undefined) {
       const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
-      ;(slide.steps ??= []).push({ label: '新步骤', text: '' })
+      ;(slide.steps ??= []).push({ label: t('ed.newStep'), text: '' })
       deck.slides[i] = slide
       card.outerHTML = renderCard(slide, i, deck.slides.length)
       mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
     } else if (btn.dataset.delSub !== undefined) {
       const sub = btn.closest<HTMLElement>('[data-item],[data-step]')
       sub?.remove()
       deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       refreshPreview(card)
-      setStatus('未保存')
+      setStatus(t('ed.unsaved'))
     }
   })
 }
@@ -345,7 +338,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
 
 function layoutOptions(selected: SlideLayout): string {
   return LAYOUTS.map(
-    (l) => `<option value="${l}"${l === selected ? ' selected' : ''}>${LAYOUT_LABELS[l]}</option>`,
+    (l) => `<option value="${l}"${l === selected ? ' selected' : ''}>${t(LAYOUT_KEYS[l])}</option>`,
   ).join('')
 }
 
@@ -356,9 +349,9 @@ function renderCard(s: Slide, i: number, total: number): string {
         <span class="slide-card__n">${i + 1}</span>
         <select class="select slide-card__layout" data-layout>${layoutOptions(s.layout)}</select>
         <div class="slide-card__ops">
-          <button class="icon-btn" data-up title="上移"${i === 0 ? ' disabled' : ''}>${icons.up}</button>
-          <button class="icon-btn" data-down title="下移"${i === total - 1 ? ' disabled' : ''}>${icons.down}</button>
-          <button class="icon-btn" data-del title="删除">${icons.trash}</button>
+          <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}"${i === 0 ? ' disabled' : ''}>${icons.up}</button>
+          <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}"${i === total - 1 ? ' disabled' : ''}>${icons.down}</button>
+          <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
         </div>
       </div>
       <div class="slide-card__body">
@@ -366,13 +359,13 @@ function renderCard(s: Slide, i: number, total: number): string {
         <div class="slide-card__fields">${renderFields(s)}</div>
       </div>
       <div class="ed-bg">
-        <span class="ed-bg__label">${s.bg ? '🖼 已配背景图（很淡）' : '未配背景图'}</span>
-        <button class="btn btn--ghost btn--sm" data-bg-refresh>${icons.refresh} 换背景图</button>
-        ${s.bg ? `<button class="btn btn--ghost btn--sm" data-bg-remove>移除背景</button>` : ''}
+        <span class="ed-bg__label">${s.bg ? t('ed.bgOn') : t('ed.bgOff')}</span>
+        <button class="btn btn--ghost btn--sm" data-bg-refresh>${icons.refresh} ${t('ed.bgRefresh')}</button>
+        ${s.bg ? `<button class="btn btn--ghost btn--sm" data-bg-remove>${t('ed.bgRemove')}</button>` : ''}
       </div>
       <div class="adjust">
-        <input class="input adjust__input" data-instruct placeholder="想怎么改这一页的内容？（例如：换成更具体的例子、语气更活泼、补一个数据…）">
-        <button class="btn btn--ghost btn--sm" data-regen-slide>${icons.sparkles} AI 重写本页</button>
+        <input class="input adjust__input" data-instruct placeholder="${escapeHtml(t('ed.instructPlaceholder'))}">
+        <button class="btn btn--ghost btn--sm" data-regen-slide>${icons.sparkles} ${t('ed.aiRewrite')}</button>
       </div>
     </div>`
 }
@@ -391,60 +384,60 @@ function renderFields(s: Slide): string {
   switch (s.layout) {
     case 'cover':
     case 'section':
-      return text('eyebrow', '小标签', s.eyebrow) + text('title', '标题', s.title) + text('subtitle', '副标题', s.subtitle)
+      return text('eyebrow', t('ed.f.eyebrow'), s.eyebrow) + text('title', t('ed.f.title'), s.title) + text('subtitle', t('ed.subtitle'), s.subtitle)
     case 'end':
-      return text('title', '结束语', s.title) + text('subtitle', '收尾副标题', s.subtitle)
+      return text('title', t('ed.f.closing'), s.title) + text('subtitle', t('ed.f.closingSub'), s.subtitle)
     case 'bullets':
-      return text('title', '页标题', s.title) + lines('bullets', '要点（每行一条）', s.bullets) + text('note', '讲者备注', s.note)
+      return text('title', t('ed.f.pageTitle'), s.title) + lines('bullets', t('ed.f.bullets'), s.bullets) + text('note', t('ed.f.note'), s.note)
     case 'big-number':
-      return text('value', '关键数字', s.value) + text('caption', '说明', s.caption) + text('title', '页标题（可选）', s.title)
+      return text('value', t('ed.f.value'), s.value) + text('caption', t('ed.f.caption'), s.caption) + text('title', t('ed.f.pageTitleOpt'), s.title)
     case 'quote':
-      return area('text', '金句', s.text, 3) + text('author', '出处', s.author)
+      return area('text', t('ed.f.quote'), s.text, 3) + text('author', t('ed.f.author'), s.author)
     case 'image-text':
-      return text('title', '页标题', s.title) + area('body', '正文（支持 Markdown）', s.body, 5)
+      return text('title', t('ed.f.pageTitle'), s.title) + area('body', t('ed.f.body'), s.body, 5)
     case 'code':
-      return text('title', '页标题', s.title) + text('language', '语言', s.language) + area('code', '代码', s.code, 6, true)
+      return text('title', t('ed.f.pageTitle'), s.title) + text('language', t('ed.f.language'), s.language) + area('code', t('ed.f.code'), s.code, 6, true)
     case 'two-col':
       return (
-        text('title', '页标题', s.title) +
+        text('title', t('ed.f.pageTitle'), s.title) +
         `<div class="f-cols">` +
-        `<div class="f-col">${text('left.heading', '左栏标题', s.left?.heading)}${lines('left.bullets', '左栏要点', s.left?.bullets)}</div>` +
-        `<div class="f-col">${text('right.heading', '右栏标题', s.right?.heading)}${lines('right.bullets', '右栏要点', s.right?.bullets)}</div>` +
+        `<div class="f-col">${text('left.heading', t('ed.f.leftHeading'), s.left?.heading)}${lines('left.bullets', t('ed.f.leftBullets'), s.left?.bullets)}</div>` +
+        `<div class="f-col">${text('right.heading', t('ed.f.rightHeading'), s.right?.heading)}${lines('right.bullets', t('ed.f.rightBullets'), s.right?.bullets)}</div>` +
         `</div>`
       )
     case 'comparison':
       return (
-        text('title', '页标题', s.title) +
+        text('title', t('ed.f.pageTitle'), s.title) +
         (s.items ?? []).map(renderCompareItem).join('') +
-        `<button class="btn btn--ghost btn--sm" data-add-item>${icons.plus} 添加一张卡片</button>`
+        `<button class="btn btn--ghost btn--sm" data-add-item>${icons.plus} ${t('ed.addCard')}</button>`
       )
     case 'timeline':
       return (
-        text('title', '页标题', s.title) +
+        text('title', t('ed.f.pageTitle'), s.title) +
         (s.steps ?? []).map(renderStep).join('') +
-        `<button class="btn btn--ghost btn--sm" data-add-step>${icons.plus} 添加一步</button>`
+        `<button class="btn btn--ghost btn--sm" data-add-step>${icons.plus} ${t('ed.addStep')}</button>`
       )
     default:
-      return text('title', '标题', s.title)
+      return text('title', t('ed.f.title'), s.title)
   }
 }
 
 function renderCompareItem(item: CompareItem): string {
   const tones: Array<[string, string]> = [
-    ['neutral', '中性'],
-    ['positive', '正面'],
-    ['negative', '反面'],
+    ['neutral', t('ed.tone.neutral')],
+    ['positive', t('ed.tone.positive')],
+    ['negative', t('ed.tone.negative')],
   ]
   return `
     <div class="f-sub" data-item>
       <div class="f-sub__head">
-        <input class="form-input" data-f="heading" value="${escapeHtml(item.heading ?? '')}" placeholder="卡片标题">
+        <input class="form-input" data-f="heading" value="${escapeHtml(item.heading ?? '')}" placeholder="${escapeHtml(t('ed.f.cardTitle'))}">
         <select class="select" data-f="tone">${tones
           .map(([v, l]) => `<option value="${v}"${(item.tone ?? 'neutral') === v ? ' selected' : ''}>${l}</option>`)
           .join('')}</select>
-        <button class="icon-btn" data-del-sub title="删除">${icons.trash}</button>
+        <button class="icon-btn" data-del-sub title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
       </div>
-      <textarea class="form-input" data-f="points" rows="3" placeholder="每行一条要点">${escapeHtml((item.points ?? []).join('\n'))}</textarea>
+      <textarea class="form-input" data-f="points" rows="3" placeholder="${escapeHtml(t('ed.f.pointsPerLine'))}">${escapeHtml((item.points ?? []).join('\n'))}</textarea>
     </div>`
 }
 
@@ -452,10 +445,10 @@ function renderStep(step: { label: string; text?: string }): string {
   return `
     <div class="f-sub" data-step>
       <div class="f-sub__head">
-        <input class="form-input" data-f="label" value="${escapeHtml(step.label ?? '')}" placeholder="阶段 / 步骤">
-        <button class="icon-btn" data-del-sub title="删除">${icons.trash}</button>
+        <input class="form-input" data-f="label" value="${escapeHtml(step.label ?? '')}" placeholder="${escapeHtml(t('ed.f.stepLabel'))}">
+        <button class="icon-btn" data-del-sub title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
       </div>
-      <input class="form-input" data-f="text" value="${escapeHtml(step.text ?? '')}" placeholder="说明（可选）">
+      <input class="form-input" data-f="text" value="${escapeHtml(step.text ?? '')}" placeholder="${escapeHtml(t('ed.f.stepText'))}">
     </div>`
 }
 
