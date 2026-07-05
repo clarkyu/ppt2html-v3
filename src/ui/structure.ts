@@ -5,16 +5,17 @@ import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
+import { t } from '../i18n'
 import type { GenerateOptions, Section, Structure, ThemeName } from '../types'
 
-const THEME_LABELS: Array<{ value: ThemeName; label: string }> = [
-  { value: 'aurora', label: '极光' },
-  { value: 'ink', label: '水墨' },
-  { value: 'sunrise', label: '暖阳' },
-  { value: 'forest', label: '森林' },
-  { value: 'noir', label: '深邃' },
-  { value: 'sand', label: '砂纸' },
-  { value: 'rose', label: '玫瑰' },
+const THEME_LABELS: Array<{ value: ThemeName; key: string }> = [
+  { value: 'aurora', key: 'theme.aurora' },
+  { value: 'ink', key: 'theme.ink' },
+  { value: 'sunrise', key: 'theme.sunrise' },
+  { value: 'forest', key: 'theme.forest' },
+  { value: 'noir', key: 'theme.noir' },
+  { value: 'sand', key: 'theme.sand' },
+  { value: 'rose', key: 'theme.rose' },
 ]
 
 /**
@@ -25,11 +26,11 @@ const THEME_LABELS: Array<{ value: ThemeName; label: string }> = [
 export function startStructure(topic: string, opts: GenerateOptions): void {
   const trimmed = topic.trim()
   if (!trimmed) {
-    toast('请先输入一句话主题')
+    toast(t('err.noTopic'))
     return
   }
   if (!isConfigured(loadSettings())) {
-    toast('请先在「设置」中填写 API Key')
+    toast(t('err.noKey'))
     navigate('#/settings')
     return
   }
@@ -48,9 +49,9 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
     body.innerHTML = `
       <div class="gen" style="padding:8px">
         <div class="gen__spinner"></div>
-        <h2>正在理解需求、规划整体结构…</h2>
+        <h2>${t('struct.loading')}</h2>
         <p>「${escapeHtml(trimmed)}」</p>
-        <div class="gen__actions"><button class="btn btn--ghost" data-cancel>取消</button></div>
+        <div class="gen__actions"><button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button></div>
       </div>`
     body.querySelector('[data-cancel]')!.addEventListener('click', () => {
       controller.abort()
@@ -61,11 +62,11 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
   const showError = (msg: string) => {
     body.innerHTML = `
       <div class="gen" style="padding:8px">
-        <h2 class="gen__error">结构生成失败</h2>
+        <h2 class="gen__error">${t('struct.failed')}</h2>
         <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>
         <div class="gen__actions">
-          <button class="btn btn--ghost" data-cancel>关闭</button>
-          <button class="btn btn--primary" data-retry>重试</button>
+          <button class="btn btn--ghost" data-cancel>${t('common.close')}</button>
+          <button class="btn btn--primary" data-retry>${t('common.retry')}</button>
         </div>
       </div>`
     body.querySelector('[data-cancel]')!.addEventListener('click', close)
@@ -89,7 +90,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
       onNext: () => {
         const edited = collectStructure(body, trimmed)
         if (!edited.sections.length) {
-          toast('至少保留一个部分')
+          toast(t('struct.keepOne'))
           return
         }
         rich = body.querySelector<HTMLInputElement>('[data-rich]')?.checked ?? rich
@@ -121,56 +122,56 @@ function renderSecRow(s: Section): string {
       <div class="ol-row__index" data-index></div>
       <div class="ol-row__content">
         <div class="ol-row__top">
-          <input class="ol-row__title" data-title value="${escapeHtml(s.title)}" placeholder="部分标题">
-          <div class="sec-row__budget" title="这一部分的页数">
+          <input class="ol-row__title" data-title value="${escapeHtml(s.title)}" placeholder="${escapeHtml(t('struct.partTitle'))}">
+          <div class="sec-row__budget" title="${escapeHtml(t('struct.partPages'))}">
             <button class="sec-row__step" data-dec type="button" tabindex="-1">−</button>
             <input class="sec-row__pages" type="number" min="1" max="15" data-pages value="${s.pages ?? 3}">
             <button class="sec-row__step" data-inc type="button" tabindex="-1">+</button>
-            <span class="sec-row__unit">页</span>
+            <span class="sec-row__unit">${t('unit.pages')}</span>
             <span class="sec-row__time" data-time></span>
           </div>
           <div class="ol-row__ops">
-            <button class="icon-btn" data-up title="上移">${icons.up}</button>
-            <button class="icon-btn" data-down title="下移">${icons.down}</button>
-            <button class="icon-btn" data-del title="删除">${icons.trash}</button>
+            <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}">${icons.up}</button>
+            <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}">${icons.down}</button>
+            <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
           </div>
         </div>
-        <input class="ol-row__brief" data-brief value="${escapeHtml(s.brief ?? '')}" placeholder="这一部分讲什么（可选）">
+        <input class="ol-row__brief" data-brief value="${escapeHtml(s.brief ?? '')}" placeholder="${escapeHtml(t('struct.partBrief'))}">
       </div>
     </li>`
 }
 
 function renderEditor(structure: Structure, rich: boolean): string {
   const themeChips = THEME_LABELS.map(
-    (t) =>
-      `<button type="button" class="chip${t.value === structure.theme ? ' active' : ''}" data-theme="${t.value}">${t.label}</button>`,
+    (o) =>
+      `<button type="button" class="chip${o.value === structure.theme ? ' active' : ''}" data-theme="${o.value}">${t(o.key)}</button>`,
   ).join('')
 
   return `
     <div class="outline__head">
-      <h2>先确认整体结构 · <span data-count>${structure.sections.length}</span> 个部分</h2>
-      <p>核对我对需求的理解，以及分成哪几个部分、每部分多少页；下一步会逐个环节细化成具体页面。</p>
-      <div class="outline__total">全篇约 <b data-total-pages>–</b> 页 · <b data-total-time>–</b>（含封面 / 结束页）</div>
+      <h2>${t('struct.headPre')}<span data-count>${structure.sections.length}</span>${t('struct.headPost')}</h2>
+      <p>${t('struct.headSub')}</p>
+      <div class="outline__total">${t('struct.totalPre')}<b data-total-pages>–</b>${t('struct.totalMid')}<b data-total-time>–</b>${t('struct.totalPost')}</div>
     </div>
     <div class="understand">
-      <label>我的理解</label>
+      <label>${t('struct.understandLabel')}</label>
       <textarea class="form-input understand__text" data-understanding rows="2"
-        placeholder="用一句话描述你想要的课件（讲给谁、目的、重点）">${escapeHtml(structure.understanding ?? '')}</textarea>
+        placeholder="${escapeHtml(t('struct.understandPlaceholder'))}">${escapeHtml(structure.understanding ?? '')}</textarea>
     </div>
     <div class="outline__meta">
-      <input class="form-input" data-deck-title value="${escapeHtml(structure.title)}" placeholder="课件标题">
-      <input class="form-input" data-deck-subtitle value="${escapeHtml(structure.subtitle ?? '')}" placeholder="副标题（可选）">
-      <div class="outline__theme"><span>配色</span><div class="chips" data-theme-chips>${themeChips}</div></div>
-      <label class="switch"><input type="checkbox" data-rich${rich ? ' checked' : ''}><span>生成更丰富的内容（正文 / 要点，而不只是提纲框架）</span></label>
+      <input class="form-input" data-deck-title value="${escapeHtml(structure.title)}" placeholder="${escapeHtml(t('struct.deckTitle'))}">
+      <input class="form-input" data-deck-subtitle value="${escapeHtml(structure.subtitle ?? '')}" placeholder="${escapeHtml(t('struct.deckSubtitle'))}">
+      <div class="outline__theme"><span>${t('home.field.theme')}</span><div class="chips" data-theme-chips>${themeChips}</div></div>
+      <label class="switch"><input type="checkbox" data-rich${rich ? ' checked' : ''}><span>${t('struct.richLabel')}</span></label>
     </div>
     <ol class="outline__list" data-list>
       ${structure.sections.map(renderSecRow).join('')}
     </ol>
-    <button class="btn btn--ghost btn--sm outline__add" data-add>${icons.plus} 添加一个部分</button>
+    <button class="btn btn--ghost btn--sm outline__add" data-add>${icons.plus} ${t('struct.addPart')}</button>
     <div class="outline__actions">
-      <button class="btn btn--ghost" data-cancel>取消</button>
-      <button class="btn btn--ghost" data-regen>${icons.refresh} 重新规划</button>
-      <button class="btn btn--primary" data-go>下一步：逐环节细化 →</button>
+      <button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button>
+      <button class="btn btn--ghost" data-regen>${icons.refresh} ${t('struct.regen')}</button>
+      <button class="btn btn--primary" data-go>${t('struct.next')}</button>
     </div>`
 }
 
@@ -205,11 +206,11 @@ function wireEditor(
       if (up) up.disabled = i === 0
       if (down) down.disabled = i === rows.length - 1
       const timeEl = row.querySelector<HTMLElement>('[data-time]')
-      if (timeEl) timeEl.textContent = `· ~${Math.max(1, Math.round(pagesOf(row) * perPage))} 分钟`
+      if (timeEl) timeEl.textContent = `· ~${Math.max(1, Math.round(pagesOf(row) * perPage))} ${t('unit.min')}`
     })
     if (countEl) countEl.textContent = String(rows.length)
     if (totalPagesEl) totalPagesEl.textContent = String(totalPages)
-    if (totalTimeEl) totalTimeEl.textContent = `${Math.max(1, Math.round(totalPages * perPage))} 分钟`
+    if (totalTimeEl) totalTimeEl.textContent = `${Math.max(1, Math.round(totalPages * perPage))} ${t('unit.min')}`
   }
 
   list.addEventListener('click', (e) => {
@@ -269,11 +270,11 @@ function collectStructure(body: HTMLElement, topic: string): Structure {
 
   const sections: Section[] = []
   body.querySelectorAll<HTMLElement>('[data-row]').forEach((row) => {
-    const t = row.querySelector<HTMLInputElement>('[data-title]')?.value.trim() ?? ''
+    const ttl = row.querySelector<HTMLInputElement>('[data-title]')?.value.trim() ?? ''
     const brief = row.querySelector<HTMLInputElement>('[data-brief]')?.value.trim() || undefined
     const pagesRaw = Number(row.querySelector<HTMLInputElement>('[data-pages]')?.value)
     const pages = Number.isFinite(pagesRaw) && pagesRaw > 0 ? Math.round(pagesRaw) : 3
-    if (t || brief) sections.push({ title: t || (brief as string), brief: t ? brief : undefined, pages })
+    if (ttl || brief) sections.push({ title: ttl || (brief as string), brief: ttl ? brief : undefined, pages })
   })
 
   return { understanding, title, subtitle, theme, sections }
