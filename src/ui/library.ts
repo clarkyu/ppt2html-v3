@@ -1,6 +1,6 @@
 import { icons } from '../lib/icons'
 import { navigate } from '../router'
-import { listDecks, deleteDeck } from '../store/db'
+import { listDecks, deleteDeck, duplicateDeck, getDeck, saveDeck } from '../store/db'
 import { mountThumb } from '../render/preview'
 import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
@@ -39,14 +39,39 @@ export function renderLibrary(view: HTMLElement): () => void {
           <div class="deck-card__meta">
             <span>${deck.slides.length} 页 · ${formatDate(deck.createdAt)}</span>
             <div class="deck-card__actions">
+              <button class="icon-btn" data-edit title="编辑">${icons.edit}</button>
+              <button class="icon-btn" data-rename title="重命名">${icons.rename}</button>
+              <button class="icon-btn" data-copy title="复制">${icons.copy}</button>
               <button class="icon-btn" data-del title="删除">${icons.trash}</button>
             </div>
           </div>
         </div>`
 
       card.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).closest('[data-del]')) return
+        if ((e.target as HTMLElement).closest('.deck-card__actions')) return
         navigate(`#/play/${deck.id}`)
+      })
+      card.querySelector('[data-edit]')!.addEventListener('click', (e) => {
+        e.stopPropagation()
+        navigate(`#/edit/${deck.id}`)
+      })
+      card.querySelector('[data-rename]')!.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        const name = prompt('重命名课件：', deck.title)?.trim()
+        if (!name || name === deck.title) return
+        const fresh = await getDeck(deck.id)
+        if (!fresh) return
+        fresh.title = name
+        fresh.updatedAt = Date.now()
+        await saveDeck(fresh)
+        toast('已重命名')
+        draw(await listDecks())
+      })
+      card.querySelector('[data-copy]')!.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        const copy = await duplicateDeck(deck.id)
+        toast(copy ? '已复制' : '复制失败')
+        draw(await listDecks())
       })
       card.querySelector('[data-del]')!.addEventListener('click', async (e) => {
         e.stopPropagation()
