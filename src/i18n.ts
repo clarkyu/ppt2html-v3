@@ -194,6 +194,17 @@ const DICT: Record<string, Entry> = {
   'lib.deleted': { zh: '已删除', en: 'Deleted' },
   'lib.readError': { zh: '读取失败', en: 'Failed to load' },
   'lib.readErrorHint': { zh: '无法读取本地课件库。', en: 'Could not read the local deck library.' },
+  'lib.backup': { zh: '备份', en: 'Back up' },
+  'lib.restore': { zh: '恢复', en: 'Restore' },
+  'lib.backupHint': {
+    zh: '把整个课件库导出为一个文件妥善保存;换设备或清缓存后可用「恢复」导回。',
+    en: 'Export your whole library to a file; use “Restore” to bring it back after clearing data or switching devices.',
+  },
+  'lib.restoreHint': { zh: '从备份文件恢复课件', en: 'Restore decks from a backup file' },
+  'lib.backupEmpty': { zh: '还没有课件可备份', en: 'No decks to back up yet' },
+  'lib.backupDone': { zh: '已备份 {n} 份课件', en: 'Backed up {n} decks' },
+  'lib.restoreDone': { zh: '已恢复 {n} 份课件', en: 'Restored {n} decks' },
+  'lib.restoreFailed': { zh: '恢复失败:不是有效的备份文件', en: 'Restore failed: not a valid backup file' },
 
   // Guided create wizard
   'guided.pickModel': { zh: '选择生成模型', en: 'Choose a model' },

@@ -41,6 +41,25 @@ export async function deleteDeck(id: string): Promise<void> {
   await (await db()).delete('decks', id)
 }
 
+/**
+ * Bulk-insert decks from a backup file (put = insert or overwrite by id, so
+ * restoring is idempotent). Skips anything that isn't deck-shaped. Returns the
+ * number actually written.
+ */
+export async function importDecks(decks: Deck[]): Promise<number> {
+  const database = await db()
+  const tx = database.transaction('decks', 'readwrite')
+  let n = 0
+  for (const d of decks) {
+    if (d && typeof d.id === 'string' && typeof d.title === 'string' && Array.isArray(d.slides)) {
+      await tx.store.put(d)
+      n++
+    }
+  }
+  await tx.done
+  return n
+}
+
 /** Save a copy of a deck under a new id/title. Returns the new deck. */
 export async function duplicateDeck(id: string): Promise<Deck | undefined> {
   const src = await getDeck(id)

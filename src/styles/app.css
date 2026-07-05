@@ -201,9 +201,11 @@ button { font-family: inherit; }
 .section-head h2 { font-size: 22px; font-weight: 750; margin: 0; color: var(--text-strong); }
 .section-head a { color: var(--brand); text-decoration: none; font-weight: 600; font-size: 14px; }
 
-/* ---------- Library toolbar (search + sort) ---------- */
+/* ---------- Library toolbar (search + sort + backup/restore) ---------- */
 .library-head { align-items: center; gap: 12px; flex-wrap: wrap; }
-.library-tools { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.library-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.library-tools { display: flex; align-items: center; gap: 10px; }
+.library-io { display: flex; align-items: center; gap: 8px; }
 .search { position: relative; display: flex; align-items: center; }
 .search__icon { position: absolute; left: 10px; width: 16px; height: 16px; color: var(--text-muted); pointer-events: none; display: flex; }
 .search__icon svg { width: 16px; height: 16px; }
