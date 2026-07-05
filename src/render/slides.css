@@ -79,6 +79,37 @@
 .reveal.deck .deck-slide__credit a { color: inherit; border: none; text-decoration: none; }
 .reveal.deck .deck-slide__credit a:hover { opacity: 1; text-decoration: underline; }
 
+/* Chapter label (top-right) + page number (bottom-right). Baked into each slide
+   so they also appear in print/PDF. */
+.reveal.deck .deck-slide__section {
+  position: absolute;
+  top: 30px;
+  right: 92px;
+  z-index: 2;
+  max-width: 46%;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  opacity: 0.85;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reveal.deck .deck-slide__pagenum {
+  position: absolute;
+  bottom: 26px;
+  right: 92px;
+  z-index: 2;
+  font-size: 15px;
+  color: var(--muted);
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
 /* The inner wrapper fills the slide and arranges content. */
 .reveal.deck .s {
   display: flex;
