@@ -8,10 +8,14 @@
 // to null so generation never breaks — a page simply keeps its theme gradient.
 
 import type { Deck, Slide, SlideBg } from '../types'
-import type { LlmSettings } from '../llm/settings'
+import { effectiveImageProvider, type LlmSettings } from '../llm/settings'
 
 const REQ_TIMEOUT = 10000
 const CONCURRENCY = 4
+const UTM = 'utm_source=ppt2html_v3&utm_medium=referral'
+
+/** A search result plus Unsplash's download-tracking URL (stripped before use). */
+type Candidate = SlideBg & { _download?: string }
 
 interface SearchOpts {
   signal?: AbortSignal
@@ -28,15 +32,19 @@ export async function searchImage(
   const q = query.trim()
   if (!q) return null
   try {
-    const unsplashKey = settings.images.unsplashKey.trim()
-    const pexelsKey = settings.images.pexelsKey.trim()
-    const candidates = unsplashKey
-      ? await unsplash(q, unsplashKey, opts.signal)
-      : pexelsKey
-        ? await pexels(q, pexelsKey, opts.signal)
-        : await openverse(q, opts.signal)
+    const { source, key } = effectiveImageProvider(settings)
+    const candidates: Candidate[] =
+      source === 'unsplash'
+        ? await unsplash(q, key, opts.signal)
+        : source === 'pexels'
+          ? await pexels(q, key, opts.signal)
+          : await openverse(q, opts.signal)
     const pick = candidates.find((c) => !opts.exclude?.has(c.url)) ?? candidates[0]
-    return pick ?? null
+    if (!pick) return null
+    // Unsplash API terms require pinging the download endpoint when a photo is used.
+    if (pick.source === 'unsplash' && pick._download) void triggerUnsplashDownload(pick._download, key)
+    const { _download, ...bg } = pick
+    return bg
   } catch {
     return null
   }
@@ -106,14 +114,14 @@ function plain(s: string): string {
 
 /* ------------------------------- providers ------------------------------- */
 
-async function openverse(q: string, signal?: AbortSignal): Promise<SlideBg[]> {
+async function openverse(q: string, signal?: AbortSignal): Promise<Candidate[]> {
   const url =
     `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}` +
     `&page_size=6&aspect_ratio=wide&mature=false`
   const data = await getJson(url, {}, signal)
   const results = Array.isArray(data?.results) ? data.results : []
   return results
-    .map((r: Record<string, unknown>): SlideBg | null => {
+    .map((r: Record<string, unknown>): Candidate | null => {
       const thumb = typeof r.thumbnail === 'string' ? r.thumbnail : ''
       if (!thumb) return null
       const credit = [r.creator, r.provider].filter((x) => typeof x === 'string').join(' · ')
@@ -124,37 +132,39 @@ async function openverse(q: string, signal?: AbortSignal): Promise<SlideBg[]> {
         link: typeof r.foreign_landing_url === 'string' ? r.foreign_landing_url : undefined,
       }
     })
-    .filter((x: SlideBg | null): x is SlideBg => x !== null)
+    .filter((x: Candidate | null): x is Candidate => x !== null)
 }
 
-async function unsplash(q: string, key: string, signal?: AbortSignal): Promise<SlideBg[]> {
+async function unsplash(q: string, key: string, signal?: AbortSignal): Promise<Candidate[]> {
   const url =
     `https://api.unsplash.com/search/photos?query=${encodeURIComponent(q)}` +
     `&per_page=6&orientation=landscape&content_filter=high`
   const data = await getJson(url, { Authorization: `Client-ID ${key}` }, signal)
   const results = Array.isArray(data?.results) ? data.results : []
   return results
-    .map((r: Record<string, any>): SlideBg | null => {
+    .map((r: Record<string, any>): Candidate | null => {
       const u = r?.urls?.regular
       if (typeof u !== 'string') return null
+      const html = typeof r?.links?.html === 'string' ? r.links.html : undefined
       return {
         url: u,
         source: 'unsplash',
         credit: typeof r?.user?.name === 'string' ? r.user.name : undefined,
-        link: typeof r?.links?.html === 'string' ? r.links.html : undefined,
+        link: html ? `${html}?${UTM}` : undefined,
+        _download: typeof r?.links?.download_location === 'string' ? r.links.download_location : undefined,
       }
     })
-    .filter((x: SlideBg | null): x is SlideBg => x !== null)
+    .filter((x: Candidate | null): x is Candidate => x !== null)
 }
 
-async function pexels(q: string, key: string, signal?: AbortSignal): Promise<SlideBg[]> {
+async function pexels(q: string, key: string, signal?: AbortSignal): Promise<Candidate[]> {
   const url =
     `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}` +
     `&per_page=6&orientation=landscape`
   const data = await getJson(url, { Authorization: key }, signal)
   const photos = Array.isArray(data?.photos) ? data.photos : []
   return photos
-    .map((p: Record<string, any>): SlideBg | null => {
+    .map((p: Record<string, any>): Candidate | null => {
       const u = p?.src?.large2x || p?.src?.large || p?.src?.original
       if (typeof u !== 'string') return null
       return {
@@ -164,7 +174,16 @@ async function pexels(q: string, key: string, signal?: AbortSignal): Promise<Sli
         link: typeof p?.url === 'string' ? p.url : undefined,
       }
     })
-    .filter((x: SlideBg | null): x is SlideBg => x !== null)
+    .filter((x: Candidate | null): x is Candidate => x !== null)
+}
+
+/** Unsplash requires a GET to the photo's download_location when it's used. */
+async function triggerUnsplashDownload(loc: string, key: string): Promise<void> {
+  try {
+    await fetch(loc, { headers: { Authorization: `Client-ID ${key}` } })
+  } catch {
+    /* best-effort; ignore */
+  }
 }
 
 async function getJson(

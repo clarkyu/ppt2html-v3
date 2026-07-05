@@ -3,6 +3,7 @@ import {
   saveSettings,
   DEFAULT_SETTINGS,
   hasSystemKey,
+  hasSystemImageKey,
   SYSTEM_DEEPSEEK,
   systemKeyApplies,
   type LlmSettings,
@@ -88,7 +89,11 @@ export function renderSettings(view: HTMLElement): () => void {
       <div class="form-group">
         <label>页面背景图</label>
         <label class="switch"><input type="checkbox" data-img-enabled><span>自动为每页配一张相关的淡背景图</span></label>
-        <div class="hint">默认用免费的 <b>Openverse</b> 图库搜索（CC 授权、<b>无需 Key</b>、开箱即用）。背景很淡、不干扰阅读。想要更高画质/更贴合，可填下面任一图片 Key（有则优先用 Unsplash）——<b>Unsplash / Pexels 都可去官网免费申请 API Key</b>。</div>
+        <div class="hint">${
+          hasSystemImageKey
+            ? '默认已由<b>系统提供的高清图库（Unsplash）</b>配图——开箱即用、免填 Key。若填入你自己的 Unsplash / Pexels Key，则优先用你的。'
+            : '默认用免费的 <b>Openverse</b> 图库搜索（CC 授权、<b>无需 Key</b>、开箱即用）。想要更高画质/更贴合，可填下面任一图片 Key（有则优先用 Unsplash）——<b>Unsplash / Pexels 都可去官网免费申请 API Key</b>。'
+        }背景很淡、不干扰阅读，右下角会标注图片来源。</div>
         <input class="form-input" data-img-unsplash placeholder="Unsplash Access Key（可选）" autocomplete="off" style="margin-top:10px">
         <input class="form-input" data-img-pexels placeholder="Pexels API Key（可选）" autocomplete="off" style="margin-top:8px">
         <div class="hint">这些是「图片搜索」Key，仅用于给页面配背景照片，只存本机。</div>

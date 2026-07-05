@@ -1,4 +1,4 @@
-import type { Slide, Column, CompareItem, TimelineStep } from '../types'
+import type { Slide, SlideBg, Column, CompareItem, TimelineStep } from '../types'
 import { mdInline, mdProse, escapeHtml } from '../lib/markdown'
 
 // Each renderer returns the inner HTML for a slide's <section>.
@@ -195,4 +195,32 @@ export function slideBgHtml(slide: Slide): string {
   const css = bgCssUrl(slide.bg?.url)
   if (!css) return ''
   return `<div class="deck-slide__bg" aria-hidden="true" style="background-image:${css}"></div>`
+}
+
+const PLATFORM: Record<string, string> = { unsplash: 'Unsplash', pexels: 'Pexels', openverse: 'Openverse' }
+
+/**
+ * A small photo-attribution caption for a background image (empty if none).
+ * Required for Unsplash/Pexels/CC usage; shown in a corner of the slide.
+ */
+export function creditHtml(bg: SlideBg | undefined): string {
+  if (!bg || !/^https?:\/\//i.test(bg.url)) return ''
+  const platform = PLATFORM[bg.source] ?? ''
+  const who = (bg.credit ?? '').trim()
+  // Openverse credit already carries "creator · provider"; others append platform.
+  let label = who
+  if (bg.source !== 'openverse' && platform) label = who ? `${who} / ${platform}` : platform
+  else if (!who) label = platform
+  if (!label) return ''
+  const safe = escapeHtml(label)
+  const inner =
+    bg.link && /^https?:\/\//i.test(bg.link)
+      ? `<a href="${escapeHtml(bg.link)}" target="_blank" rel="noopener noreferrer">${safe}</a>`
+      : safe
+  return `<div class="deck-slide__credit">${inner}</div>`
+}
+
+/** Attribution caption for a slide's background image (empty if none). */
+export function slideCreditHtml(slide: Slide): string {
+  return creditHtml(slide.bg)
 }

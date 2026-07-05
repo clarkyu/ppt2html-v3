@@ -1,5 +1,13 @@
 import { generateClarifyingQuestions, DEFAULT_QUESTIONS } from '../llm/clarify'
-import { loadSettings, saveSettings, isConfigured, hasSystemKey, type LlmSettings, type Provider } from '../llm/settings'
+import {
+  loadSettings,
+  saveSettings,
+  isConfigured,
+  hasSystemKey,
+  hasSystemImageKey,
+  type LlmSettings,
+  type Provider,
+} from '../llm/settings'
 import { MODEL_PRESETS, modelChoicesFor, presetFor } from '../llm/models'
 import { startStructure } from './structure'
 import { navigate } from '../router'
@@ -141,7 +149,9 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
       bgNote.style.display = draft.images.enabled ? '' : 'none'
       bgNote.innerHTML = hasImgKey
         ? '将用你的 Unsplash / Pexels 服务搜图（画质更好）。'
-        : '默认用免费的 Openverse 图库（免 Key）。想更精致可用 <b>Unsplash / Pexels</b>——去官网免费申请 API Key，再到「更多设置」里填写。'
+        : hasSystemImageKey
+          ? '将用系统提供的<b>高清 Unsplash 图库</b>配图（免填 Key）。'
+          : '默认用免费的 Openverse 图库（免 Key）。想更精致可用 <b>Unsplash / Pexels</b>——去官网免费申请 API Key，再到「更多设置」里填写。'
     }
 
     const paint = () => {

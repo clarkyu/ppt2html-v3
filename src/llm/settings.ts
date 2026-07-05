@@ -47,6 +47,18 @@ export const SYSTEM_DEEPSEEK = {
 }
 export const hasSystemKey = SYSTEM_DEEPSEEK.apiKey.length > 0
 
+/**
+ * System-provided image-search keys (baked in from build-time env vars, like
+ * the DeepSeek key). When present, all users get high-quality Unsplash / Pexels
+ * backgrounds by default without configuring anything. Same public-bundle
+ * tradeoff as the DeepSeek key.
+ */
+export const SYSTEM_IMAGE = {
+  unsplashKey: ((import.meta.env.VITE_UNSPLASH_KEY as string | undefined) ?? '').trim(),
+  pexelsKey: ((import.meta.env.VITE_PEXELS_KEY as string | undefined) ?? '').trim(),
+}
+export const hasSystemImageKey = SYSTEM_IMAGE.unsplashKey.length > 0 || SYSTEM_IMAGE.pexelsKey.length > 0
+
 function isDeepSeekHost(url: string): boolean {
   try {
     return new URL(url).host.toLowerCase().includes('deepseek')
@@ -125,9 +137,19 @@ export function isConfigured(settings: LlmSettings): boolean {
   return effectiveApiKey(settings).length > 0
 }
 
-/** Which image backend applies: user's Unsplash/Pexels key, else free Openverse. */
+/**
+ * The image backend + key to actually use, in priority order:
+ * user's Unsplash → user's Pexels → system Unsplash → system Pexels → free Openverse.
+ */
+export function effectiveImageProvider(settings: LlmSettings): { source: ImageSource; key: string } {
+  if (settings.images.unsplashKey.trim()) return { source: 'unsplash', key: settings.images.unsplashKey.trim() }
+  if (settings.images.pexelsKey.trim()) return { source: 'pexels', key: settings.images.pexelsKey.trim() }
+  if (SYSTEM_IMAGE.unsplashKey) return { source: 'unsplash', key: SYSTEM_IMAGE.unsplashKey }
+  if (SYSTEM_IMAGE.pexelsKey) return { source: 'pexels', key: SYSTEM_IMAGE.pexelsKey }
+  return { source: 'openverse', key: '' }
+}
+
+/** Which image backend applies (source only). */
 export function imageSource(settings: LlmSettings): ImageSource {
-  if (settings.images.unsplashKey.trim()) return 'unsplash'
-  if (settings.images.pexelsKey.trim()) return 'pexels'
-  return 'openverse'
+  return effectiveImageProvider(settings).source
 }
