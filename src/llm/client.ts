@@ -1,7 +1,7 @@
 import type { DeckSpec, GenerateOptions } from '../types'
 import { buildSystemPrompt, buildUserPrompt } from './prompt'
 import { extractJson } from './extractJson'
-import { activeConfig, type LlmSettings, type ProviderConfig } from './settings'
+import { activeConfig, effectiveApiKey, isConfigured, type LlmSettings, type ProviderConfig } from './settings'
 
 export interface GenerateHandlers {
   /** Called on every streamed chunk with the full text so far and the new delta. */
@@ -29,9 +29,18 @@ export async function generateDeckSpec(
 }
 
 function requireKey(settings: LlmSettings): void {
-  if (!activeConfig(settings).apiKey.trim()) {
+  if (!isConfigured(settings)) {
     throw new Error('尚未配置 API Key，请先在「设置」中填写。')
   }
+}
+
+/**
+ * The active provider config with the *effective* key resolved (the user's own
+ * key, or the system DeepSeek fallback). Downstream header builders just read
+ * `cfg.apiKey`, so this is where the fallback gets injected.
+ */
+function resolvedConfig(settings: LlmSettings): ProviderConfig {
+  return { ...activeConfig(settings), apiKey: effectiveApiKey(settings) }
 }
 
 /* ----------------------------- streaming ----------------------------- */
@@ -43,7 +52,7 @@ export async function streamText(
   settings: LlmSettings,
   handlers: GenerateHandlers = {},
 ): Promise<string> {
-  const cfg = activeConfig(settings)
+  const cfg = resolvedConfig(settings)
   return settings.provider === 'anthropic'
     ? streamAnthropic(cfg, system, user, handlers)
     : streamOpenAI(cfg, system, user, handlers, providerExtras(settings))
@@ -138,7 +147,7 @@ export async function requestText(
   opts: { signal?: AbortSignal; maxTokens?: number; json?: boolean } = {},
 ): Promise<string> {
   requireKey(settings)
-  const cfg = activeConfig(settings)
+  const cfg = resolvedConfig(settings)
   const maxTokens = opts.maxTokens ?? 1024
   return settings.provider === 'anthropic'
     ? requestAnthropic(cfg, system, user, maxTokens, opts.signal)

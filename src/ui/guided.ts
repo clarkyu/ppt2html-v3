@@ -1,5 +1,5 @@
 import { generateClarifyingQuestions, DEFAULT_QUESTIONS } from '../llm/clarify'
-import { loadSettings, saveSettings, type LlmSettings, type Provider } from '../llm/settings'
+import { loadSettings, saveSettings, isConfigured, hasSystemKey, type LlmSettings, type Provider } from '../llm/settings'
 import { MODEL_PRESETS, modelChoicesFor, presetFor } from '../llm/models'
 import { startStructure } from './structure'
 import { navigate } from '../router'
@@ -29,7 +29,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     return
   }
   const initial = loadSettings()
-  if (!initial.anthropic.apiKey.trim() && !initial.openai.apiKey.trim()) {
+  if (!isConfigured(initial) && !usable(initial, 'anthropic') && !usable(initial, 'openai')) {
     toast('请先在「设置」中填写 API Key')
     navigate('#/settings')
     return
@@ -66,9 +66,11 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
 
   const showModel = () => {
     const draft = loadSettings()
-    // Default to a provider that actually has a key configured.
-    if (!draft[draft.provider].apiKey.trim()) {
-      draft.provider = draft.anthropic.apiKey.trim() ? 'anthropic' : 'openai'
+    // Default to a provider that's actually usable (own key, or the system
+    // DeepSeek fallback). Keep the saved one if it works; otherwise switch.
+    if (!usable(draft, draft.provider)) {
+      const other: Provider = draft.provider === 'anthropic' ? 'openai' : 'anthropic'
+      if (usable(draft, other)) draft.provider = other
     }
     // Kick off the clarifying-questions request now so it overlaps this step.
     startPrefetch(draft)
@@ -77,6 +79,11 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
       <div class="clarify__head">
         <h2>选择生成模型</h2>
         <p>「${escapeHtml(trimmed)}」——先确认用哪个模型生成，可随时在「设置」里更改。</p>
+        ${
+          hasSystemKey
+            ? `<p class="clarify__hint">DeepSeek 由系统提供、<b>免填 Key</b> 可直接开始；其它模型需填你自己的 API Key。生图模型也需自备 Key，否则只能生成文本型课件。</p>`
+            : ''
+        }
       </div>
       <div class="modelpick">
         <div class="modelpick__row">
@@ -119,7 +126,9 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
 
     const paint = () => {
       const cfg = draft[draft.provider]
-      const hasKey = cfg.apiKey.trim().length > 0
+      const ownKey = cfg.apiKey.trim().length > 0
+      const ready = isConfigured(draft) // own key, or system DeepSeek fallback
+      const systemCovers = ready && !ownKey
       segBtns.forEach((b) => b.classList.toggle('active', b.dataset.provider === draft.provider))
 
       // Thinking-mode toggle only applies to DeepSeek V4 endpoints.
@@ -138,11 +147,13 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
         .map((m) => `<option value="${escapeHtml(m)}"${m === cfg.model ? ' selected' : ''}>${escapeHtml(m)}</option>`)
         .join('')
 
-      noteEl.textContent = hasKey
-        ? `将使用 ${hostOf(cfg.baseUrl)} 上的 ${cfg.model}`
-        : '⚠ 该服务尚未配置 API Key，请点「更多设置」填写后再生成。'
-      noteEl.classList.toggle('modelpick__note--warn', !hasKey)
-      goBtn.disabled = !hasKey
+      noteEl.textContent = ready
+        ? systemCovers
+          ? `将使用系统提供的 DeepSeek · ${cfg.model}（免填 Key）`
+          : `将使用 ${hostOf(cfg.baseUrl)} 上的 ${cfg.model}`
+        : '⚠ 该服务尚未配置 API Key，请点「更多设置」填写后再生成（DeepSeek 可免填，由系统提供）。'
+      noteEl.classList.toggle('modelpick__note--warn', !ready)
+      goBtn.disabled = !ready
     }
 
     segBtns.forEach((b) =>
@@ -169,7 +180,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     })
     body.querySelector('[data-cancel]')!.addEventListener('click', close)
     goBtn.addEventListener('click', () => {
-      if (!draft[draft.provider].apiKey.trim()) {
+      if (!isConfigured(draft)) {
         toast('该服务尚未配置 API Key')
         return
       }
@@ -257,6 +268,11 @@ function hostOf(url: string): string {
   } catch {
     return url
   }
+}
+
+/** Is provider `p` usable — its own key set, or the system fallback covers it? */
+function usable(s: LlmSettings, p: Provider): boolean {
+  return isConfigured({ ...s, provider: p })
 }
 
 function renderQuestion(q: ClarifyQuestion, i: number): string {
