@@ -117,8 +117,8 @@ const DICT: Record<string, Entry> = {
   'err.httpPrefix': { zh: '请求失败（HTTP {status}）：', en: 'Request failed (HTTP {status}): ' },
   'err.noJson': { zh: '模型没有返回有效的 JSON', en: 'The model did not return valid JSON' },
   'err.network': {
-    zh: '网络请求失败:无法连接到模型服务。可能是网络不稳定、该服务被拦截,或模型响应太慢被中断(尤其像 GPT-5.5 Pro 等 Pro 级慢速模型)。建议换用更快的模型(如 gpt-5.5 / gpt-5.4-mini)后重试。',
-    en: 'Network request failed: could not reach the model service. This can be an unstable connection, a blocked endpoint, or a model too slow to respond before the connection drops (especially “Pro”-tier models like GPT-5.5 Pro). Try a faster model (e.g. gpt-5.5 / gpt-5.4-mini) and retry.',
+    zh: '无法连接到模型服务(网络请求失败)。多半是你的网络无法直连该服务——例如 api.openai.com 在中国大陆通常要用代理 / VPN 才能访问;也可能被浏览器插件 / 防火墙拦截,或模型太慢被中断。可改用能直连的服务:系统自带的 DeepSeek(免 Key),或通义千问 / 智谱 GLM / Kimi / 文心一言,再重试。',
+    en: 'Could not reach the model service (network request failed). Most likely your network can’t reach it directly — e.g. api.openai.com usually needs a proxy/VPN in mainland China. It may also be blocked by a browser extension/firewall, or the model was too slow. Try a directly-reachable provider (the built-in DeepSeek, or Qwen / GLM / Kimi / ERNIE) and retry.',
   },
 
   // Generating overlay
