@@ -37,6 +37,18 @@ export interface TimelineStep {
   text?: string
 }
 
+/** Presenter / org / date / logo shown on the cover and as a per-slide mark. */
+export interface Branding {
+  /** Presenter name (人). */
+  presenter?: string
+  /** Organization / unit (单位). */
+  org?: string
+  /** Display date (日期), e.g. "2026-07-05". */
+  date?: string
+  /** Logo image: a data: URL (uploaded) or an http(s) URL. */
+  logo?: string
+}
+
 /** A resolved, subtle background image for a slide (from an online search). */
 export interface SlideBg {
   url: string
@@ -87,6 +99,8 @@ export interface Deck {
   updatedAt: number
   /** Model id used to generate it, for reference. */
   model?: string
+  /** Presenter / org / date / logo (defaults from settings, editable per deck). */
+  branding?: Branding
 }
 
 /** The loose shape we accept from the model before normalization. */

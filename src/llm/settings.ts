@@ -7,6 +7,8 @@
 // bundle and is therefore world-readable — an accepted tradeoff for a painless
 // default. Any other model still requires the user's own key.
 
+import type { Branding } from '../types'
+
 export type Provider = 'anthropic' | 'openai'
 
 export interface ProviderConfig {
@@ -35,6 +37,8 @@ export interface LlmSettings {
   thinking: boolean
   /** Auto background images per page. */
   images: ImageSettings
+  /** Default presenter / org / logo (baked into new decks; editable per deck). */
+  branding: Branding
 }
 
 const STORAGE_KEY = 'ppt2html.settings.v1'
@@ -86,6 +90,7 @@ export const DEFAULT_SETTINGS: LlmSettings = {
   },
   thinking: false,
   images: { enabled: true, unsplashKey: '', pexelsKey: '' },
+  branding: {},
 }
 
 /** Fresh defaults. With a system key, default to system DeepSeek (thinking on). */
@@ -111,6 +116,7 @@ export function loadSettings(): LlmSettings {
       openai: { ...DEFAULT_SETTINGS.openai, ...parsed.openai },
       thinking: parsed.thinking === true,
       images: { ...DEFAULT_SETTINGS.images, ...parsed.images },
+      branding: { ...DEFAULT_SETTINGS.branding, ...parsed.branding },
     }
   } catch {
     return freshDefaults()
@@ -152,4 +158,18 @@ export function effectiveImageProvider(settings: LlmSettings): { source: ImageSo
 /** Which image backend applies (source only). */
 export function imageSource(settings: LlmSettings): ImageSource {
   return effectiveImageProvider(settings).source
+}
+
+/** Branding for a newly generated deck: global defaults + today's date. */
+export function newDeckBranding(settings: LlmSettings): Branding {
+  const b = settings.branding ?? {}
+  const today = new Date().toISOString().slice(0, 10)
+  const out: Branding = {
+    presenter: b.presenter?.trim() || undefined,
+    org: b.org?.trim() || undefined,
+    logo: b.logo?.trim() || undefined,
+    date: b.date?.trim() || today,
+  }
+  // Only attach if there's anything to show.
+  return out.presenter || out.org || out.logo ? out : { date: out.date }
 }

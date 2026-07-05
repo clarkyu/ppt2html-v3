@@ -1,6 +1,17 @@
-import type { Deck } from '../types'
+import type { Deck, Branding } from '../types'
 import { renderSlideInner, slideBgHtml, slideCreditHtml } from './layouts'
 import { escapeHtml } from '../lib/markdown'
+
+function validLogo(u?: string): string {
+  const s = (u ?? '').trim()
+  return /^(https?:\/\/|data:image\/)/i.test(s) ? s : ''
+}
+
+/** "presenter · org · date" line, for the cover / end slides. */
+function brandLineHtml(b?: Branding): string {
+  const parts = [b?.presenter, b?.org, b?.date].map((x) => (x ?? '').trim()).filter(Boolean)
+  return parts.length ? `<div class="deck-slide__brand">${parts.map(escapeHtml).join(' · ')}</div>` : ''
+}
 
 /**
  * Render a deck to the innerHTML of a reveal.js `.slides` container:
@@ -13,6 +24,9 @@ export function renderDeckSlides(deck: Deck): string {
   const total = deck.slides.length
   let sectionNum = 0
   let sectionTitle = ''
+
+  const logo = validLogo(deck.branding?.logo)
+  const logoHtml = logo ? `<img class="deck-slide__logo" src="${escapeHtml(logo)}" alt="">` : ''
 
   return deck.slides
     .map((slide, i) => {
@@ -30,13 +44,17 @@ export function renderDeckSlides(deck: Deck): string {
         ? `<div class="deck-slide__section">环节 ${sectionNum}${sectionTitle ? ` · ${escapeHtml(sectionTitle)}` : ''}</div>`
         : ''
       const pageHtml = `<div class="deck-slide__pagenum">${i + 1} / ${total}</div>`
+      // Presenter · org · date on the title & closing slides.
+      const brandHtml = slide.layout === 'cover' || slide.layout === 'end' ? brandLineHtml(deck.branding) : ''
 
       return (
         `<section data-layout="${slide.layout}" class="deck-slide">` +
         slideBgHtml(slide) +
         renderSlideInner(slide) +
+        logoHtml +
         sectionHtml +
         pageHtml +
+        brandHtml +
         slideCreditHtml(slide) +
         note +
         `</section>`

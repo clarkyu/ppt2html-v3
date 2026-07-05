@@ -1,5 +1,5 @@
 import { generateDeckFromOutline } from '../llm/outline'
-import { loadSettings, isConfigured, activeConfig } from '../llm/settings'
+import { loadSettings, isConfigured, activeConfig, newDeckBranding } from '../llm/settings'
 import { normalizeDeck } from '../render/normalize'
 import { saveDeck } from '../store/db'
 import { navigate } from '../router'
@@ -37,6 +37,7 @@ export function generateAndPlay(topic: string, opts: GenerateOptions, outline: O
   })
     .then((spec) => {
       const deck = normalizeDeck(spec, { prompt: trimmed, model, theme: outline.theme })
+      deck.branding = newDeckBranding(settings)
       // Background images are fetched lazily in the player (non-blocking), so a
       // slow / rate-limited image search never delays opening the deck.
       return saveDeck(deck).then(() => deck)
