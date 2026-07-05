@@ -73,11 +73,14 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
     })
   }
 
+  let rich = opts.richContent ?? true
+
   const showEditor = (structure: Structure) => {
-    body.innerHTML = renderEditor(structure)
+    body.innerHTML = renderEditor(structure, rich)
     wireEditor(body, minutes, {
       onCancel: close,
       onRegen: () => {
+        rich = body.querySelector<HTMLInputElement>('[data-rich]')?.checked ?? rich
         controller = new AbortController()
         run()
       },
@@ -87,8 +90,9 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
           toast('至少保留一个部分')
           return
         }
+        rich = body.querySelector<HTMLInputElement>('[data-rich]')?.checked ?? rich
         close()
-        startPageOutline(trimmed, { ...opts, understanding: edited.understanding }, edited)
+        startPageOutline(trimmed, { ...opts, understanding: edited.understanding, richContent: rich }, edited)
       },
     })
   }
@@ -134,7 +138,7 @@ function renderSecRow(s: Section): string {
     </li>`
 }
 
-function renderEditor(structure: Structure): string {
+function renderEditor(structure: Structure, rich: boolean): string {
   const themeChips = THEME_LABELS.map(
     (t) =>
       `<button type="button" class="chip${t.value === structure.theme ? ' active' : ''}" data-theme="${t.value}">${t.label}</button>`,
@@ -155,6 +159,7 @@ function renderEditor(structure: Structure): string {
       <input class="form-input" data-deck-title value="${escapeHtml(structure.title)}" placeholder="课件标题">
       <input class="form-input" data-deck-subtitle value="${escapeHtml(structure.subtitle ?? '')}" placeholder="副标题（可选）">
       <div class="outline__theme"><span>配色</span><div class="chips" data-theme-chips>${themeChips}</div></div>
+      <label class="switch"><input type="checkbox" data-rich${rich ? ' checked' : ''}><span>生成更丰富的内容（正文 / 要点，而不只是提纲框架）</span></label>
     </div>
     <ol class="outline__list" data-list>
       ${structure.sections.map(renderSecRow).join('')}

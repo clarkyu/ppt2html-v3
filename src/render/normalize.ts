@@ -83,7 +83,7 @@ function coerceLayout(v: unknown, slide: Record<string, unknown>): SlideLayout {
   return 'section'
 }
 
-function normalizeSlide(raw: unknown): Slide | null {
+export function normalizeSlide(raw: unknown): Slide | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
   const layout = coerceLayout(o.layout, o)

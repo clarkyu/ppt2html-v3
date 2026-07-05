@@ -99,6 +99,8 @@ export interface GenerateOptions {
   clarifications?: Clarification[]
   /** One-line restatement of the user's intent, confirmed at the structure step. */
   understanding?: string
+  /** Whether to generate rich, detailed page content (vs. a concise framework). */
+  richContent?: boolean
 }
 
 /** One AI-generated clarifying question with quick-pick suggestions. */
