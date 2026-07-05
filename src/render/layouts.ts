@@ -178,13 +178,21 @@ export function renderSlideInner(slide: Slide): string {
 }
 
 /**
+ * A CSS `url('…')` value for a background image, with the URL escaped for safe
+ * use inside an inline style attribute. Returns null for non-http(s) URLs.
+ */
+export function bgCssUrl(url: string | undefined): string | null {
+  if (!url || !/^https?:\/\//i.test(url)) return null
+  const safe = encodeURI(url).replace(/['"()<>\\]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)
+  return `url('${safe}')`
+}
+
+/**
  * The subtle full-bleed background-image layer for a slide (empty when the
- * slide has no resolved image). The URL is escaped for safe use inside a CSS
- * `url('…')` in an inline style attribute.
+ * slide has no resolved image).
  */
 export function slideBgHtml(slide: Slide): string {
-  const u = slide.bg?.url
-  if (!u || !/^https?:\/\//i.test(u)) return ''
-  const safe = encodeURI(u).replace(/['"()<>\\]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)
-  return `<div class="deck-slide__bg" aria-hidden="true" style="background-image:url('${safe}')"></div>`
+  const css = bgCssUrl(slide.bg?.url)
+  if (!css) return ''
+  return `<div class="deck-slide__bg" aria-hidden="true" style="background-image:${css}"></div>`
 }

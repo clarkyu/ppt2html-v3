@@ -1,12 +1,15 @@
-import { getDeck } from '../store/db'
+import { getDeck, saveDeck } from '../store/db'
 import { getSampleDeck } from '../sample'
 import { mountPlayer, type PlayerHandle } from '../player/player'
+import { populateDeckImages } from '../images/search'
+import { loadSettings } from '../llm/settings'
 import { navigate } from '../router'
 import { icons } from '../lib/icons'
 
 export function renderViewer(view: HTMLElement, id: string): () => void {
   let player: PlayerHandle | null = null
   let hideTimer = 0
+  const imgAbort = new AbortController()
 
   view.innerHTML = `
     <div class="viewer">
@@ -62,6 +65,32 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         editBtn.addEventListener('click', () => navigate(`#/edit/${id}`))
       }
       player = mountPlayer(mount, deck)
+
+      // Background images are fetched lazily, AFTER the deck is on screen, so a
+      // slow / rate-limited image search never blocks the deck from opening.
+      // Each image patches its slide live and the deck is re-saved so replays
+      // (and the editor) get them for free. Sample deck is ephemeral — skip.
+      const settings = loadSettings()
+      if (id !== 'sample' && settings.images.enabled && deck.slides.some((s) => !s.bg)) {
+        let saveTimer = 0
+        const scheduleSave = () => {
+          window.clearTimeout(saveTimer)
+          saveTimer = window.setTimeout(() => void saveDeck(deck), 800)
+        }
+        void populateDeckImages(deck, settings, {
+          signal: imgAbort.signal,
+          onImage: (index, bg) => {
+            player?.setSlideBackground(index, bg)
+            scheduleSave()
+          },
+        })
+          .then(() => {
+            if (!imgAbort.signal.aborted) void saveDeck(deck)
+          })
+          .catch(() => {
+            /* best-effort: a missing background just leaves the theme gradient */
+          })
+      }
     })
     .catch(() => {
       mount.innerHTML = `<div class="empty" style="color:#fff"><h3>加载失败</h3></div>`
@@ -69,6 +98,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
 
   return () => {
     window.clearTimeout(hideTimer)
+    imgAbort.abort()
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
     player?.destroy()
   }
