@@ -5,6 +5,7 @@ import { populateDeckImages } from '../images/search'
 import { loadSettings } from '../llm/settings'
 import { navigate } from '../router'
 import { icons } from '../lib/icons'
+import { t } from '../i18n'
 
 export function renderViewer(view: HTMLElement, id: string): () => void {
   let player: PlayerHandle | null = null
@@ -15,36 +16,36 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
   view.innerHTML = `
     <div class="viewer">
       <div class="viewer__bar show">
-        <button class="btn btn--sm" data-back>${icons.back} 返回</button>
+        <button class="btn btn--sm" data-back>${icons.back} ${t('common.back')}</button>
         <div class="viewer__title" data-title></div>
-        <span class="viewer__timer" data-timer title="已用时间（点击归零）">${icons.clock}<b>00:00</b></span>
-        <button class="btn btn--sm" data-notes title="演讲者备注">${icons.note}</button>
-        <button class="btn btn--sm" data-overview title="总览 (O)">${icons.grid}</button>
-        <button class="btn btn--sm" data-edit title="编辑课件" hidden>${icons.edit} 编辑</button>
-        <button class="btn btn--sm" data-print title="导出 PDF / 打印">${icons.print}</button>
-        <button class="btn btn--sm" data-full title="全屏 (F)">${icons.expand}</button>
-        <button class="btn btn--sm" data-help title="快捷键">${icons.keyboard}</button>
+        <span class="viewer__timer" data-timer title="${t('viewer.timerTitle')}">${icons.clock}<b>00:00</b></span>
+        <button class="btn btn--sm" data-notes title="${t('viewer.notes')}">${icons.note}</button>
+        <button class="btn btn--sm" data-overview title="${t('viewer.overview')}">${icons.grid}</button>
+        <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
+        <button class="btn btn--sm" data-print title="${t('viewer.print')}">${icons.print}</button>
+        <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}">${icons.expand}</button>
+        <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}">${icons.keyboard}</button>
       </div>
       <div class="viewer__notes" data-notes-panel hidden></div>
       <div class="viewer__help" data-help-panel hidden>
         <div class="viewer__help-card">
-          <h3>播放快捷键</h3>
+          <h3>${t('viewer.help.title')}</h3>
           <ul>
-            <li><kbd>←</kbd> <kbd>→</kbd> 上一页 / 下一页</li>
-            <li><kbd>F</kbd> 全屏 · <kbd>O</kbd> 幻灯总览</li>
-            <li><kbd>S</kbd> 演讲者视图（备注 + 计时）</li>
-            <li><kbd>Esc</kbd> 退出全屏 / 总览</li>
-            <li>手机：左右滑动翻页，横屏更清晰</li>
+            <li><kbd>←</kbd> <kbd>→</kbd> ${t('viewer.help.nav')}</li>
+            <li><kbd>F</kbd> ${t('viewer.fullscreenShort')} · <kbd>O</kbd> ${t('viewer.overviewShort')}</li>
+            <li><kbd>S</kbd> ${t('viewer.help.speaker')}</li>
+            <li><kbd>Esc</kbd> ${t('viewer.help.esc')}</li>
+            <li>${t('viewer.help.mobile')}</li>
           </ul>
-          <button class="btn btn--sm" data-help-close>知道了</button>
+          <button class="btn btn--sm" data-help-close>${t('common.gotIt')}</button>
         </div>
       </div>
       <div class="viewer__mount" data-mount></div>
       <div class="rotate-hint" data-rotate-hint>
         <div class="rotate-hint__icon">${icons.rotate}</div>
-        <p class="rotate-hint__title">横屏观看更清晰</p>
-        <p class="rotate-hint__sub">把手机横过来，课件会铺满屏幕；左右滑动翻页。</p>
-        <button class="btn btn--sm" data-rotate-dismiss>仍要竖屏播放</button>
+        <p class="rotate-hint__title">${t('viewer.rotate.title')}</p>
+        <p class="rotate-hint__sub">${t('viewer.rotate.sub')}</p>
+        <button class="btn btn--sm" data-rotate-dismiss>${t('viewer.rotate.dismiss')}</button>
       </div>
     </div>`
 
@@ -114,7 +115,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
       notesPanel.textContent = text
     } else {
       const em = document.createElement('em')
-      em.textContent = '本页没有备注'
+      em.textContent = t('viewer.noNote')
       notesPanel.appendChild(em)
     }
   }
@@ -137,7 +138,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
   load
     .then((deck) => {
       if (!deck) {
-        mount.innerHTML = `<div class="empty" style="color:#fff"><h3>课件不存在</h3><p>它可能已被删除。</p></div>`
+        mount.innerHTML = `<div class="empty" style="color:#fff"><h3>${t('viewer.notFound')}</h3><p>${t('viewer.notFoundHint')}</p></div>`
         return
       }
       titleEl.textContent = deck.title
@@ -176,7 +177,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
       }
     })
     .catch(() => {
-      mount.innerHTML = `<div class="empty" style="color:#fff"><h3>加载失败</h3></div>`
+      mount.innerHTML = `<div class="empty" style="color:#fff"><h3>${t('viewer.loadError')}</h3></div>`
     })
 
   return () => {

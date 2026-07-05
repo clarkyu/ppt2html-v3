@@ -5,14 +5,15 @@ import { mountThumb } from '../render/preview'
 import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
 import { toast } from '../lib/toast'
+import { t } from '../i18n'
 import type { Deck } from '../types'
 
 type SortKey = 'updated' | 'created' | 'title'
 
-const SORTS: Array<{ value: SortKey; label: string }> = [
-  { value: 'updated', label: '最近修改' },
-  { value: 'created', label: '最近创建' },
-  { value: 'title', label: '名称' },
+const SORTS: Array<{ value: SortKey; key: string }> = [
+  { value: 'updated', key: 'lib.sort.updated' },
+  { value: 'created', key: 'lib.sort.created' },
+  { value: 'title', key: 'lib.sort.title' },
 ]
 
 function sortDecks(decks: Deck[], key: SortKey): Deck[] {
@@ -31,17 +32,17 @@ export function renderLibrary(view: HTMLElement): () => void {
 
   view.innerHTML = `
     <div class="section-head library-head">
-      <h2>我的课件</h2>
+      <h2>${t('nav.library')}</h2>
       <div class="library-tools" data-tools hidden>
         <div class="search"><span class="search__icon">${icons.search}</span>
-          <input class="search__input" data-search placeholder="搜索课件标题…" />
+          <input class="search__input" data-search placeholder="${escapeHtml(t('lib.searchPlaceholder'))}" />
         </div>
         <select class="form-input library-sort" data-sort>
-          ${SORTS.map((s) => `<option value="${s.value}">${s.label}</option>`).join('')}
+          ${SORTS.map((s) => `<option value="${s.value}">${escapeHtml(t(s.key))}</option>`).join('')}
         </select>
       </div>
     </div>
-    <div data-body>加载中…</div>`
+    <div data-body>${t('common.loading')}</div>`
 
   const body = view.querySelector<HTMLElement>('[data-body]')!
   const tools = view.querySelector<HTMLElement>('[data-tools]')!
@@ -54,15 +55,15 @@ export function renderLibrary(view: HTMLElement): () => void {
     if (!decks.length) {
       // Distinguish "no decks at all" from "none match the search".
       if (all.length && query) {
-        body.innerHTML = `<div class="empty"><h3>没有匹配的课件</h3><p>试试换个关键词。</p></div>`
+        body.innerHTML = `<div class="empty"><h3>${t('lib.noMatch')}</h3><p>${t('lib.noMatchHint')}</p></div>`
         return
       }
       body.innerHTML = `
         <div class="empty">
           ${icons.empty}
-          <h3>还没有课件</h3>
-          <p>回到首页，输入一句话就能生成第一份精美课件。</p>
-          <button class="btn btn--primary" data-new>${icons.sparkles} 去创建</button>
+          <h3>${t('lib.emptyTitle')}</h3>
+          <p>${t('lib.emptyHint')}</p>
+          <button class="btn btn--primary" data-new>${icons.sparkles} ${t('lib.emptyCta')}</button>
         </div>`
       body.querySelector('[data-new]')!.addEventListener('click', () => navigate('#/'))
       return
@@ -79,12 +80,12 @@ export function renderLibrary(view: HTMLElement): () => void {
         <div class="deck-card__body">
           <div class="deck-card__title">${escapeHtml(deck.title)}</div>
           <div class="deck-card__meta">
-            <span>${deck.slides.length} 页 · ${formatDate(deck.createdAt)}</span>
+            <span>${deck.slides.length} ${t('unit.pages')} · ${formatDate(deck.createdAt)}</span>
             <div class="deck-card__actions">
-              <button class="icon-btn" data-edit title="编辑">${icons.edit}</button>
-              <button class="icon-btn" data-rename title="重命名">${icons.rename}</button>
-              <button class="icon-btn" data-copy title="复制">${icons.copy}</button>
-              <button class="icon-btn" data-del title="删除">${icons.trash}</button>
+              <button class="icon-btn" data-edit title="${t('lib.action.edit')}">${icons.edit}</button>
+              <button class="icon-btn" data-rename title="${t('lib.action.rename')}">${icons.rename}</button>
+              <button class="icon-btn" data-copy title="${t('lib.action.copy')}">${icons.copy}</button>
+              <button class="icon-btn" data-del title="${t('lib.action.delete')}">${icons.trash}</button>
             </div>
           </div>
         </div>`
@@ -99,27 +100,27 @@ export function renderLibrary(view: HTMLElement): () => void {
       })
       card.querySelector('[data-rename]')!.addEventListener('click', async (e) => {
         e.stopPropagation()
-        const name = prompt('重命名课件：', deck.title)?.trim()
+        const name = prompt(t('lib.renamePrompt'), deck.title)?.trim()
         if (!name || name === deck.title) return
         const fresh = await getDeck(deck.id)
         if (!fresh) return
         fresh.title = name
         fresh.updatedAt = Date.now()
         await saveDeck(fresh)
-        toast('已重命名')
+        toast(t('lib.renamed'))
         await reload()
       })
       card.querySelector('[data-copy]')!.addEventListener('click', async (e) => {
         e.stopPropagation()
         const copy = await duplicateDeck(deck.id)
-        toast(copy ? '已复制' : '复制失败')
+        toast(copy ? t('lib.copied') : t('lib.copyFailed'))
         await reload()
       })
       card.querySelector('[data-del]')!.addEventListener('click', async (e) => {
         e.stopPropagation()
-        if (!confirm(`删除「${deck.title}」？此操作不可撤销。`)) return
+        if (!confirm(t('lib.deleteConfirm').replace('{title}', deck.title))) return
         await deleteDeck(deck.id)
-        toast('已删除')
+        toast(t('lib.deleted'))
         await reload()
       })
 
@@ -150,7 +151,7 @@ export function renderLibrary(view: HTMLElement): () => void {
   })
 
   reload().catch(() => {
-    body.innerHTML = `<div class="empty"><h3>读取失败</h3><p>无法读取本地课件库。</p></div>`
+    body.innerHTML = `<div class="empty"><h3>${t('lib.readError')}</h3><p>${t('lib.readErrorHint')}</p></div>`
   })
 
   return () => thumbCleanups.forEach((fn) => fn())

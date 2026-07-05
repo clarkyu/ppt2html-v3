@@ -59,6 +59,12 @@ button { font-family: inherit; }
 }
 .nav a:hover { color: var(--text); background: var(--surface); }
 .nav a.active { color: var(--text-strong); background: var(--surface-2); }
+.lang-toggle {
+  margin-left: 6px; padding: 7px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+  font-weight: 700; font-size: 13px; transition: color 0.15s, border-color 0.15s;
+}
+.lang-toggle:hover { color: var(--text-strong); border-color: var(--border-strong); }
 
 /* ---------- Layout ---------- */
 .view {

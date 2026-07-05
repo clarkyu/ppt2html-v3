@@ -7,35 +7,46 @@ import { renderLibrary } from './ui/library'
 import { renderSettings } from './ui/settings'
 import { renderViewer } from './ui/viewer'
 import { renderDeckEditor } from './ui/editor'
+import { t, getLang, toggleLang } from './i18n'
 
 registerSW({ immediate: true })
 
 const app = document.getElementById('app')!
-app.innerHTML = `
-  <header class="appbar">
+app.innerHTML = `<header class="appbar" id="appbar"></header><main class="view" id="view"></main>`
+
+const appbar = document.getElementById('appbar')!
+
+function renderAppbar(route?: Route): void {
+  appbar.innerHTML = `
     <a class="brand" href="#/">
       <span class="brand__logo">${icons.play}</span>
-      课件生成器
+      ${t('app.name')}
     </a>
     <nav class="nav">
-      <a href="#/" data-nav="home">首页</a>
-      <a href="#/library" data-nav="library">我的课件</a>
-      <a href="#/settings" data-nav="settings">设置</a>
-    </nav>
-  </header>
-  <main class="view" id="view"></main>
-`
+      <a href="#/" data-nav="home">${t('nav.home')}</a>
+      <a href="#/library" data-nav="library">${t('nav.library')}</a>
+      <a href="#/settings" data-nav="settings">${t('nav.settings')}</a>
+      <button class="lang-toggle" data-lang title="${t('lang.toggleTitle')}">${t('lang.toggle')}</button>
+    </nav>`
+  appbar.querySelector('[data-lang]')!.addEventListener('click', () => toggleLang())
+  const name = route?.name
+  appbar.querySelectorAll<HTMLElement>('[data-nav]').forEach((a) => {
+    a.classList.toggle('active', a.dataset.nav === name)
+  })
+}
+
+document.documentElement.lang = getLang() === 'zh' ? 'zh-CN' : 'en'
 
 const view = document.getElementById('view')!
 let cleanup: (() => void) | null = null
+let current: Route = parseRoute(location.hash)
 
 function mount(route: Route): void {
   cleanup?.()
   cleanup = null
+  current = route
 
-  document.querySelectorAll<HTMLElement>('[data-nav]').forEach((a) => {
-    a.classList.toggle('active', a.dataset.nav === route.name)
-  })
+  renderAppbar(route)
   document.body.classList.toggle('playing', route.name === 'play')
   window.scrollTo(0, 0)
 
@@ -60,4 +71,6 @@ function mount(route: Route): void {
 
 const handle = () => mount(parseRoute(location.hash))
 window.addEventListener('hashchange', handle)
+// A language switch re-renders the current screen (and the app bar) in place.
+window.addEventListener('langchange', () => mount(current))
 handle()

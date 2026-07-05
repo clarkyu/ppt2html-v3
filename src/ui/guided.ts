@@ -13,6 +13,7 @@ import { startStructure } from './structure'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { escapeHtml } from '../lib/markdown'
+import { t } from '../i18n'
 import type { ClarifyQuestion, Clarification, GenerateOptions } from '../types'
 
 interface Prefetch {
@@ -33,12 +34,12 @@ interface Prefetch {
 export function startGuidedGeneration(topic: string, opts: GenerateOptions): void {
   const trimmed = topic.trim()
   if (!trimmed) {
-    toast('请先输入一句话主题')
+    toast(t('err.noTopic'))
     return
   }
   const initial = loadSettings()
   if (!isConfigured(initial) && !usable(initial, 'anthropic') && !usable(initial, 'openai')) {
-    toast('请先在「设置」中填写 API Key')
+    toast(t('err.noKey'))
     navigate('#/settings')
     return
   }
@@ -89,48 +90,44 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
 
     body.innerHTML = `
       <div class="clarify__head">
-        <h2>选择生成模型</h2>
-        <p>「${escapeHtml(trimmed)}」——先确认用哪个模型生成，可随时在「设置」里更改。</p>
-        ${
-          hasSystemKey
-            ? `<p class="clarify__hint">DeepSeek 由系统提供、<b>免填 Key</b> 可直接开始；其它模型需填你自己的 API Key。生图模型也需自备 Key，否则只能生成文本型课件。</p>`
-            : ''
-        }
+        <h2>${t('guided.pickModel')}</h2>
+        <p>${t('guided.pickModelSub').replace('{topic}', escapeHtml(trimmed))}</p>
+        ${hasSystemKey ? `<p class="clarify__hint">${t('guided.systemKeyHint')}</p>` : ''}
       </div>
       <div class="modelpick">
         <div class="modelpick__row">
-          <span class="modelpick__label">服务</span>
+          <span class="modelpick__label">${t('guided.service')}</span>
           <div class="seg" data-seg>
             <button type="button" data-provider="anthropic">Claude</button>
-            <button type="button" data-provider="openai">OpenAI 兼容</button>
+            <button type="button" data-provider="openai">${t('guided.openaiCompat')}</button>
           </div>
         </div>
         <div class="modelpick__row">
-          <span class="modelpick__label">预设</span>
+          <span class="modelpick__label">${t('guided.preset')}</span>
           <div class="chips modelpick__presets" data-presets>
             ${MODEL_PRESETS.map((p, i) => `<button type="button" class="chip" data-preset="${i}">${p.label}</button>`).join('')}
           </div>
         </div>
         <div class="modelpick__row">
-          <span class="modelpick__label">模型</span>
+          <span class="modelpick__label">${t('guided.model')}</span>
           <select class="select modelpick__model" data-model></select>
         </div>
         <div class="modelpick__row" data-think-row hidden>
-          <span class="modelpick__label">思考</span>
-          <label class="switch"><input type="checkbox" data-thinking><span>思考模式（更深入，稍慢）</span></label>
+          <span class="modelpick__label">${t('guided.thinking')}</span>
+          <label class="switch"><input type="checkbox" data-thinking><span>${t('guided.thinkingLabel')}</span></label>
         </div>
         <div class="modelpick__row">
-          <span class="modelpick__label">背景图</span>
-          <label class="switch"><input type="checkbox" data-bg-enabled><span>为每页自动配一张淡背景图</span></label>
+          <span class="modelpick__label">${t('guided.bg')}</span>
+          <label class="switch"><input type="checkbox" data-bg-enabled><span>${t('guided.bgLabel')}</span></label>
         </div>
         <div class="modelpick__note" data-bg-note></div>
         <div class="modelpick__note" data-note></div>
       </div>
       <div class="clarify__actions">
-        <button class="btn btn--ghost" data-settings>更多设置</button>
+        <button class="btn btn--ghost" data-settings>${t('guided.moreSettings')}</button>
         <div class="clarify__actions-right">
-          <button class="btn btn--ghost" data-cancel>取消</button>
-          <button class="btn btn--primary" data-go>开始 →</button>
+          <button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button>
+          <button class="btn btn--primary" data-go>${t('guided.start')}</button>
         </div>
       </div>`
 
@@ -148,10 +145,10 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
       const hasImgKey = draft.images.unsplashKey.trim() || draft.images.pexelsKey.trim()
       bgNote.style.display = draft.images.enabled ? '' : 'none'
       bgNote.innerHTML = hasImgKey
-        ? '将用你的 Unsplash / Pexels 服务搜图（画质更好）。'
+        ? t('guided.bgNote.own')
         : hasSystemImageKey
-          ? '将用系统提供的<b>高清 Unsplash 图库</b>配图（免填 Key）。'
-          : '默认用免费的 Openverse 图库（免 Key）。想更精致可用 <b>Unsplash / Pexels</b>——去官网免费申请 API Key，再到「更多设置」里填写。'
+          ? t('guided.bgNote.system')
+          : t('guided.bgNote.openverse')
     }
 
     const paint = () => {
@@ -179,9 +176,9 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
 
       noteEl.textContent = ready
         ? systemCovers
-          ? `将使用系统提供的 DeepSeek · ${cfg.model}（免填 Key）`
-          : `将使用 ${hostOf(cfg.baseUrl)} 上的 ${cfg.model}`
-        : '⚠ 该服务尚未配置 API Key，请点「更多设置」填写后再生成（DeepSeek 可免填，由系统提供）。'
+          ? t('guided.willUseSystem').replace('{model}', cfg.model)
+          : t('guided.willUse').replace('{host}', hostOf(cfg.baseUrl)).replace('{model}', cfg.model)
+        : t('guided.warnNoKey')
       noteEl.classList.toggle('modelpick__note--warn', !ready)
       goBtn.disabled = !ready
       paintBg()
@@ -216,7 +213,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     body.querySelector('[data-cancel]')!.addEventListener('click', close)
     goBtn.addEventListener('click', () => {
       if (!isConfigured(draft)) {
-        toast('该服务尚未配置 API Key')
+        toast(t('err.noKeyShort'))
         return
       }
       saveSettings(draft)
@@ -258,19 +255,19 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     step = 'questions'
     body.innerHTML = `
       <div class="clarify__head">
-        <h2>回答 1~2 个关键问题</h2>
-        <p>帮我把课件方向定准——选一选或补充即可，可跳过。下一步会先跟你确认整体结构。</p>
+        <h2>${t('guided.qTitle')}</h2>
+        <p>${t('guided.qSub')}</p>
       </div>
-      ${provisional ? `<div class="clarify__loading">正在按主题优化建议…</div>` : ''}
+      ${provisional ? `<div class="clarify__loading">${t('guided.qOptimizing')}</div>` : ''}
       <div class="clarify__list">
         ${questions.map(renderQuestion).join('')}
       </div>
       <div class="clarify__actions">
-        <button class="btn btn--ghost" data-back>← 上一步</button>
-        <button class="btn btn--ghost" data-skip>跳过，看整体结构</button>
+        <button class="btn btn--ghost" data-back>${t('common.prevStep')}</button>
+        <button class="btn btn--ghost" data-skip>${t('guided.skipToStructure')}</button>
         <div class="clarify__actions-right">
-          <button class="btn btn--ghost" data-cancel>取消</button>
-          <button class="btn btn--primary" data-go>下一步 →</button>
+          <button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button>
+          <button class="btn btn--primary" data-go>${t('common.next')}</button>
         </div>
       </div>`
 
@@ -321,7 +318,7 @@ function renderQuestion(q: ClarifyQuestion, i: number): string {
     <div class="clarify__q" data-q="${i}">
       <div class="clarify__qtext">${escapeHtml(q.question)}</div>
       ${chips ? `<div class="chips">${chips}</div>` : ''}
-      <input class="input clarify__custom" data-custom placeholder="补充说明（可选）">
+      <input class="input clarify__custom" data-custom placeholder="${escapeHtml(t('guided.qCustom'))}">
     </div>`
 }
 
