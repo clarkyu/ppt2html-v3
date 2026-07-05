@@ -5,6 +5,7 @@ import { saveDeck } from '../store/db'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { escapeHtml } from '../lib/markdown'
+import { liveTitles, renderLive } from '../lib/live'
 import type { GenerateOptions, Outline } from '../types'
 
 interface Overlay {
@@ -63,21 +64,21 @@ function buildOverlay(
     <div class="gen card" style="padding:32px">
       <div class="gen__spinner"></div>
       <h2>正在生成课件…</h2>
-      <p>「${escapeHtml(topic)}」 · ${outline.slides.length} 页</p>
-      <div class="gen__stream" data-stream>正在连接模型…</div>
+      <p>「${escapeHtml(topic)}」 · 共 ${outline.slides.length} 页</p>
+      <ol class="gen-live gen-live--tall" data-live><li class="gen-live__wait">正在连接模型…</li></ol>
       <div class="gen__actions">
         <button class="btn btn--ghost" data-cancel>取消</button>
       </div>
     </div>`
 
-  const streamEl = el.querySelector<HTMLElement>('[data-stream]')!
+  const liveEl = el.querySelector<HTMLElement>('[data-live]')!
   el.querySelector('[data-cancel]')!.addEventListener('click', onCancel)
 
   return {
     el,
     setStream: (text) => {
-      streamEl.textContent = text.slice(-1200)
-      streamEl.scrollTop = streamEl.scrollHeight
+      renderLive(liveEl, liveTitles(text))
+      liveEl.scrollTop = liveEl.scrollHeight
     },
     fail: (message) => {
       el.querySelector('.gen')!.innerHTML = `
