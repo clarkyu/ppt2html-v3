@@ -40,3 +40,19 @@ export async function listDecks(): Promise<Deck[]> {
 export async function deleteDeck(id: string): Promise<void> {
   await (await db()).delete('decks', id)
 }
+
+/** Save a copy of a deck under a new id/title. Returns the new deck. */
+export async function duplicateDeck(id: string): Promise<Deck | undefined> {
+  const src = await getDeck(id)
+  if (!src) return undefined
+  const now = Date.now()
+  const copy: Deck = {
+    ...structuredClone(src),
+    id: crypto.randomUUID(),
+    title: `${src.title}（副本）`,
+    createdAt: now,
+    updatedAt: now,
+  }
+  await saveDeck(copy)
+  return copy
+}
