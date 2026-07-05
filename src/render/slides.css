@@ -24,8 +24,11 @@
   position: relative;
 }
 
-/* Subtle, content-related background image. A theme-colored scrim keeps it
-   faint and text legible on both dark and light themes (only ~16% shows). */
+/* Subtle, content-related background image with a theme-tinted scrim. Two
+   layers keep text legible on light + dark themes while giving a more
+   "designed" look than a flat wash: a base tint everywhere, plus an extra
+   tint that fades out toward the far edge so the image reads a little more
+   where there's no text. */
 .reveal.deck .deck-slide__bg {
   position: absolute;
   inset: 0;
@@ -34,12 +37,25 @@
   background-position: center;
   pointer-events: none;
 }
+.reveal.deck .deck-slide__bg::before,
 .reveal.deck .deck-slide__bg::after {
   content: '';
   position: absolute;
   inset: 0;
+}
+/* Base tint everywhere (theme-appropriate, keeps light+dark legible). */
+.reveal.deck .deck-slide__bg::before {
   background: var(--bg);
-  opacity: 0.84;
+  opacity: 0.6;
+}
+/* Directional extra tint: opaque behind the content (upper-left), fading toward
+   the far bottom-right corner where the photo is allowed to show through more —
+   a cleaner, editorial look than a flat wash. */
+.reveal.deck .deck-slide__bg::after {
+  background: var(--bg);
+  opacity: 0.62;
+  -webkit-mask-image: linear-gradient(115deg, #000 34%, transparent 104%);
+  mask-image: linear-gradient(115deg, #000 34%, transparent 104%);
 }
 /* Keep all slide content above the background layer. */
 .reveal.deck .deck-slide > .s { position: relative; z-index: 1; }
