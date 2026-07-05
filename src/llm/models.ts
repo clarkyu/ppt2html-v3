@@ -37,9 +37,13 @@ export const MODEL_PRESETS: ModelPreset[] = [
     label: 'OpenAI',
     provider: 'openai',
     baseUrl: 'https://api.openai.com/v1',
+    // Note: OpenAI's "-pro" tier (gpt-5.5-pro / o3-pro / o1-pro) runs only on the
+    // Responses API and does extended reasoning that far outlasts a non-streaming
+    // browser request — the connection is dropped before the answer returns
+    // ("Failed to fetch"). This client speaks chat/completions, so those models
+    // are intentionally omitted; use gpt-5.5 / gpt-5.4 instead.
     models: [
       'gpt-5.5',
-      'gpt-5.5-pro',
       'gpt-5.4',
       'gpt-5.4-mini',
       'gpt-5.4-nano',
@@ -55,7 +59,6 @@ export const MODEL_PRESETS: ModelPreset[] = [
       'gpt-4o',
       'gpt-4o-mini',
       'chatgpt-4o-latest',
-      'o3-pro',
       'o3',
     ],
   },
