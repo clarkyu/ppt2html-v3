@@ -2,7 +2,7 @@
 // The LLM is asked to emit a `DeckSpec` (loose, forgiving); we validate/normalize
 // it into a `Deck` before rendering or persisting.
 
-export const THEMES = ['aurora', 'ink', 'sunrise', 'forest', 'noir'] as const
+export const THEMES = ['aurora', 'ink', 'sunrise', 'forest', 'noir', 'sand', 'rose'] as const
 export type ThemeName = (typeof THEMES)[number]
 
 export const LAYOUTS = [

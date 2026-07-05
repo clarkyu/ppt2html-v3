@@ -136,6 +136,37 @@ export const MODEL_PRESETS: ModelPreset[] = [
   },
 ]
 
+/**
+ * Short, friendly one-word-ish tags for well-known models, shown next to the id
+ * in the picker so newcomers can tell "strongest" from "cheapest / fastest".
+ * Models not listed here simply show their id with no tag.
+ */
+export const MODEL_NOTES: Record<string, string> = {
+  // Claude
+  'claude-opus-4-8': '推荐 · 最强',
+  'claude-sonnet-5': '性价比',
+  'claude-haiku-4-5': '最快最省',
+  'claude-fable-5': '最强 · 较贵',
+  // OpenAI
+  'gpt-5.5': '推荐 · 最强',
+  'gpt-5.4': '较强',
+  'gpt-5.4-mini': '性价比',
+  'gpt-5.4-nano': '最快最省',
+  'gpt-4o-mini': '便宜',
+  // Gemini
+  'gemini-3.5-flash': '推荐 · 性价比',
+  'gemini-3.1-pro-preview': '最强 · 预览',
+  'gemini-2.5-flash': '快',
+  // DeepSeek
+  'deepseek-v4-pro': '推荐 · 系统已提供',
+  'deepseek-v4-flash': '更快',
+}
+
+/** The friendly tag for a model id, if any. */
+export function modelNote(id: string): string {
+  return MODEL_NOTES[id.trim()] ?? ''
+}
+
 function hostOf(url: string): string {
   try {
     return new URL(url).host.toLowerCase()

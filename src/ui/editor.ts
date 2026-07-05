@@ -38,6 +38,8 @@ const THEME_LABELS: Record<ThemeName, string> = {
   sunrise: '暖阳',
   forest: '森林',
   noir: '深邃',
+  sand: '砂纸',
+  rose: '玫瑰',
 }
 
 /** Deck content editor: every page shown with a live preview and editable fields. */
