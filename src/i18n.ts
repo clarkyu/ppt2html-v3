@@ -116,6 +116,10 @@ const DICT: Record<string, Entry> = {
   'err.modelError': { zh: '模型返回错误', en: 'The model returned an error' },
   'err.httpPrefix': { zh: '请求失败（HTTP {status}）：', en: 'Request failed (HTTP {status}): ' },
   'err.noJson': { zh: '模型没有返回有效的 JSON', en: 'The model did not return valid JSON' },
+  'err.network': {
+    zh: '网络请求失败:无法连接到模型服务。可能是网络不稳定、该服务被拦截,或模型响应太慢被中断(尤其像 GPT-5.5 Pro 等 Pro 级慢速模型)。建议换用更快的模型(如 gpt-5.5 / gpt-5.4-mini)后重试。',
+    en: 'Network request failed: could not reach the model service. This can be an unstable connection, a blocked endpoint, or a model too slow to respond before the connection drops (especially “Pro”-tier models like GPT-5.5 Pro). Try a faster model (e.g. gpt-5.5 / gpt-5.4-mini) and retry.',
+  },
 
   // Generating overlay
   'gen.title': { zh: '正在生成课件…', en: 'Generating your deck…' },

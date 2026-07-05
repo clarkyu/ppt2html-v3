@@ -98,7 +98,7 @@ async function streamAnthropic(
   user: string,
   handlers: GenerateHandlers,
 ): Promise<string> {
-  const res = await fetch(joinUrl(cfg.baseUrl, '/v1/messages'), {
+  const res = await doFetch(joinUrl(cfg.baseUrl, '/v1/messages'), {
     method: 'POST',
     signal: handlers.signal,
     headers: anthropicHeaders(cfg),
@@ -128,7 +128,7 @@ async function streamOpenAI(
   extras: Record<string, unknown> = {},
   jsonMode = true,
 ): Promise<string> {
-  const res = await fetch(joinUrl(cfg.baseUrl, '/chat/completions'), {
+  const res = await doFetch(joinUrl(cfg.baseUrl, '/chat/completions'), {
     method: 'POST',
     signal: handlers.signal,
     headers: openaiHeaders(cfg),
@@ -176,7 +176,7 @@ async function requestAnthropic(
   maxTokens: number,
   signal?: AbortSignal,
 ): Promise<string> {
-  const res = await fetch(joinUrl(cfg.baseUrl, '/v1/messages'), {
+  const res = await doFetch(joinUrl(cfg.baseUrl, '/v1/messages'), {
     method: 'POST',
     signal,
     headers: anthropicHeaders(cfg),
@@ -203,7 +203,7 @@ async function requestOpenAI(
   signal?: AbortSignal,
   extras: Record<string, unknown> = {},
 ): Promise<string> {
-  const res = await fetch(joinUrl(cfg.baseUrl, '/chat/completions'), {
+  const res = await doFetch(joinUrl(cfg.baseUrl, '/chat/completions'), {
     method: 'POST',
     signal,
     headers: openaiHeaders(cfg),
@@ -295,6 +295,22 @@ async function readSSE(
 
 function joinUrl(base: string, path: string): string {
   return base.replace(/\/+$/, '') + path
+}
+
+/**
+ * `fetch` that turns a network-level failure ("Failed to fetch" TypeError) into
+ * an actionable message. This fires when the request never gets an HTTP response
+ * — flaky network, a blocked endpoint, or (commonly) a very slow model whose
+ * non-streaming request outlasts the connection timeout. AbortErrors (user
+ * cancel) are re-thrown untouched so callers can detect them.
+ */
+async function doFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') throw e
+    throw new Error(t('err.network'))
+  }
 }
 
 async function httpError(res: Response): Promise<Error> {
