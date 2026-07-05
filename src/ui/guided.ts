@@ -111,6 +111,11 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
           <span class="modelpick__label">思考</span>
           <label class="switch"><input type="checkbox" data-thinking><span>思考模式（更深入，稍慢）</span></label>
         </div>
+        <div class="modelpick__row">
+          <span class="modelpick__label">背景图</span>
+          <label class="switch"><input type="checkbox" data-bg-enabled><span>为每页自动配一张淡背景图</span></label>
+        </div>
+        <div class="modelpick__note" data-bg-note></div>
         <div class="modelpick__note" data-note></div>
       </div>
       <div class="clarify__actions">
@@ -127,6 +132,17 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     const goBtn = body.querySelector<HTMLButtonElement>('[data-go]')!
     const thinkRow = body.querySelector<HTMLElement>('[data-think-row]')!
     const thinkBox = body.querySelector<HTMLInputElement>('[data-thinking]')!
+    const bgBox = body.querySelector<HTMLInputElement>('[data-bg-enabled]')!
+    const bgNote = body.querySelector<HTMLElement>('[data-bg-note]')!
+
+    const paintBg = () => {
+      bgBox.checked = draft.images.enabled
+      const hasImgKey = draft.images.unsplashKey.trim() || draft.images.pexelsKey.trim()
+      bgNote.style.display = draft.images.enabled ? '' : 'none'
+      bgNote.innerHTML = hasImgKey
+        ? '将用你的 Unsplash / Pexels 服务搜图（画质更好）。'
+        : '默认用免费的 Openverse 图库（免 Key）。想更精致可用 <b>Unsplash / Pexels</b>——去官网免费申请 API Key，再到「更多设置」里填写。'
+    }
 
     const paint = () => {
       const cfg = draft[draft.provider]
@@ -158,6 +174,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
         : '⚠ 该服务尚未配置 API Key，请点「更多设置」填写后再生成（DeepSeek 可免填，由系统提供）。'
       noteEl.classList.toggle('modelpick__note--warn', !ready)
       goBtn.disabled = !ready
+      paintBg()
     }
 
     segBtns.forEach((b) =>
@@ -177,6 +194,10 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     })
     modelSel.addEventListener('change', () => (draft[draft.provider].model = modelSel.value))
     thinkBox.addEventListener('change', () => (draft.thinking = thinkBox.checked))
+    bgBox.addEventListener('change', () => {
+      draft.images.enabled = bgBox.checked
+      paintBg()
+    })
 
     body.querySelector('[data-settings]')!.addEventListener('click', () => {
       close()
