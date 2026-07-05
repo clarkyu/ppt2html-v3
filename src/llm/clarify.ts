@@ -2,6 +2,7 @@ import type { ClarifyQuestion, GenerateOptions } from '../types'
 import type { LlmSettings } from './settings'
 import { requestText } from './client'
 import { extractJson } from './extractJson'
+import { getLang } from '../i18n'
 
 const CLARIFY_SYSTEM = `你是课件需求分析助手。用户给出一个较粗略的主题，你只提出 **1~2 个最关键**的问题——问那些最能改变课件方向、缺了就没法动笔的点，其余一律不问。
 
@@ -26,10 +27,18 @@ function buildClarifyUser(topic: string, opts: GenerateOptions): string {
  * Instant, generic fallback questions shown while the AI-tailored ones load
  * (or if that call is slow / fails). Keeps the guided step feeling immediate.
  */
-export const DEFAULT_QUESTIONS: ClarifyQuestion[] = [
-  { question: '这份课件主要讲给谁听？', options: ['零基础新人', '有一定基础', '专业 / 进阶', '管理者 / 决策者'] },
-  { question: '你更希望课件侧重什么？', options: ['讲清概念', '实操步骤', '案例分析', '观点说服'] },
-]
+export function defaultQuestions(): ClarifyQuestion[] {
+  if (getLang() === 'en') {
+    return [
+      { question: 'Who is this deck mainly for?', options: ['Complete beginners', 'Some background', 'Advanced / pro', 'Managers / decision-makers'] },
+      { question: 'What should the deck focus on?', options: ['Explaining concepts', 'Hands-on steps', 'Case studies', 'Making an argument'] },
+    ]
+  }
+  return [
+    { question: '这份课件主要讲给谁听？', options: ['零基础新人', '有一定基础', '专业 / 进阶', '管理者 / 决策者'] },
+    { question: '你更希望课件侧重什么？', options: ['讲清概念', '实操步骤', '案例分析', '观点说服'] },
+  ]
+}
 
 /** Ask the model for a few clarifying questions about the topic. */
 export async function generateClarifyingQuestions(

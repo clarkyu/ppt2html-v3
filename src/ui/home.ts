@@ -5,10 +5,11 @@ import { mountThumb } from '../render/preview'
 import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
 import { startGuidedGeneration } from './guided'
-import { DURATION_OPTIONS, slidesForMinutes } from '../lib/duration'
+import { durationOptions, slidesForMinutes } from '../lib/duration'
+import { getLang, t } from '../i18n'
 import type { GenerateOptions, ThemeName } from '../types'
 
-const EXAMPLE_POOL = [
+const EXAMPLE_POOL_ZH = [
   '用一节课讲清楚什么是机器学习',
   '如何培养孩子的阅读习惯',
   '给新员工介绍公司的核心价值观',
@@ -30,10 +31,32 @@ const EXAMPLE_POOL = [
   '公司财报怎么看',
   '给设计师讲讲色彩搭配',
 ]
+const EXAMPLE_POOL_EN = [
+  'Explain what machine learning is in one lesson',
+  'How to build a reading habit in kids',
+  'Onboard new hires to our core values',
+  'Understand carbon neutrality in three minutes',
+  'An intro to the aesthetics of Song poetry',
+  'Run a workshop on effective team communication',
+  'Understand blockchain from scratch',
+  'The science of healthy eating',
+  'How to give a talk that moves people',
+  'An introduction to Chinese tea culture',
+  'Explain the solar system to kids',
+  "A product manager's guide to requirements analysis",
+  'Personal income tax, explained simply',
+  'Time management for new professionals',
+  'A brief history of artificial intelligence',
+  'How to train strength the scientific way',
+  'Three giants of ancient Greek philosophy',
+  'Common psychological effects, explained',
+  'How to read a company financial report',
+  'A designer’s primer on color pairing',
+]
 const EXAMPLE_BATCH = 5
 
 function sampleExamples(n: number): string[] {
-  const copy = [...EXAMPLE_POOL]
+  const copy = [...(getLang() === 'en' ? EXAMPLE_POOL_EN : EXAMPLE_POOL_ZH)]
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
     ;[copy[i], copy[j]] = [copy[j], copy[i]]
@@ -41,15 +64,23 @@ function sampleExamples(n: number): string[] {
   return copy.slice(0, n)
 }
 
-const THEME_OPTIONS: Array<{ value: '' | ThemeName; label: string }> = [
-  { value: '', label: '自动配色' },
-  { value: 'aurora', label: '极光（科技）' },
-  { value: 'ink', label: '水墨（简约）' },
-  { value: 'sunrise', label: '暖阳（人文）' },
-  { value: 'forest', label: '森林（自然）' },
-  { value: 'noir', label: '深邃（高级）' },
-  { value: 'sand', label: '砂纸（温暖）' },
-  { value: 'rose', label: '玫瑰（明艳）' },
+const THEME_OPTIONS: Array<{ value: '' | ThemeName; key: string }> = [
+  { value: '', key: 'home.theme.auto' },
+  { value: 'aurora', key: 'home.theme.aurora' },
+  { value: 'ink', key: 'home.theme.ink' },
+  { value: 'sunrise', key: 'home.theme.sunrise' },
+  { value: 'forest', key: 'home.theme.forest' },
+  { value: 'noir', key: 'home.theme.noir' },
+  { value: 'sand', key: 'home.theme.sand' },
+  { value: 'rose', key: 'home.theme.rose' },
+]
+
+const TONE_OPTIONS: Array<{ value: string; key: string }> = [
+  { value: '', key: 'tone.auto' },
+  { value: '专业严谨', key: 'tone.pro' },
+  { value: '轻松活泼', key: 'tone.lively' },
+  { value: '学术深入', key: 'tone.academic' },
+  { value: '极简克制', key: 'tone.minimal' },
 ]
 
 export function renderHome(view: HTMLElement): () => void {
@@ -57,45 +88,41 @@ export function renderHome(view: HTMLElement): () => void {
 
   view.innerHTML = `
     <div class="hero">
-      <div class="hero__kicker">${icons.sparkles} AI 课件生成器</div>
-      <h1>一句话，生成<span class="grad">精美课件</span></h1>
-      <p>输入一个主题，AI 自动编排结构与版式，在浏览器里像 PPT 一样播放。</p>
+      <div class="hero__kicker">${icons.sparkles} ${t('home.kicker')}</div>
+      <h1>${t('home.titlePre')}<span class="grad">${t('home.titleHi')}</span></h1>
+      <p>${t('home.subtitle')}</p>
     </div>
 
     <div class="composer card">
       <textarea class="composer__input" data-topic
-        placeholder="输入一句话主题，例如：用一节课讲清楚什么是机器学习"></textarea>
+        placeholder="${escapeHtml(t('home.placeholder'))}"></textarea>
       <div class="composer__row">
-        <label class="field"><span>配色</span>
+        <label class="field"><span>${t('home.field.theme')}</span>
           <select class="select" data-theme>
-            ${THEME_OPTIONS.map((o) => `<option value="${o.value}">${o.label}</option>`).join('')}
+            ${THEME_OPTIONS.map((o) => `<option value="${o.value}">${escapeHtml(t(o.key))}</option>`).join('')}
           </select>
         </label>
-        <label class="field"><span>分享时长</span>
+        <label class="field"><span>${t('home.field.duration')}</span>
           <select class="select" data-duration>
-            ${DURATION_OPTIONS.map((o) => `<option value="${o.value}">${o.label}</option>`).join('')}
+            ${durationOptions().map((o) => `<option value="${o.value}">${escapeHtml(o.label)}</option>`).join('')}
           </select>
         </label>
-        <label class="field"><span>语气</span>
+        <label class="field"><span>${t('home.field.tone')}</span>
           <select class="select" data-tone>
-            <option value="">自动</option>
-            <option value="专业严谨">专业严谨</option>
-            <option value="轻松活泼">轻松活泼</option>
-            <option value="学术深入">学术深入</option>
-            <option value="极简克制">极简克制</option>
+            ${TONE_OPTIONS.map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(t(o.key))}</option>`).join('')}
           </select>
         </label>
         <div class="composer__actions">
-          <button class="btn btn--ghost" data-sample>${icons.play} 看示例</button>
-          <button class="btn btn--primary" data-generate>${icons.sparkles} 生成课件</button>
+          <button class="btn btn--ghost" data-sample>${icons.play} ${t('home.sample')}</button>
+          <button class="btn btn--primary" data-generate>${icons.sparkles} ${t('home.generate')}</button>
         </div>
       </div>
     </div>
 
     <div class="examples">
       <div class="examples__head">
-        <span class="examples__label">试试这些主题：</span>
-        <button class="btn btn--ghost btn--sm" data-shuffle>${icons.refresh} 换一批</button>
+        <span class="examples__label">${t('home.examplesLabel')}</span>
+        <button class="btn btn--ghost btn--sm" data-shuffle>${icons.refresh} ${t('home.shuffle')}</button>
       </div>
       <div class="chips" data-examples></div>
     </div>
@@ -148,8 +175,8 @@ export function renderHome(view: HTMLElement): () => void {
       const recent = decks.slice(0, 4)
       recentEl.innerHTML = `
         <div class="section-head">
-          <h2>最近的课件</h2>
-          <a href="#/library">查看全部 →</a>
+          <h2>${t('home.recent')}</h2>
+          <a href="#/library">${t('home.viewAll')}</a>
         </div>
         <div class="deck-grid" data-grid></div>`
       const grid = recentEl.querySelector<HTMLElement>('[data-grid]')!
@@ -160,7 +187,7 @@ export function renderHome(view: HTMLElement): () => void {
           <div class="thumb"></div>
           <div class="deck-card__body">
             <div class="deck-card__title">${escapeHtml(deck.title)}</div>
-            <div class="deck-card__meta"><span>${deck.slides.length} 页 · ${formatDate(deck.createdAt)}</span></div>
+            <div class="deck-card__meta"><span>${deck.slides.length} ${t('unit.pages')} · ${formatDate(deck.createdAt)}</span></div>
           </div>`
         card.addEventListener('click', () => navigate(`#/play/${deck.id}`))
         grid.appendChild(card)

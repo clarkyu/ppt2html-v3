@@ -6,6 +6,7 @@ import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { escapeHtml } from '../lib/markdown'
 import { liveTitles, renderLive } from '../lib/live'
+import { t } from '../i18n'
 import type { GenerateOptions, Outline } from '../types'
 
 interface Overlay {
@@ -20,7 +21,7 @@ export function generateAndPlay(topic: string, opts: GenerateOptions, outline: O
   const trimmed = topic.trim()
   const settings = loadSettings()
   if (!isConfigured(settings)) {
-    toast('请先在「设置」中填写 API Key')
+    toast(t('err.noKey'))
     navigate('#/settings')
     return
   }
@@ -66,11 +67,11 @@ function buildOverlay(
   el.innerHTML = `
     <div class="gen card" style="padding:32px">
       <div class="gen__spinner"></div>
-      <h2>正在生成课件…</h2>
-      <p>「${escapeHtml(topic)}」 · 共 ${outline.slides.length} 页</p>
-      <ol class="gen-live gen-live--tall" data-live><li class="gen-live__wait">正在连接模型…</li></ol>
+      <h2>${t('gen.title')}</h2>
+      <p>${t('gen.subtitle').replace('{topic}', escapeHtml(topic)).replace('{n}', String(outline.slides.length))}</p>
+      <ol class="gen-live gen-live--tall" data-live><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
       <div class="gen__actions">
-        <button class="btn btn--ghost" data-cancel>取消</button>
+        <button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button>
       </div>
     </div>`
 
@@ -85,11 +86,11 @@ function buildOverlay(
     },
     fail: (message) => {
       el.querySelector('.gen')!.innerHTML = `
-        <h2 class="gen__error">生成失败</h2>
+        <h2 class="gen__error">${t('gen.failed')}</h2>
         <p style="color:var(--text-muted)">${escapeHtml(message)}</p>
         <div class="gen__actions">
-          <button class="btn btn--ghost" data-close>关闭</button>
-          <button class="btn btn--primary" data-retry>重试</button>
+          <button class="btn btn--ghost" data-close>${t('common.close')}</button>
+          <button class="btn btn--primary" data-retry>${t('common.retry')}</button>
         </div>`
       el.querySelector('[data-close]')!.addEventListener('click', () => el.remove())
       el.querySelector('[data-retry]')!.addEventListener('click', () => {

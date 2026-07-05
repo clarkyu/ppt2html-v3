@@ -2,6 +2,7 @@ import type { DeckSpec, GenerateOptions } from '../types'
 import { buildSystemPrompt, buildUserPrompt } from './prompt'
 import { extractJson } from './extractJson'
 import { activeConfig, effectiveApiKey, isConfigured, type LlmSettings, type ProviderConfig } from './settings'
+import { t } from '../i18n'
 
 export interface GenerateHandlers {
   /** Called on every streamed chunk with the full text so far and the new delta. */
@@ -23,14 +24,14 @@ export async function generateDeckSpec(
 
   const spec = extractJson(text) as DeckSpec
   if (!spec || typeof spec !== 'object' || !Array.isArray(spec.slides) || !spec.slides.length) {
-    throw new Error('模型返回的内容不是有效的课件结构，请重试。')
+    throw new Error(t('err.invalidDeck'))
   }
   return spec
 }
 
 function requireKey(settings: LlmSettings): void {
   if (!isConfigured(settings)) {
-    throw new Error('尚未配置 API Key，请先在「设置」中填写。')
+    throw new Error(t('err.notConfigured'))
   }
 }
 
@@ -275,7 +276,7 @@ async function readSSE(
 
         if ((data as { type?: string }).type === 'error') {
           const msg = (data as { error?: { message?: string } }).error?.message
-          throw new Error(msg || '模型返回错误')
+          throw new Error(msg || t('err.modelError'))
         }
 
         const delta = extract(data)
@@ -308,5 +309,5 @@ async function httpError(res: Response): Promise<Error> {
   } catch {
     /* keep statusText */
   }
-  return new Error(`请求失败（HTTP ${res.status}）：${detail.slice(0, 300)}`)
+  return new Error(t('err.httpPrefix').replace('{status}', String(res.status)) + detail.slice(0, 300))
 }
