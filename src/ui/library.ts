@@ -6,6 +6,7 @@ import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
 import { toast } from '../lib/toast'
 import { t } from '../i18n'
+import { buildBackup, backupFilename, downloadText, parseBackupFile, restoreDecks } from '../lib/backup'
 import type { Deck } from '../types'
 
 type SortKey = 'updated' | 'created' | 'title'
@@ -33,13 +34,20 @@ export function renderLibrary(view: HTMLElement): () => void {
   view.innerHTML = `
     <div class="section-head library-head">
       <h2>${t('nav.library')}</h2>
-      <div class="library-tools" data-tools hidden>
-        <div class="search"><span class="search__icon">${icons.search}</span>
-          <input class="search__input" data-search placeholder="${escapeHtml(t('lib.searchPlaceholder'))}" />
+      <div class="library-right">
+        <div class="library-tools" data-tools hidden>
+          <div class="search"><span class="search__icon">${icons.search}</span>
+            <input class="search__input" data-search placeholder="${escapeHtml(t('lib.searchPlaceholder'))}" />
+          </div>
+          <select class="form-input library-sort" data-sort>
+            ${SORTS.map((s) => `<option value="${s.value}">${escapeHtml(t(s.key))}</option>`).join('')}
+          </select>
         </div>
-        <select class="form-input library-sort" data-sort>
-          ${SORTS.map((s) => `<option value="${s.value}">${escapeHtml(t(s.key))}</option>`).join('')}
-        </select>
+        <div class="library-io">
+          <button class="btn btn--ghost btn--sm" data-backup title="${escapeHtml(t('lib.backupHint'))}">${icons.download} ${t('lib.backup')}</button>
+          <button class="btn btn--ghost btn--sm" data-restore title="${escapeHtml(t('lib.restoreHint'))}">${icons.upload} ${t('lib.restore')}</button>
+          <input type="file" accept="application/json,.json" hidden data-restore-file>
+        </div>
       </div>
     </div>
     <div data-body>${t('common.loading')}</div>`
@@ -48,6 +56,31 @@ export function renderLibrary(view: HTMLElement): () => void {
   const tools = view.querySelector<HTMLElement>('[data-tools]')!
   const searchEl = view.querySelector<HTMLInputElement>('[data-search]')!
   const sortEl = view.querySelector<HTMLSelectElement>('[data-sort]')!
+  const restoreFileEl = view.querySelector<HTMLInputElement>('[data-restore-file]')!
+
+  view.querySelector('[data-backup]')!.addEventListener('click', async () => {
+    if (!all.length) {
+      toast(t('lib.backupEmpty'))
+      return
+    }
+    const backup = await buildBackup(Date.now())
+    downloadText(backupFilename(Date.now()), JSON.stringify(backup, null, 2))
+    toast(t('lib.backupDone').replace('{n}', String(backup.decks.length)))
+  })
+  view.querySelector('[data-restore]')!.addEventListener('click', () => restoreFileEl.click())
+  restoreFileEl.addEventListener('change', async () => {
+    const file = restoreFileEl.files?.[0]
+    restoreFileEl.value = ''
+    if (!file) return
+    try {
+      const decks = await parseBackupFile(file)
+      const n = await restoreDecks(decks)
+      toast(t('lib.restoreDone').replace('{n}', String(n)))
+      await reload()
+    } catch {
+      toast(t('lib.restoreFailed'))
+    }
+  })
 
   const drawCards = (decks: Deck[]) => {
     thumbCleanups.splice(0).forEach((fn) => fn())

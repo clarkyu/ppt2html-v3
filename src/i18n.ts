@@ -117,8 +117,8 @@ const DICT: Record<string, Entry> = {
   'err.httpPrefix': { zh: '请求失败（HTTP {status}）：', en: 'Request failed (HTTP {status}): ' },
   'err.noJson': { zh: '模型没有返回有效的 JSON', en: 'The model did not return valid JSON' },
   'err.network': {
-    zh: '无法连接到模型服务(网络请求失败)。多半是你的网络无法直连该服务——例如 api.openai.com 在中国大陆通常要用代理 / VPN 才能访问;也可能被浏览器插件 / 防火墙拦截,或模型太慢被中断。可改用能直连的服务:系统自带的 DeepSeek(免 Key),或通义千问 / 智谱 GLM / Kimi / 文心一言,再重试。',
-    en: 'Could not reach the model service (network request failed). Most likely your network can’t reach it directly — e.g. api.openai.com usually needs a proxy/VPN in mainland China. It may also be blocked by a browser extension/firewall, or the model was too slow. Try a directly-reachable provider (the built-in DeepSeek, or Qwen / GLM / Kimi / ERNIE) and retry.',
+    zh: '请求未能完成(浏览器只报了网络 / CORS 错误)。常见两种原因:① API Key 无效或账户无额度——密钥被拒时,若对方的错误响应缺少 CORS 头,浏览器会把真正的 401 藏起来、只显示网络/CORS 错误,请到「设置」核对 Key、确认账户已绑支付/有余额;② 你的网络无法直连该服务(如 api.openai.com 在中国大陆常需代理/VPN,或被浏览器插件/防火墙拦截)。可先用免 Key、可直连的 DeepSeek,或核对 Key 后重试。',
+    en: 'The request didn’t complete (the browser only reports a network/CORS error). Two common causes: (1) an invalid API key or no account balance — when a key is rejected and the error response lacks CORS headers, the browser hides the real 401 and shows only a network/CORS error, so check your key and billing in Settings; (2) your network can’t reach the endpoint directly (e.g. api.openai.com often needs a proxy/VPN in mainland China, or is blocked by an extension/firewall). Try the built-in DeepSeek (no key) or fix the key and retry.',
   },
 
   // Generating overlay
@@ -194,6 +194,17 @@ const DICT: Record<string, Entry> = {
   'lib.deleted': { zh: '已删除', en: 'Deleted' },
   'lib.readError': { zh: '读取失败', en: 'Failed to load' },
   'lib.readErrorHint': { zh: '无法读取本地课件库。', en: 'Could not read the local deck library.' },
+  'lib.backup': { zh: '备份', en: 'Back up' },
+  'lib.restore': { zh: '恢复', en: 'Restore' },
+  'lib.backupHint': {
+    zh: '把整个课件库导出为一个文件妥善保存;换设备或清缓存后可用「恢复」导回。',
+    en: 'Export your whole library to a file; use “Restore” to bring it back after clearing data or switching devices.',
+  },
+  'lib.restoreHint': { zh: '从备份文件恢复课件', en: 'Restore decks from a backup file' },
+  'lib.backupEmpty': { zh: '还没有课件可备份', en: 'No decks to back up yet' },
+  'lib.backupDone': { zh: '已备份 {n} 份课件', en: 'Backed up {n} decks' },
+  'lib.restoreDone': { zh: '已恢复 {n} 份课件', en: 'Restored {n} decks' },
+  'lib.restoreFailed': { zh: '恢复失败:不是有效的备份文件', en: 'Restore failed: not a valid backup file' },
 
   // Guided create wizard
   'guided.pickModel': { zh: '选择生成模型', en: 'Choose a model' },
