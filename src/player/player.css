@@ -7,6 +7,16 @@
   --r-background-color: transparent;
 }
 
+/* Content marked `.fragment` (bullets, cards, timeline steps) should be fully
+   visible as soon as a slide is shown — we don't use click-to-reveal stepping
+   (see `fragments: false`). This guarantees content shows even if reveal leaves
+   fragments hidden. */
+.player .reveal .slides section .fragment {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+
 .player__bg {
   position: absolute;
   inset: 0;

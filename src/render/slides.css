@@ -21,7 +21,10 @@
   padding: 64px 92px;
   box-sizing: border-box;
   overflow: hidden;
-  position: relative;
+  /* NOTE: do NOT set `position: relative` here — it would out-specify reveal.js's
+     own `position: absolute` on slide sections, breaking slide stacking (later
+     slides flow off-screen). Both the player (reveal) and previews (.thumb CSS)
+     already make the section `position: absolute`, which anchors .deck-slide__bg. */
 }
 
 /* Subtle, content-related background image with a theme-tinted scrim. Two

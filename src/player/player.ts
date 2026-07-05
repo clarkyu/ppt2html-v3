@@ -36,6 +36,10 @@ const REVEAL_CONFIG = {
   controlsLayout: 'bottom-right' as const,
   progress: true,
   slideNumber: 'c/t' as const,
+  // Show each slide's full content as soon as you land on it — no click-to-reveal
+  // stepping. (Bullets etc. carry a `.fragment` class; keeping stepping on made
+  // freshly-flipped slides look blank, esp. behind a background image.)
+  fragments: false,
   hash: false,
   respondToHashChanges: false,
   history: false,
