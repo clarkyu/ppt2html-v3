@@ -574,6 +574,13 @@ textarea.form-input { resize: vertical; line-height: 1.5; }
 .ov-group__count { font-size: 12.5px; color: var(--text-dim); }
 .ov-group__goto { margin-left: auto; }
 .ov-group .outline__list + .btn { margin-top: 8px; }
+.ov-group__fold { flex: none; }
+.ov-group__fold svg { transition: transform 0.15s; }
+.ov-group.is-collapsed .ov-group__fold svg { transform: rotate(-90deg); }
+.ov-group.is-collapsed .ov-group__body { display: none; }
+.ov-group__del { flex: none; }
+.ov-group__del:hover { color: var(--danger); }
+.ov-addpart { margin: 2px 0 8px; }
 .outline__actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 18px; flex-wrap: wrap; }
 .outline__actions [data-cancel] { margin-right: auto; }
 

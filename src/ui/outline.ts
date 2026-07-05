@@ -86,12 +86,13 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
   }
   let controller = new AbortController()
 
-  const steps: Step[] = [
+  const buildSteps = (): Step[] => [
     { kind: 'cover' },
     ...structure.sections.map((_, index) => ({ kind: 'part', index }) as Step),
     { kind: 'end' },
   ]
-  const stepTotal = steps.length + 1 // + overview
+  let steps: Step[] = buildSteps()
+  const stepCount = () => steps.length + 1 // + overview
   const results: OutlineSlide[][] = new Array(steps.length)
 
   const coverSlides = (): OutlineSlide[] => [
@@ -126,7 +127,7 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
   const showStreaming = (i: number, partTitle: string, pages: number) => {
     body.innerHTML = `
       <div class="wizard__head">
-        <div class="wizard__crumb">环节 ${i + 1} / ${stepTotal}</div>
+        <div class="wizard__crumb">环节 ${i + 1} / ${stepCount()}</div>
         <h2>正在细化：${escapeHtml(partTitle)}</h2>
         <p>约 ${pages} 页 · 逐页规划中，实时显示 ↓</p>
       </div>
@@ -165,7 +166,7 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
 
   const stepMeta = (i: number): { title: string; sub: string; canRegen: boolean } => {
     const step = steps[i]
-    const nth = `第 ${i + 1} 步 / 共 ${stepTotal} 步`
+    const nth = `第 ${i + 1} 步 / 共 ${stepCount()} 步`
     if (step.kind === 'cover') return { title: '封面页', sub: `确认课件封面 · ${nth}`, canRegen: false }
     if (step.kind === 'end') return { title: '结束页', sub: `确认收尾页 · ${nth}`, canRegen: false }
     const sec = structure.sections[step.index]
@@ -181,7 +182,7 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
     const last = i === steps.length - 1
     body.innerHTML = `
       <div class="wizard__head">
-        <div class="wizard__crumb">环节 ${i + 1} / ${stepTotal}</div>
+        <div class="wizard__crumb">环节 ${i + 1} / ${stepCount()}</div>
         <h2>${escapeHtml(meta.title)}</h2>
         <p>${escapeHtml(meta.sub)}</p>
       </div>
@@ -236,7 +237,7 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
   }
 
   const showOverview = () => {
-    const groups = steps.map((step, i) => ({ label: groupLabel(step), slides: results[i] ?? [] }))
+    const groups = steps.map((step, i) => ({ label: groupLabel(step), kind: step.kind, slides: results[i] ?? [] }))
     const title = assembleOutline(structure, results.map((r) => r ?? [])).title
     body.innerHTML = renderOverview(structure, title, groups)
     wireOverview(body, {
@@ -248,6 +249,23 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
       onGoto: (i) => {
         syncOverviewIntoResults()
         runStep(i)
+      },
+      onDeletePart: (i) => {
+        const step = steps[i]
+        if (step.kind !== 'part') return
+        syncOverviewIntoResults()
+        structure.sections.splice(step.index, 1)
+        results.splice(i, 1)
+        steps = buildSteps()
+        showOverview()
+      },
+      onAddPart: () => {
+        syncOverviewIntoResults()
+        structure.sections.push({ title: '新部分', pages: 3 })
+        // Insert the new part's pages just before the 结束 group.
+        results.splice(Math.max(1, results.length - 1), 0, [{ layout: 'section', title: '新部分' }])
+        steps = buildSteps()
+        showOverview()
       },
       onGenerate: () => {
         const edited = collectOutline(body, trimmed)
@@ -293,6 +311,7 @@ function renderRow(s: OutlineSlide): string {
 
 interface OvGroup {
   label: string
+  kind: Step['kind']
   slides: OutlineSlide[]
 }
 
@@ -303,10 +322,10 @@ function renderOverview(structure: Structure, title: string, groups: OvGroup[]):
   ).join('')
   const total = groups.reduce((n, g) => n + g.slides.length, 0)
 
-  return `
+  return `<div data-ov>
     <div class="outline__head">
       <h2>整份大纲总览 · 共 <span data-count>${total}</span> 页</h2>
-      <p>按环节分类；可在此微调，或点某环节的「去修改」/ 底部「上一步」回到逐环节修改。满意后再生成完整课件。</p>
+      <p>按环节分类，点标题左侧箭头可折叠；可增删部分、在某环节内加页，或用「去修改」/「上一步」回到逐环节修改。满意后再生成完整课件。</p>
     </div>
     <div class="outline__meta">
       <input class="form-input" data-deck-title value="${escapeHtml(title)}" placeholder="课件标题">
@@ -318,20 +337,26 @@ function renderOverview(structure: Structure, title: string, groups: OvGroup[]):
         (g, i) => `
       <div class="ov-group" data-group="${i}">
         <div class="ov-group__head">
+          <button class="icon-btn ov-group__fold" data-fold title="折叠 / 展开">${icons.down}</button>
           <span class="ov-group__label">${escapeHtml(g.label)}</span>
           <span class="ov-group__count">${g.slides.length} 页</span>
           <button class="btn btn--ghost btn--sm ov-group__goto" data-goto="${i}">${icons.edit} 去修改</button>
+          ${g.kind === 'part' ? `<button class="icon-btn ov-group__del" data-del-group title="删除此部分">${icons.trash}</button>` : ''}
         </div>
-        <ol class="outline__list" data-list>${g.slides.map(renderRow).join('')}</ol>
-        <button class="btn btn--ghost btn--sm" data-add>${icons.plus} 在此环节加一页</button>
+        <div class="ov-group__body">
+          <ol class="outline__list" data-list>${g.slides.map(renderRow).join('')}</ol>
+          <button class="btn btn--ghost btn--sm" data-add>${icons.plus} 在此环节加一页</button>
+        </div>
       </div>`,
       )
       .join('')}
+    <button class="btn btn--ghost btn--sm ov-addpart" data-add-part>${icons.plus} 添加一个部分</button>
     <div class="outline__actions">
       <button class="btn btn--ghost" data-cancel>取消</button>
       <button class="btn btn--ghost" data-prev>← 上一步（逐环节修改）</button>
       <button class="btn btn--primary" data-go>生成课件 →</button>
-    </div>`
+    </div>
+  </div>`
 }
 
 /* ------------------------------ behavior ------------------------------ */
@@ -388,7 +413,14 @@ function wireRowList(body: HTMLElement): void {
 
 function wireOverview(
   body: HTMLElement,
-  h: { onCancel: () => void; onPrev: () => void; onGoto: (i: number) => void; onGenerate: () => void },
+  h: {
+    onCancel: () => void
+    onPrev: () => void
+    onGoto: (i: number) => void
+    onDeletePart: (i: number) => void
+    onAddPart: () => void
+    onGenerate: () => void
+  },
 ): void {
   // Global renumbering across all 环节 groups (page N of total).
   const renumber = () => {
@@ -411,10 +443,22 @@ function wireOverview(
     if (total) total.textContent = String(idx)
   }
 
-  body.addEventListener('click', (e) => {
+  const groupIndex = (btn: HTMLElement): number => Number(btn.closest<HTMLElement>('.ov-group')?.dataset.group)
+
+  // Delegate on the (re-rendered) wrapper, not the persistent body, so listeners
+  // don't stack across re-renders.
+  const root = body.querySelector<HTMLElement>('[data-ov]')!
+
+  root.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>('button')
     if (!btn) return
+    if (btn.dataset.fold !== undefined) {
+      btn.closest<HTMLElement>('.ov-group')?.classList.toggle('is-collapsed')
+      return
+    }
     if (btn.dataset.goto !== undefined) return h.onGoto(Number(btn.dataset.goto))
+    if (btn.dataset.delGroup !== undefined) return h.onDeletePart(groupIndex(btn))
+    if (btn.dataset.addPart !== undefined) return h.onAddPart()
     if (btn.dataset.cancel !== undefined) return h.onCancel()
     if (btn.dataset.prev !== undefined) return h.onPrev()
     if (btn.dataset.go !== undefined) return h.onGenerate()
@@ -439,7 +483,7 @@ function wireOverview(
     }
   })
 
-  body.addEventListener('change', (e) => {
+  root.addEventListener('change', (e) => {
     const sel = (e.target as HTMLElement).closest<HTMLSelectElement>('[data-layout]')
     if (!sel) return
     const row = sel.closest<HTMLElement>('[data-row]')
