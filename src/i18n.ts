@@ -117,8 +117,8 @@ const DICT: Record<string, Entry> = {
   'err.httpPrefix': { zh: '请求失败（HTTP {status}）：', en: 'Request failed (HTTP {status}): ' },
   'err.noJson': { zh: '模型没有返回有效的 JSON', en: 'The model did not return valid JSON' },
   'err.network': {
-    zh: '无法连接到模型服务(网络请求失败)。多半是你的网络无法直连该服务——例如 api.openai.com 在中国大陆通常要用代理 / VPN 才能访问;也可能被浏览器插件 / 防火墙拦截,或模型太慢被中断。可改用能直连的服务:系统自带的 DeepSeek(免 Key),或通义千问 / 智谱 GLM / Kimi / 文心一言,再重试。',
-    en: 'Could not reach the model service (network request failed). Most likely your network can’t reach it directly — e.g. api.openai.com usually needs a proxy/VPN in mainland China. It may also be blocked by a browser extension/firewall, or the model was too slow. Try a directly-reachable provider (the built-in DeepSeek, or Qwen / GLM / Kimi / ERNIE) and retry.',
+    zh: '请求未能完成(浏览器只报了网络 / CORS 错误)。常见两种原因:① API Key 无效或账户无额度——密钥被拒时,若对方的错误响应缺少 CORS 头,浏览器会把真正的 401 藏起来、只显示网络/CORS 错误,请到「设置」核对 Key、确认账户已绑支付/有余额;② 你的网络无法直连该服务(如 api.openai.com 在中国大陆常需代理/VPN,或被浏览器插件/防火墙拦截)。可先用免 Key、可直连的 DeepSeek,或核对 Key 后重试。',
+    en: 'The request didn’t complete (the browser only reports a network/CORS error). Two common causes: (1) an invalid API key or no account balance — when a key is rejected and the error response lacks CORS headers, the browser hides the real 401 and shows only a network/CORS error, so check your key and billing in Settings; (2) your network can’t reach the endpoint directly (e.g. api.openai.com often needs a proxy/VPN in mainland China, or is blocked by an extension/firewall). Try the built-in DeepSeek (no key) or fix the key and retry.',
   },
 
   // Generating overlay
