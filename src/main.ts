@@ -6,6 +6,7 @@ import { renderHome } from './ui/home'
 import { renderLibrary } from './ui/library'
 import { renderSettings } from './ui/settings'
 import { renderViewer } from './ui/viewer'
+import { renderDeckEditor } from './ui/editor'
 
 registerSW({ immediate: true })
 
@@ -50,6 +51,9 @@ function mount(route: Route): void {
       break
     case 'play':
       cleanup = renderViewer(view, route.id)
+      break
+    case 'edit':
+      cleanup = renderDeckEditor(view, route.id)
       break
   }
 }

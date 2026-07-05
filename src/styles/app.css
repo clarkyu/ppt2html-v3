@@ -175,7 +175,8 @@ button { font-family: inherit; }
 .select:focus, .input:focus { border-color: color-mix(in srgb, var(--brand) 55%, transparent); }
 
 .examples { margin-top: 26px; }
-.examples__label { font-size: 13px; color: var(--text-dim); margin-bottom: 10px; }
+.examples__head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.examples__label { font-size: 13px; color: var(--text-dim); }
 .chips { display: flex; flex-wrap: wrap; gap: 10px; }
 .chip {
   padding: 8px 14px;
@@ -329,6 +330,54 @@ button { font-family: inherit; }
 .wizard__crumb { font-size: 12px; font-weight: 700; color: var(--brand); margin-bottom: 6px; }
 .wizard__head h2 { font-size: 22px; margin: 0 0 4px; color: var(--text-strong); }
 .wizard__head p { margin: 0; color: var(--text-muted); font-size: 14px; }
+
+/* ---------- Deck content editor ---------- */
+.f { display: flex; flex-direction: column; gap: 6px; }
+.f > span { font-size: 12.5px; color: var(--text-dim); }
+textarea.form-input { resize: vertical; line-height: 1.5; }
+.form-input.mono { font-family: var(--font-mono); font-size: 13px; }
+
+.ed-meta { display: grid; grid-template-columns: 1fr 1fr 170px; gap: 14px; padding: 16px 18px; margin-bottom: 18px; }
+.ed-list { display: flex; flex-direction: column; gap: 16px; }
+.ed-add { margin: 16px 0 4px; }
+.ed-actions {
+  position: sticky; bottom: 0; z-index: 5;
+  display: flex; align-items: center; gap: 12px; justify-content: flex-end;
+  padding: 14px 0; margin-top: 10px;
+  background: color-mix(in srgb, #0b1020 88%, transparent);
+  backdrop-filter: blur(8px); border-top: 1px solid var(--border);
+}
+.ed-status { margin-right: auto; font-size: 13px; color: var(--text-dim); }
+
+.slide-card { padding: 14px 16px; }
+.slide-card__bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.slide-card__n {
+  width: 26px; height: 26px; display: grid; place-items: center; flex: none;
+  border-radius: 8px; font-weight: 750; font-size: 13px;
+  color: var(--brand); background: color-mix(in srgb, var(--brand) 16%, transparent);
+}
+.slide-card__layout { flex: none; width: 132px; }
+.slide-card__ops { margin-left: auto; display: flex; gap: 2px; }
+.slide-card__body { display: grid; grid-template-columns: 300px 1fr; gap: 18px; align-items: start; }
+.slide-card__preview { width: 100%; border-radius: 10px; border: 1px solid var(--border); }
+.slide-card__fields { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.f-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.f-col { display: flex; flex-direction: column; gap: 12px; }
+.f-sub {
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px; background: rgba(0, 0, 0, 0.15);
+}
+.f-sub__head { display: flex; gap: 8px; align-items: center; }
+.f-sub__head input { flex: 1; min-width: 0; }
+.f-sub__head select { flex: none; width: 90px; }
+
+@media (max-width: 720px) {
+  .ed-meta { grid-template-columns: 1fr; }
+  .slide-card__body { grid-template-columns: 1fr; }
+  .slide-card__preview { max-width: 380px; }
+  .f-cols { grid-template-columns: 1fr; }
+}
 
 /* ---------- Guided clarifying questions ---------- */
 .clarify {

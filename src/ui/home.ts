@@ -8,13 +8,38 @@ import { startGuidedGeneration } from './guided'
 import { DURATION_OPTIONS, slidesForMinutes } from '../lib/duration'
 import type { GenerateOptions, ThemeName } from '../types'
 
-const EXAMPLES = [
+const EXAMPLE_POOL = [
   '用一节课讲清楚什么是机器学习',
   '如何培养孩子的阅读习惯',
   '给新员工介绍公司的核心价值观',
   '三分钟看懂碳中和',
   '宋词的美学世界',
+  '给团队做一次高效沟通培训',
+  '从零开始理解区块链',
+  '健康饮食的科学原理',
+  '如何做一次打动人心的演讲',
+  '中国茶文化入门',
+  '给孩子讲讲太阳系',
+  '产品经理的需求分析方法',
+  '一文读懂个人所得税',
+  '职场新人的时间管理',
+  '人工智能的发展简史',
+  '如何科学地进行力量训练',
+  '古希腊哲学的三位巨匠',
+  '带你认识常见的心理学效应',
+  '公司财报怎么看',
+  '给设计师讲讲色彩搭配',
 ]
+const EXAMPLE_BATCH = 5
+
+function sampleExamples(n: number): string[] {
+  const copy = [...EXAMPLE_POOL]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy.slice(0, n)
+}
 
 const THEME_OPTIONS: Array<{ value: '' | ThemeName; label: string }> = [
   { value: '', label: '自动配色' },
@@ -66,10 +91,11 @@ export function renderHome(view: HTMLElement): () => void {
     </div>
 
     <div class="examples">
-      <div class="examples__label">试试这些主题：</div>
-      <div class="chips">
-        ${EXAMPLES.map((e) => `<button class="chip" data-example="${escapeHtml(e)}">${escapeHtml(e)}</button>`).join('')}
+      <div class="examples__head">
+        <span class="examples__label">试试这些主题：</span>
+        <button class="btn btn--ghost btn--sm" data-shuffle>${icons.refresh} 换一批</button>
       </div>
+      <div class="chips" data-examples></div>
     </div>
 
     <div data-recent></div>
@@ -97,12 +123,20 @@ export function renderHome(view: HTMLElement): () => void {
   topicEl.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submit()
   })
-  view.querySelectorAll<HTMLElement>('[data-example]').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      topicEl.value = chip.dataset.example ?? ''
-      topicEl.focus()
-    })
+  const examplesEl = view.querySelector<HTMLElement>('[data-examples]')!
+  const renderChips = () => {
+    examplesEl.innerHTML = sampleExamples(EXAMPLE_BATCH)
+      .map((e) => `<button class="chip" data-example="${escapeHtml(e)}">${escapeHtml(e)}</button>`)
+      .join('')
+  }
+  renderChips()
+  examplesEl.addEventListener('click', (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>('[data-example]')
+    if (!chip) return
+    topicEl.value = chip.dataset.example ?? ''
+    topicEl.focus()
   })
+  view.querySelector('[data-shuffle]')!.addEventListener('click', renderChips)
 
   // Recent decks strip.
   const recentEl = view.querySelector<HTMLElement>('[data-recent]')!
