@@ -14,6 +14,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         <button class="btn btn--sm" data-back>${icons.back} 返回</button>
         <div class="viewer__title" data-title></div>
         <button class="btn btn--sm" data-overview title="总览 (O)">${icons.grid}</button>
+        <button class="btn btn--sm" data-edit title="编辑课件" hidden>${icons.edit} 编辑</button>
         <button class="btn btn--sm" data-print title="导出 PDF / 打印">${icons.print}</button>
         <button class="btn btn--sm" data-full title="全屏 (F)">${icons.expand}</button>
       </div>
@@ -55,6 +56,11 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         return
       }
       titleEl.textContent = deck.title
+      const editBtn = view.querySelector<HTMLButtonElement>('[data-edit]')!
+      if (id !== 'sample') {
+        editBtn.hidden = false
+        editBtn.addEventListener('click', () => navigate(`#/edit/${id}`))
+      }
       player = mountPlayer(mount, deck)
     })
     .catch(() => {
