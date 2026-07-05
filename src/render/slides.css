@@ -21,7 +21,28 @@
   padding: 64px 92px;
   box-sizing: border-box;
   overflow: hidden;
+  position: relative;
 }
+
+/* Subtle, content-related background image. A theme-colored scrim keeps it
+   faint and text legible on both dark and light themes (only ~16% shows). */
+.reveal.deck .deck-slide__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+.reveal.deck .deck-slide__bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0.84;
+}
+/* Keep all slide content above the background layer. */
+.reveal.deck .deck-slide > .s { position: relative; z-index: 1; }
 
 /* The inner wrapper fills the slide and arranges content. */
 .reveal.deck .s {

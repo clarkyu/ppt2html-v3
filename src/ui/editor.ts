@@ -2,6 +2,7 @@ import { getDeck, saveDeck } from '../store/db'
 import { getSampleDeck } from '../sample'
 import { mountSlidePreview } from '../render/preview'
 import { regenerateSlide } from '../llm/edit'
+import { searchImage, queryForSlide } from '../images/search'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
@@ -138,7 +139,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     const card = target.closest<HTMLElement>('[data-card]')
     if (card && target.closest('[data-field]')) {
       const i = Number(card.dataset.i)
-      deck.slides[i] = collectSlide(card, deck.slides[i].layout)
+      deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       refreshPreview(card)
       setStatus('未保存')
     }
@@ -157,7 +158,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       const card = target.closest<HTMLElement>('[data-card]')!
       const i = Number(card.dataset.i)
       const layout = (target as HTMLSelectElement).value as SlideLayout
-      deck.slides[i] = { ...collectSlide(card, deck.slides[i].layout), layout }
+      deck.slides[i] = { ...collectSlide(card, deck.slides[i].layout, deck.slides[i]), layout }
       // Re-render just this card so its fields match the new layout.
       card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
       mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
@@ -206,7 +207,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
         return
       }
       // Persist current edits on this card before regenerating.
-      deck.slides[i] = collectSlide(card, deck.slides[i].layout)
+      deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       btn.setAttribute('disabled', '')
       btn.textContent = 'AI 重写中…'
       regenerateSlide(deck, i, instruction, settings)
@@ -221,6 +222,46 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
           toast('重写失败：' + (err instanceof Error ? err.message : String(err)))
           btn.removeAttribute('disabled')
           btn.textContent = 'AI 重写本页'
+        })
+      return
+    }
+
+    if (btn.dataset.bgRemove !== undefined) {
+      const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
+      slide.bg = undefined
+      deck.slides[i] = slide
+      card.outerHTML = renderCard(slide, i, deck.slides.length)
+      mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+      setStatus('未保存')
+      return
+    }
+
+    if (btn.dataset.bgRefresh !== undefined) {
+      const settings = loadSettings()
+      if (!settings.images.enabled) {
+        toast('已在「设置」里关闭了背景图')
+        return
+      }
+      deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
+      const used = new Set<string>()
+      for (const s of deck.slides) if (s.bg?.url) used.add(s.bg.url)
+      btn.setAttribute('disabled', '')
+      searchImage(queryForSlide(deck.slides[i], deck), settings, { exclude: used })
+        .then((bg) => {
+          if (!bg) {
+            toast('没找到合适的图片，换个说法或稍后再试')
+            btn.removeAttribute('disabled')
+            return
+          }
+          deck.slides[i].bg = bg
+          card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
+          mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+          setStatus('未保存')
+          toast('已换背景图')
+        })
+        .catch(() => {
+          toast('换背景图失败，请稍后再试')
+          btn.removeAttribute('disabled')
         })
       return
     }
@@ -242,14 +283,14 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       render()
       setStatus('未保存')
     } else if (btn.dataset.addItem !== undefined) {
-      const slide = collectSlide(card, deck.slides[i].layout)
+      const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       ;(slide.items ??= []).push({ heading: '新方案', points: [''] })
       deck.slides[i] = slide
       card.outerHTML = renderCard(slide, i, deck.slides.length)
       mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
       setStatus('未保存')
     } else if (btn.dataset.addStep !== undefined) {
-      const slide = collectSlide(card, deck.slides[i].layout)
+      const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       ;(slide.steps ??= []).push({ label: '新步骤', text: '' })
       deck.slides[i] = slide
       card.outerHTML = renderCard(slide, i, deck.slides.length)
@@ -258,7 +299,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     } else if (btn.dataset.delSub !== undefined) {
       const sub = btn.closest<HTMLElement>('[data-item],[data-step]')
       sub?.remove()
-      deck.slides[i] = collectSlide(card, deck.slides[i].layout)
+      deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       refreshPreview(card)
       setStatus('未保存')
     }
@@ -288,6 +329,11 @@ function renderCard(s: Slide, i: number, total: number): string {
       <div class="slide-card__body">
         <div class="thumb slide-card__preview" data-preview></div>
         <div class="slide-card__fields">${renderFields(s)}</div>
+      </div>
+      <div class="ed-bg">
+        <span class="ed-bg__label">${s.bg ? '🖼 已配背景图（很淡）' : '未配背景图'}</span>
+        <button class="btn btn--ghost btn--sm" data-bg-refresh>${icons.refresh} 换背景图</button>
+        ${s.bg ? `<button class="btn btn--ghost btn--sm" data-bg-remove>移除背景</button>` : ''}
       </div>
       <div class="adjust">
         <input class="input adjust__input" data-instruct placeholder="想怎么改这一页的内容？（例如：换成更具体的例子、语气更活泼、补一个数据…）">
@@ -380,12 +426,13 @@ function renderStep(step: { label: string; text?: string }): string {
 
 /* ------------------------------ collect ------------------------------ */
 
-function collectSlide(card: HTMLElement, layout: SlideLayout): Slide {
+function collectSlide(card: HTMLElement, layout: SlideLayout, prev?: Slide): Slide {
   const raw = (f: string): string => card.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-field="${f}"]`)?.value ?? ''
   const v = (f: string): string => raw(f).trim()
   const und = (f: string): string | undefined => v(f) || undefined
   const list = (f: string): string[] => raw(f).split('\n').map((x) => x.trim()).filter(Boolean)
-  const s: Slide = { layout }
+  // Carry over fields that have no form input, so edits don't drop them.
+  const s: Slide = { layout, bg: prev?.bg, imageQuery: prev?.imageQuery }
 
   switch (layout) {
     case 'cover':

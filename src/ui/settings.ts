@@ -85,6 +85,15 @@ export function renderSettings(view: HTMLElement): () => void {
         <div class="hint">仅对支持思考模式的模型生效，如 DeepSeek V4（v4-flash / v4-pro）。</div>
       </div>
 
+      <div class="form-group">
+        <label>页面背景图</label>
+        <label class="switch"><input type="checkbox" data-img-enabled><span>自动为每页配一张相关的淡背景图</span></label>
+        <div class="hint">默认用免费的 <b>Openverse</b> 图库搜索（CC 授权、<b>无需 Key</b>、开箱即用）。背景很淡、不干扰阅读。想要更高画质/更贴合，可填下面任一图片 Key（有则优先用 Unsplash）。</div>
+        <input class="form-input" data-img-unsplash placeholder="Unsplash Access Key（可选）" autocomplete="off" style="margin-top:10px">
+        <input class="form-input" data-img-pexels placeholder="Pexels API Key（可选）" autocomplete="off" style="margin-top:8px">
+        <div class="hint">这些是「图片搜索」Key，仅用于给页面配背景照片，只存本机。</div>
+      </div>
+
       <div class="notice notice--warn">
         提示：这是纯前端应用，部分第三方端点可能因 CORS 限制无法在浏览器直接调用。
         Claude 与 OpenAI 官方端点均支持浏览器直连。
@@ -104,6 +113,9 @@ export function renderSettings(view: HTMLElement): () => void {
   const modelSelect = view.querySelector<HTMLSelectElement>('[data-model-select]')!
   const modelCustom = view.querySelector<HTMLInputElement>('[data-model-custom]')!
   const thinkingEl = view.querySelector<HTMLInputElement>('[data-thinking]')!
+  const imgEnabledEl = view.querySelector<HTMLInputElement>('[data-img-enabled]')!
+  const imgUnsplashEl = view.querySelector<HTMLInputElement>('[data-img-unsplash]')!
+  const imgPexelsEl = view.querySelector<HTMLInputElement>('[data-img-pexels]')!
   const keyHintEl = view.querySelector<HTMLElement>('[data-key-hint]')!
   const DEFAULT_KEY_HINT = keyHintEl.textContent ?? ''
 
@@ -133,6 +145,9 @@ export function renderSettings(view: HTMLElement): () => void {
     baseEl.placeholder = hint.base
     keyEl.value = cfg.apiKey
     thinkingEl.checked = state.thinking
+    imgEnabledEl.checked = state.images.enabled
+    imgUnsplashEl.value = state.images.unsplashKey
+    imgPexelsEl.value = state.images.pexelsKey
     updateKeyHint()
     rebuildModels()
   }
@@ -189,6 +204,9 @@ export function renderSettings(view: HTMLElement): () => void {
   })
   modelCustom.addEventListener('input', () => (state[state.provider].model = modelCustom.value))
   thinkingEl.addEventListener('change', () => (state.thinking = thinkingEl.checked))
+  imgEnabledEl.addEventListener('change', () => (state.images.enabled = imgEnabledEl.checked))
+  imgUnsplashEl.addEventListener('input', () => (state.images.unsplashKey = imgUnsplashEl.value))
+  imgPexelsEl.addEventListener('input', () => (state.images.pexelsKey = imgPexelsEl.value))
 
   view.querySelector('[data-save]')!.addEventListener('click', () => {
     // Fall back to placeholder defaults for empty base/model.
@@ -207,6 +225,7 @@ export function renderSettings(view: HTMLElement): () => void {
     state.anthropic = fresh.anthropic
     state.openai = fresh.openai
     state.thinking = fresh.thinking
+    state.images = fresh.images
     customModel = false
     paint()
     toast('已恢复默认（未保存）')

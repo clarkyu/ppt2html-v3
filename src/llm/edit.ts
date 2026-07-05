@@ -33,6 +33,7 @@ export async function regenerateSlide(
 
   const text = await requestText(EDIT_SYSTEM, user, settings, { signal, maxTokens: 1600 })
   const norm = normalizeSlide(extractJson(text))
-  // Never change the layout; fall back to the original slide if parsing failed.
-  return norm ? { ...norm, layout: slide.layout } : slide
+  // Never change the layout; keep the existing background image; fall back to
+  // the original slide if parsing failed.
+  return norm ? { ...norm, layout: slide.layout, bg: slide.bg, imageQuery: slide.imageQuery } : slide
 }

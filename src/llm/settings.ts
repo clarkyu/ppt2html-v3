@@ -15,12 +15,26 @@ export interface ProviderConfig {
   model: string
 }
 
+/** Per-page background image settings (hybrid: free Openverse + optional BYOK). */
+export interface ImageSettings {
+  /** Master toggle for auto background images. */
+  enabled: boolean
+  /** Unsplash Access Key (optional; preferred when set). */
+  unsplashKey: string
+  /** Pexels API Key (optional; used if no Unsplash key). */
+  pexelsKey: string
+}
+
+export type ImageSource = 'unsplash' | 'pexels' | 'openverse'
+
 export interface LlmSettings {
   provider: Provider
   anthropic: ProviderConfig
   openai: ProviderConfig
   /** Thinking / reasoning mode. Currently applied to DeepSeek V4 endpoints. */
   thinking: boolean
+  /** Auto background images per page. */
+  images: ImageSettings
 }
 
 const STORAGE_KEY = 'ppt2html.settings.v1'
@@ -59,6 +73,7 @@ export const DEFAULT_SETTINGS: LlmSettings = {
     model: 'gpt-4o-mini',
   },
   thinking: false,
+  images: { enabled: true, unsplashKey: '', pexelsKey: '' },
 }
 
 /** Fresh defaults. With a system key, default to system DeepSeek (thinking on). */
@@ -83,6 +98,7 @@ export function loadSettings(): LlmSettings {
       anthropic: { ...DEFAULT_SETTINGS.anthropic, ...parsed.anthropic },
       openai: { ...DEFAULT_SETTINGS.openai, ...parsed.openai },
       thinking: parsed.thinking === true,
+      images: { ...DEFAULT_SETTINGS.images, ...parsed.images },
     }
   } catch {
     return freshDefaults()
@@ -107,4 +123,11 @@ export function effectiveApiKey(settings: LlmSettings): string {
 /** Configured = the user has a key, or the system DeepSeek fallback covers it. */
 export function isConfigured(settings: LlmSettings): boolean {
   return effectiveApiKey(settings).length > 0
+}
+
+/** Which image backend applies: user's Unsplash/Pexels key, else free Openverse. */
+export function imageSource(settings: LlmSettings): ImageSource {
+  if (settings.images.unsplashKey.trim()) return 'unsplash'
+  if (settings.images.pexelsKey.trim()) return 'pexels'
+  return 'openverse'
 }
