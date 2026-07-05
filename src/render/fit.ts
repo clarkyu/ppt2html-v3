@@ -1,7 +1,11 @@
-// Shrink-to-fit for slide headings: if a title/subtitle wraps past its line
-// budget (and would overflow / break awkwardly), reduce its font size until it
-// fits. Runs on the visible slide in the player and on every preview render,
-// so edits adjust in real time.
+// Overflow control for slides. Two layers, applied on every render (player
+// slide-change + every preview), so both freshly generated and edited decks
+// stay inside the 1280×720 canvas and never clip:
+//
+//   1. fitHeadings — shrink oversized titles/subtitles per element (keeps the
+//      rest of the layout untouched; nicest for the common "long title" case).
+//   2. fitSlide    — after headings are fitted, if the whole content block still
+//      overflows the canvas, uniformly scale it down until it fits.
 
 interface FitTarget {
   sel: string
@@ -60,5 +64,40 @@ function fitOne(el: HTMLElement, maxLines: number, minScale: number): void {
 export function fitHeadings(root: HTMLElement): void {
   for (const t of TARGETS) {
     root.querySelectorAll<HTMLElement>(t.sel).forEach((el) => fitOne(el, t.maxLines, t.minScale))
+  }
+}
+
+/**
+ * Fit an entire slide so nothing is clipped: shrink oversized headings, then—if
+ * the content block still overflows the canvas—uniformly scale it down.
+ * `root` is a slide `<section>` (player) or a preview container holding one.
+ */
+export function fitSlide(root: HTMLElement): void {
+  fitHeadings(root)
+
+  const s = root.querySelector<HTMLElement>('.s')
+  if (!s) return
+
+  // Reset any previous fit so we measure the natural layout.
+  s.style.transform = ''
+  s.style.transformOrigin = ''
+
+  const availH = s.clientHeight
+  const availW = s.clientWidth
+  if (!availH || !availW) return
+
+  // `.s` vertically centers its content, which makes scrollHeight underreport
+  // overflow (content spilling above the top edge isn't counted). Flow from the
+  // top while measuring so the full content extent is captured, then restore.
+  const prevJustify = s.style.justifyContent
+  s.style.justifyContent = 'flex-start'
+  const contentH = s.scrollHeight
+  const contentW = s.scrollWidth
+  s.style.justifyContent = prevJustify
+
+  const scale = Math.min(availH / contentH, availW / contentW, 1)
+  if (scale < 0.995) {
+    s.style.transformOrigin = 'center center'
+    s.style.transform = `scale(${Math.max(scale, 0.4)})`
   }
 }

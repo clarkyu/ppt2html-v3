@@ -8,7 +8,7 @@ import './player.css'
 
 import type { Deck } from '../types'
 import { renderDeckSlides } from '../render/renderDeck'
-import { fitHeadings } from '../render/fit'
+import { fitSlide } from '../render/fit'
 
 export interface PlayerHandle {
   reveal: RevealApi
@@ -75,11 +75,12 @@ export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
     plugins: [RevealNotes],
   })
 
-  // Shrink-to-fit the current slide's headings so long titles/subtitles don't
-  // wrap into an overflow. Re-run on every slide change.
+  // Fit the current slide so long titles and content never clip: shrink
+  // oversized headings, then scale the whole block down if it still overflows.
+  // Re-run on every slide change.
   const fitCurrent = () => {
     const cur = reveal.getCurrentSlide() as HTMLElement | null
-    if (cur) fitHeadings(cur)
+    if (cur) fitSlide(cur)
   }
   reveal.on('ready', () => requestAnimationFrame(fitCurrent))
   reveal.on('slidechanged', fitCurrent)
