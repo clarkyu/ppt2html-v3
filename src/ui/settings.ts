@@ -61,6 +61,12 @@ export function renderSettings(view: HTMLElement): () => void {
         <div class="hint">从常见模型中选择；如需其它模型请选「自定义…」自行填写。</div>
       </div>
 
+      <div class="form-group">
+        <label>思考模式</label>
+        <label class="switch"><input type="checkbox" data-thinking><span>开启思考 / 推理（更深入，但更慢）</span></label>
+        <div class="hint">仅对支持思考模式的模型生效，如 DeepSeek V4（v4-flash / v4-pro）。</div>
+      </div>
+
       <div class="notice notice--warn">
         提示：这是纯前端应用，部分第三方端点可能因 CORS 限制无法在浏览器直接调用。
         Claude 与 OpenAI 官方端点均支持浏览器直连。
@@ -79,6 +85,7 @@ export function renderSettings(view: HTMLElement): () => void {
   const keyEl = view.querySelector<HTMLInputElement>('[data-key]')!
   const modelSelect = view.querySelector<HTMLSelectElement>('[data-model-select]')!
   const modelCustom = view.querySelector<HTMLInputElement>('[data-model-custom]')!
+  const thinkingEl = view.querySelector<HTMLInputElement>('[data-thinking]')!
 
   const rebuildModels = () => {
     const cfg = state[state.provider]
@@ -105,6 +112,7 @@ export function renderSettings(view: HTMLElement): () => void {
     baseEl.value = cfg.baseUrl
     baseEl.placeholder = hint.base
     keyEl.value = cfg.apiKey
+    thinkingEl.checked = state.thinking
     rebuildModels()
   }
 
@@ -146,6 +154,7 @@ export function renderSettings(view: HTMLElement): () => void {
     }
   })
   modelCustom.addEventListener('input', () => (state[state.provider].model = modelCustom.value))
+  thinkingEl.addEventListener('change', () => (state.thinking = thinkingEl.checked))
 
   view.querySelector('[data-save]')!.addEventListener('click', () => {
     // Fall back to placeholder defaults for empty base/model.
@@ -163,6 +172,7 @@ export function renderSettings(view: HTMLElement): () => void {
     fresh.provider = state.provider
     state.anthropic = fresh.anthropic
     state.openai = fresh.openai
+    state.thinking = fresh.thinking
     customModel = false
     paint()
     toast('已恢复默认（未保存）')

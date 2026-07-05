@@ -96,6 +96,10 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
           <span class="modelpick__label">模型</span>
           <select class="select modelpick__model" data-model></select>
         </div>
+        <div class="modelpick__row" data-think-row hidden>
+          <span class="modelpick__label">思考</span>
+          <label class="switch"><input type="checkbox" data-thinking><span>思考模式（更深入，稍慢）</span></label>
+        </div>
         <div class="modelpick__note" data-note></div>
       </div>
       <div class="clarify__actions">
@@ -110,11 +114,18 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     const modelSel = body.querySelector<HTMLSelectElement>('[data-model]')!
     const noteEl = body.querySelector<HTMLElement>('[data-note]')!
     const goBtn = body.querySelector<HTMLButtonElement>('[data-go]')!
+    const thinkRow = body.querySelector<HTMLElement>('[data-think-row]')!
+    const thinkBox = body.querySelector<HTMLInputElement>('[data-thinking]')!
 
     const paint = () => {
       const cfg = draft[draft.provider]
       const hasKey = cfg.apiKey.trim().length > 0
       segBtns.forEach((b) => b.classList.toggle('active', b.dataset.provider === draft.provider))
+
+      // Thinking-mode toggle only applies to DeepSeek V4 endpoints.
+      const isDeepseek = draft.provider === 'openai' && cfg.baseUrl.toLowerCase().includes('deepseek')
+      thinkRow.hidden = !isDeepseek
+      thinkBox.checked = draft.thinking
 
       const activePreset = presetFor(draft.provider, cfg.baseUrl)
       body.querySelectorAll<HTMLElement>('[data-preset]').forEach((chip) => {
@@ -150,6 +161,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
       paint()
     })
     modelSel.addEventListener('change', () => (draft[draft.provider].model = modelSel.value))
+    thinkBox.addEventListener('change', () => (draft.thinking = thinkBox.checked))
 
     body.querySelector('[data-settings]')!.addEventListener('click', () => {
       close()

@@ -64,8 +64,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     label: 'DeepSeek',
     provider: 'openai',
     baseUrl: 'https://api.deepseek.com',
-    // V4 是当前模型；deepseek-chat / deepseek-reasoner 为旧别名，2026-07-24 后停用。
-    models: ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'],
+    models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
   },
   {
     label: '通义千问',
