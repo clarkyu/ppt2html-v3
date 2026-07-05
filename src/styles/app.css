@@ -638,6 +638,40 @@ body.playing .appbar { display: none; }
 .viewer__bar .btn:hover { background: rgba(255,255,255,0.2); }
 .viewer__mount { position: absolute; inset: 0; }
 
+/* Rotate-to-landscape nudge. A 16:9 deck is tiny letterboxed on a portrait
+   phone, so we invite the user to turn the phone (playback is far larger and
+   nicer in landscape). Hidden by default; shown only on portrait touch screens
+   and until the user dismisses it or actually rotates. */
+.rotate-hint { display: none; }
+@media (orientation: portrait) and (pointer: coarse) {
+  .viewer:not(.rotate-dismissed) .rotate-hint {
+    display: flex;
+    position: absolute; inset: 0; z-index: 70;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 32px; text-align: center;
+    background: radial-gradient(120% 80% at 50% 40%, #10182e 0%, #06080f 80%);
+    color: #fff;
+  }
+}
+.rotate-hint__icon {
+  width: 76px; height: 76px; color: var(--accent, #7c9cff);
+  animation: rotate-nudge 2.4s ease-in-out infinite;
+}
+.rotate-hint__icon svg { width: 100%; height: 100%; }
+.rotate-hint__title { font-size: 19px; font-weight: 700; margin: 0; }
+.rotate-hint__sub { font-size: 14px; line-height: 1.6; opacity: 0.7; margin: 0; max-width: 20em; }
+.rotate-hint .btn {
+  margin-top: 6px; background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.18); color: #fff;
+}
+@keyframes rotate-nudge {
+  0%, 55% { transform: rotate(0deg); }
+  75%, 100% { transform: rotate(-90deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rotate-hint__icon { animation: none; transform: rotate(-90deg); }
+}
+
 .toast {
   position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
   z-index: 200; padding: 12px 20px; border-radius: 12px;
