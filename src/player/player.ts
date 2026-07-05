@@ -8,7 +8,7 @@ import './player.css'
 
 import type { Deck, SlideBg } from '../types'
 import { renderDeckSlides } from '../render/renderDeck'
-import { bgCssUrl } from '../render/layouts'
+import { bgCssUrl, creditHtml } from '../render/layouts'
 import { fitSlide } from '../render/fit'
 
 export interface PlayerHandle {
@@ -130,6 +130,10 @@ export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
         sec.insertBefore(bgEl, sec.firstChild)
       }
       bgEl.style.backgroundImage = css
+      // Refresh the attribution caption for the new image.
+      sec.querySelector('.deck-slide__credit')?.remove()
+      const credit = creditHtml(bg)
+      if (credit) sec.insertAdjacentHTML('beforeend', credit)
     },
   }
 }

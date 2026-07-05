@@ -30,6 +30,11 @@ jobs:
       - run: npm run build
         env:
           VITE_DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # Optional system-provided image search keys (baked into the bundle,
+          # like the DeepSeek key). Present → all users get Unsplash/Pexels
+          # backgrounds by default; absent → falls back to free Openverse.
+          VITE_UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
+          VITE_PEXELS_KEY: ${{ secrets.PEXELS_KEY }}
       # Enables GitHub Pages via the API if it isn't already, so the deploy
       # step doesn't 404 on a repo where Pages was never turned on.
       - name: Setup Pages

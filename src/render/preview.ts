@@ -1,5 +1,5 @@
 import type { Deck, Slide, ThemeName } from '../types'
-import { renderSlideInner, slideBgHtml } from './layouts'
+import { renderSlideInner, slideBgHtml, slideCreditHtml } from './layouts'
 import { fitSlide } from './fit'
 import './themes.css'
 import './slides.css'
@@ -15,7 +15,7 @@ export function mountSlidePreview(container: HTMLElement, theme: ThemeName, slid
     `<div class="player theme-${theme}">` +
     `<div class="player__bg"></div>` +
     `<div class="reveal deck"><div class="slides">` +
-    `<section class="deck-slide" data-layout="${slide.layout}">${slideBgHtml(slide)}${renderSlideInner(slide)}</section>` +
+    `<section class="deck-slide" data-layout="${slide.layout}">${slideBgHtml(slide)}${renderSlideInner(slide)}${slideCreditHtml(slide)}</section>` +
     `</div></div></div></div>`
 
   fitSlide(container)

@@ -1,5 +1,5 @@
 import type { Deck } from '../types'
-import { renderSlideInner, slideBgHtml } from './layouts'
+import { renderSlideInner, slideBgHtml, slideCreditHtml } from './layouts'
 import { escapeHtml } from '../lib/markdown'
 
 /**
@@ -16,6 +16,7 @@ export function renderDeckSlides(deck: Deck): string {
         `<section data-layout="${slide.layout}" class="deck-slide">` +
         slideBgHtml(slide) +
         renderSlideInner(slide) +
+        slideCreditHtml(slide) +
         note +
         `</section>`
       )

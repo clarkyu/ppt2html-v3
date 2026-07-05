@@ -63,6 +63,22 @@
 /* Keep all slide content above the background layer. */
 .reveal.deck .deck-slide > .s { position: relative; z-index: 1; }
 
+/* Photo attribution caption (Unsplash/Pexels/CC). Small + subtle, bottom-left
+   corner where the scrim is most opaque so it stays legible. */
+.reveal.deck .deck-slide__credit {
+  position: absolute;
+  left: 20px;
+  bottom: 14px;
+  z-index: 2;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  opacity: 0.62;
+  letter-spacing: 0.02em;
+}
+.reveal.deck .deck-slide__credit a { color: inherit; border: none; text-decoration: none; }
+.reveal.deck .deck-slide__credit a:hover { opacity: 1; text-decoration: underline; }
+
 /* The inner wrapper fills the slide and arranges content. */
 .reveal.deck .s {
   display: flex;
