@@ -99,6 +99,18 @@ export function renderSettings(view: HTMLElement): () => void {
         <div class="hint">这些是「图片搜索」Key，仅用于给页面配背景照片，只存本机。</div>
       </div>
 
+      <div class="form-group">
+        <label>署名信息（人 / 单位 / Logo）</label>
+        <div class="hint">填一次作为全局默认，新课件自动带上；每份课件也可在编辑器里单独覆盖。日期默认用生成当天。会显示在封面/结束页与每页角落。</div>
+        <input class="form-input" data-brand-presenter placeholder="演示者 / 姓名" style="margin-top:8px">
+        <input class="form-input" data-brand-org placeholder="单位 / 组织" style="margin-top:8px">
+        <div style="display:flex; gap:8px; align-items:center; margin-top:8px">
+          <input class="form-input" data-brand-logo placeholder="Logo 图片网址（或点右侧上传）" style="flex:1; min-width:0">
+          <label class="btn btn--ghost btn--sm" style="flex:none">上传<input type="file" accept="image/*" data-brand-logo-file hidden></label>
+        </div>
+        <img data-brand-logo-preview alt="" style="display:none; height:36px; margin-top:8px; object-fit:contain; background:var(--surface-2); border-radius:8px; padding:4px 8px">
+      </div>
+
       <div class="notice notice--warn">
         提示：这是纯前端应用，部分第三方端点可能因 CORS 限制无法在浏览器直接调用。
         Claude 与 OpenAI 官方端点均支持浏览器直连。
@@ -121,6 +133,11 @@ export function renderSettings(view: HTMLElement): () => void {
   const imgEnabledEl = view.querySelector<HTMLInputElement>('[data-img-enabled]')!
   const imgUnsplashEl = view.querySelector<HTMLInputElement>('[data-img-unsplash]')!
   const imgPexelsEl = view.querySelector<HTMLInputElement>('[data-img-pexels]')!
+  const brandPresenterEl = view.querySelector<HTMLInputElement>('[data-brand-presenter]')!
+  const brandOrgEl = view.querySelector<HTMLInputElement>('[data-brand-org]')!
+  const brandLogoEl = view.querySelector<HTMLInputElement>('[data-brand-logo]')!
+  const brandLogoFileEl = view.querySelector<HTMLInputElement>('[data-brand-logo-file]')!
+  const brandLogoPreviewEl = view.querySelector<HTMLImageElement>('[data-brand-logo-preview]')!
   const keyHintEl = view.querySelector<HTMLElement>('[data-key-hint]')!
   const DEFAULT_KEY_HINT = keyHintEl.textContent ?? ''
 
@@ -153,8 +170,23 @@ export function renderSettings(view: HTMLElement): () => void {
     imgEnabledEl.checked = state.images.enabled
     imgUnsplashEl.value = state.images.unsplashKey
     imgPexelsEl.value = state.images.pexelsKey
+    brandPresenterEl.value = state.branding.presenter ?? ''
+    brandOrgEl.value = state.branding.org ?? ''
+    brandLogoEl.value = state.branding.logo ?? ''
+    updateLogoPreview()
     updateKeyHint()
     rebuildModels()
+  }
+
+  const updateLogoPreview = () => {
+    const u = (state.branding.logo ?? '').trim()
+    if (u) {
+      brandLogoPreviewEl.src = u
+      brandLogoPreviewEl.style.display = ''
+    } else {
+      brandLogoPreviewEl.removeAttribute('src')
+      brandLogoPreviewEl.style.display = 'none'
+    }
   }
 
   // When the system DeepSeek fallback covers this endpoint, the key is optional.
@@ -212,6 +244,29 @@ export function renderSettings(view: HTMLElement): () => void {
   imgEnabledEl.addEventListener('change', () => (state.images.enabled = imgEnabledEl.checked))
   imgUnsplashEl.addEventListener('input', () => (state.images.unsplashKey = imgUnsplashEl.value))
   imgPexelsEl.addEventListener('input', () => (state.images.pexelsKey = imgPexelsEl.value))
+  brandPresenterEl.addEventListener('input', () => (state.branding.presenter = brandPresenterEl.value))
+  brandOrgEl.addEventListener('input', () => (state.branding.org = brandOrgEl.value))
+  brandLogoEl.addEventListener('input', () => {
+    state.branding.logo = brandLogoEl.value
+    updateLogoPreview()
+  })
+  brandLogoFileEl.addEventListener('change', () => {
+    const file = brandLogoFileEl.files?.[0]
+    if (!file) return
+    if (file.size > 900_000) {
+      toast('Logo 图片太大，请用小于 ~900KB 的图片')
+      brandLogoFileEl.value = ''
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      state.branding.logo = String(reader.result)
+      brandLogoEl.value = state.branding.logo
+      updateLogoPreview()
+    }
+    reader.readAsDataURL(file)
+    brandLogoFileEl.value = ''
+  })
 
   view.querySelector('[data-save]')!.addEventListener('click', () => {
     // Fall back to placeholder defaults for empty base/model.
@@ -231,6 +286,7 @@ export function renderSettings(view: HTMLElement): () => void {
     state.openai = fresh.openai
     state.thinking = fresh.thinking
     state.images = fresh.images
+    state.branding = fresh.branding
     customModel = false
     paint()
     toast('已恢复默认（未保存）')

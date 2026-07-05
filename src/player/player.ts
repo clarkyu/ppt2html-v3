@@ -35,7 +35,9 @@ const REVEAL_CONFIG = {
   controlsTutorial: false,
   controlsLayout: 'bottom-right' as const,
   progress: true,
-  slideNumber: 'c/t' as const,
+  // We render our own page number baked into each slide (also shows in print),
+  // so reveal's built-in number is off to avoid duplication.
+  slideNumber: false as const,
   // Show each slide's full content as soon as you land on it — no click-to-reveal
   // stepping. (Bullets etc. carry a `.fragment` class; keeping stepping on made
   // freshly-flipped slides look blank, esp. behind a background image.)

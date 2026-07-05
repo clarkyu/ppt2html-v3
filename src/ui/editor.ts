@@ -11,6 +11,7 @@ import { escapeHtml } from '../lib/markdown'
 import {
   LAYOUTS,
   THEMES,
+  type Branding,
   type CompareItem,
   type Deck,
   type Slide,
@@ -92,6 +93,15 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
             ${THEMES.map((t) => `<option value="${t}"${t === deck.theme ? ' selected' : ''}>${THEME_LABELS[t]}</option>`).join('')}
           </select>
         </label>
+        <label class="f"><span>演示者</span><input class="form-input" data-meta="brand.presenter" value="${escapeHtml(deck.branding?.presenter ?? '')}" placeholder="姓名"></label>
+        <label class="f"><span>单位</span><input class="form-input" data-meta="brand.org" value="${escapeHtml(deck.branding?.org ?? '')}" placeholder="单位 / 组织"></label>
+        <label class="f"><span>日期</span><input class="form-input" data-meta="brand.date" value="${escapeHtml(deck.branding?.date ?? '')}" placeholder="如 2026-07-05"></label>
+        <label class="f"><span>Logo</span>
+          <span style="display:flex; gap:8px">
+            <input class="form-input" data-meta="brand.logo" value="${escapeHtml(deck.branding?.logo ?? '')}" placeholder="图片网址，或点上传" style="flex:1; min-width:0">
+            <label class="btn btn--ghost btn--sm" style="flex:none">上传<input type="file" accept="image/*" data-brand-logo-file hidden></label>
+          </span>
+        </label>
       </div>
       <div class="ed-list" data-list>
         ${deck.slides.map((s, i) => renderCard(s, i, deck.slides.length)).join('')}
@@ -129,10 +139,13 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     const target = e.target as HTMLElement
     const meta = target.closest<HTMLElement>('[data-meta]')
     if (meta) {
-      const key = meta.dataset.meta as 'title' | 'subtitle'
+      const key = meta.dataset.meta ?? ''
       const value = (meta as HTMLInputElement).value
       if (key === 'title') deck.title = value
-      else deck.subtitle = value.trim() || undefined
+      else if (key === 'subtitle') deck.subtitle = value.trim() || undefined
+      else if (key.startsWith('brand.')) {
+        deck.branding = { ...deck.branding, [key.slice(6) as keyof Branding]: value.trim() || undefined }
+      } else return // theme is a <select>, handled in the change listener
       setStatus('未保存')
       return
     }
@@ -148,6 +161,26 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
   // ---- selects (theme / layout) ----
   root.addEventListener('change', (e) => {
     const target = e.target as HTMLElement
+    if (target.matches('[data-brand-logo-file]')) {
+      const inp = target as HTMLInputElement
+      const file = inp.files?.[0]
+      if (!file) return
+      if (file.size > 900_000) {
+        toast('Logo 图片太大，请用小于 ~900KB 的图片')
+        inp.value = ''
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = () => {
+        deck.branding = { ...deck.branding, logo: String(reader.result) }
+        const urlInput = root.querySelector<HTMLInputElement>('[data-meta="brand.logo"]')
+        if (urlInput) urlInput.value = deck.branding.logo ?? ''
+        setStatus('未保存')
+      }
+      reader.readAsDataURL(file)
+      inp.value = ''
+      return
+    }
     if (target.matches('[data-meta="theme"]')) {
       deck.theme = (target as HTMLSelectElement).value as ThemeName
       render() // re-render all previews with the new theme
