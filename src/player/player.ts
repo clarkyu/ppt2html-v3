@@ -49,6 +49,13 @@ const REVEAL_CONFIG = {
   overview: true,
   center: true,
   touch: true,
+  // Keep PPT-style slide playback on phones. reveal.js auto-switches to its
+  // vertical "scroll view" when the viewport is narrower than this (default
+  // 435px), which on a portrait phone turns the deck into a scrolling web page
+  // of tiny letterboxed slides you can't swipe through — users reported "can't
+  // play on my phone". 0 disables that auto-activation (no viewport width is
+  // ≤ 0) so swipe/tap navigation works at any width.
+  scrollActivationWidth: 0,
   hideInactiveCursor: true,
   hideCursorTime: 3000,
   transition: 'slide' as const,

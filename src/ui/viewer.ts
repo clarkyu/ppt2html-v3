@@ -22,6 +22,12 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         <button class="btn btn--sm" data-full title="全屏 (F)">${icons.expand}</button>
       </div>
       <div class="viewer__mount" data-mount></div>
+      <div class="rotate-hint" data-rotate-hint>
+        <div class="rotate-hint__icon">${icons.rotate}</div>
+        <p class="rotate-hint__title">横屏观看更清晰</p>
+        <p class="rotate-hint__sub">把手机横过来，课件会铺满屏幕；左右滑动翻页。</p>
+        <button class="btn btn--sm" data-rotate-dismiss>仍要竖屏播放</button>
+      </div>
     </div>`
 
   const viewerEl = view.querySelector<HTMLElement>('.viewer')!
@@ -35,13 +41,22 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
   }
 
   // Auto-hide the top bar; reveal handles cursor hiding for the deck itself.
+  // Also nudge on tap (pointerdown) so touch users — who fire no mousemove —
+  // can bring the bar back to reach 返回 / 总览 after it hides.
   const nudgeBar = () => {
     bar.classList.add('show')
     window.clearTimeout(hideTimer)
     hideTimer = window.setTimeout(() => bar.classList.remove('show'), 2600)
   }
   viewerEl.addEventListener('mousemove', nudgeBar)
+  viewerEl.addEventListener('pointerdown', nudgeBar)
   nudgeBar()
+
+  // Portrait phones show a "rotate to landscape" nudge (a 16:9 deck is tiny in
+  // portrait). It's playable either way; dismissing hides it for the session.
+  view.querySelector('[data-rotate-dismiss]')!.addEventListener('click', () =>
+    viewerEl.classList.add('rotate-dismissed'),
+  )
 
   view.querySelector('[data-back]')!.addEventListener('click', goBack)
   view.querySelector('[data-overview]')!.addEventListener('click', () => player?.toggleOverview())
