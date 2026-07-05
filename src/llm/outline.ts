@@ -32,6 +32,24 @@ function coerceTheme(v: unknown, hint?: ThemeName): ThemeName {
   return typeof v === 'string' && THEME_SET.has(v) ? (v as ThemeName) : hint ?? 'aurora'
 }
 
+/**
+ * Run an LLM call and parse its JSON, retrying a few times on parse failure —
+ * models (esp. DeepSeek in thinking mode) occasionally return an empty or
+ * non-JSON answer; a retry almost always recovers. Aborts are not retried.
+ */
+async function genJson(run: () => Promise<string>, attempts = 3): Promise<unknown> {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return extractJson(await run())
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') throw e
+      lastErr = e
+    }
+  }
+  throw lastErr
+}
+
 /* ------------------------- step 1: overall structure ------------------------- */
 
 const STRUCTURE_SYSTEM = `你是课件结构规划专家。这是**第一步**：先规划课件的「整体结构」（分成哪几个部分），供用户确认后，再细化每一页。
@@ -57,8 +75,8 @@ export async function generateStructure(
   signal?: AbortSignal,
 ): Promise<Structure> {
   const user = `${contextBlock(topic, opts)}\n\n请先输出「整体结构」JSON（只列几个部分，不要展开到每一页）。只输出 JSON。`
-  const text = await requestText(STRUCTURE_SYSTEM, user, settings, { signal, maxTokens: 1400 })
-  return normalizeStructure(extractJson(text), topic, opts)
+  const raw = await genJson(() => requestText(STRUCTURE_SYSTEM, user, settings, { signal, maxTokens: 1400 }))
+  return normalizeStructure(raw, topic, opts)
 }
 
 /** Distribute `budget` pages across parts by weight, each ≥1, summing exactly. */
@@ -159,8 +177,8 @@ export async function generatePartPages(
     (instruction ? `用户对这一部分的额外调整要求（请据此重写）：${instruction}\n\n` : '') +
     `请只输出这一部分的 slides JSON，共约 ${pages} 页，第 1 页为 section 分隔页（标题：${sec?.title ?? ''}）。只输出 JSON。`
 
-  const text = await streamText(PART_SYSTEM, user, settings, handlers)
-  return normalizePartSlides(extractJson(text), sec)
+  const raw = await genJson(() => streamText(PART_SYSTEM, user, settings, handlers))
+  return normalizePartSlides(raw, sec)
 }
 
 function normalizePartSlides(raw: unknown, sec?: Section): OutlineSlide[] {
@@ -246,8 +264,7 @@ export async function generateDeckFromOutline(
     `已确认的大纲（请严格照此生成完整课件）：\n${JSON.stringify(outline)}\n\n` +
     `请输出符合 schema 的完整课件 JSON，页数/顺序/每页 layout 与 title 与大纲一致。只输出 JSON。`
 
-  const text = await streamText(FROM_OUTLINE_SYSTEM, user, settings, handlers)
-  const spec = extractJson(text) as DeckSpec
+  const spec = (await genJson(() => streamText(FROM_OUTLINE_SYSTEM, user, settings, handlers))) as DeckSpec
   if (!spec || typeof spec !== 'object' || !Array.isArray(spec.slides) || !spec.slides.length) {
     throw new Error('模型返回的内容不是有效的课件结构，请重试。')
   }

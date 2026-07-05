@@ -53,9 +53,21 @@ export async function streamText(
   handlers: GenerateHandlers = {},
 ): Promise<string> {
   const cfg = resolvedConfig(settings)
+  const extras = providerExtras(settings)
   return settings.provider === 'anthropic'
     ? streamAnthropic(cfg, system, user, handlers)
-    : streamOpenAI(cfg, system, user, handlers, providerExtras(settings))
+    : streamOpenAI(cfg, system, user, handlers, extras, !thinkingActive(extras))
+}
+
+/**
+ * DeepSeek's reasoning ("thinking") mode does NOT support `response_format:
+ * json_object` — forcing it can make the model return an empty answer (all
+ * output goes to reasoning), yielding no JSON. So we drop JSON mode when
+ * thinking is on; the prompt already demands pure JSON.
+ */
+function thinkingActive(extras: Record<string, unknown>): boolean {
+  const t = extras.thinking as { type?: string } | undefined
+  return t?.type === 'enabled'
 }
 
 function safeHost(url: string): string {
@@ -113,6 +125,7 @@ async function streamOpenAI(
   user: string,
   handlers: GenerateHandlers,
   extras: Record<string, unknown> = {},
+  jsonMode = true,
 ): Promise<string> {
   const res = await fetch(joinUrl(cfg.baseUrl, '/chat/completions'), {
     method: 'POST',
@@ -121,7 +134,7 @@ async function streamOpenAI(
     body: JSON.stringify({
       model: cfg.model,
       stream: true,
-      response_format: { type: 'json_object' },
+      ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
       ...extras,
       messages: [
         { role: 'system', content: system },
@@ -148,10 +161,11 @@ export async function requestText(
 ): Promise<string> {
   requireKey(settings)
   const cfg = resolvedConfig(settings)
+  const extras = providerExtras(settings)
   const maxTokens = opts.maxTokens ?? 1024
   return settings.provider === 'anthropic'
     ? requestAnthropic(cfg, system, user, maxTokens, opts.signal)
-    : requestOpenAI(cfg, system, user, opts.json ?? true, opts.signal, providerExtras(settings))
+    : requestOpenAI(cfg, system, user, (opts.json ?? true) && !thinkingActive(extras), opts.signal, extras)
 }
 
 async function requestAnthropic(
