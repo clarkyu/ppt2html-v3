@@ -16,9 +16,9 @@ const THEME_LABELS: Array<{ value: ThemeName; label: string }> = [
 ]
 
 /**
- * Step 1 of outlining: plan the deck's overall structure (a few parts) plus a
- * one-line restatement of the user's intent, let the user confirm/edit both,
- * then move on to page-level detailing.
+ * Step 1 of outlining: plan the deck's overall structure (a few parts, each
+ * with an estimated page count / duration) plus a one-line restatement of the
+ * user's intent, let the user confirm/edit, then move on to per-part detailing.
  */
 export function startStructure(topic: string, opts: GenerateOptions): void {
   const trimmed = topic.trim()
@@ -31,6 +31,8 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
     navigate('#/settings')
     return
   }
+
+  const minutes = opts.durationMinutes
 
   const el = document.createElement('div')
   el.className = 'overlay'
@@ -73,7 +75,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
 
   const showEditor = (structure: Structure) => {
     body.innerHTML = renderEditor(structure)
-    wireEditor(body, {
+    wireEditor(body, minutes, {
       onCancel: close,
       onRegen: () => {
         controller = new AbortController()
@@ -114,6 +116,13 @@ function renderSecRow(s: Section): string {
       <div class="ol-row__content">
         <div class="ol-row__top">
           <input class="ol-row__title" data-title value="${escapeHtml(s.title)}" placeholder="部分标题">
+          <div class="sec-row__budget" title="这一部分的页数">
+            <button class="sec-row__step" data-dec type="button" tabindex="-1">−</button>
+            <input class="sec-row__pages" type="number" min="1" max="15" data-pages value="${s.pages ?? 3}">
+            <button class="sec-row__step" data-inc type="button" tabindex="-1">+</button>
+            <span class="sec-row__unit">页</span>
+            <span class="sec-row__time" data-time></span>
+          </div>
           <div class="ol-row__ops">
             <button class="icon-btn" data-up title="上移">${icons.up}</button>
             <button class="icon-btn" data-down title="下移">${icons.down}</button>
@@ -134,7 +143,8 @@ function renderEditor(structure: Structure): string {
   return `
     <div class="outline__head">
       <h2>先确认整体结构 · <span data-count>${structure.sections.length}</span> 个部分</h2>
-      <p>核对我对需求的理解，以及课件分成哪几个部分；下一步再把每个部分细化成具体页面。</p>
+      <p>核对我对需求的理解，以及分成哪几个部分、每部分多少页；下一步会逐个环节细化成具体页面。</p>
+      <div class="outline__total">全篇约 <b data-total-pages>–</b> 页 · <b data-total-time>–</b>（含封面 / 结束页）</div>
     </div>
     <div class="understand">
       <label>我的理解</label>
@@ -153,7 +163,7 @@ function renderEditor(structure: Structure): string {
     <div class="outline__actions">
       <button class="btn btn--ghost" data-cancel>取消</button>
       <button class="btn btn--ghost" data-regen>${icons.refresh} 重新规划</button>
-      <button class="btn btn--primary" data-go>下一步：细化每页 →</button>
+      <button class="btn btn--primary" data-go>下一步：逐环节细化 →</button>
     </div>`
 }
 
@@ -161,13 +171,25 @@ function renderEditor(structure: Structure): string {
 
 function wireEditor(
   body: HTMLElement,
+  minutes: number | undefined,
   h: { onCancel: () => void; onRegen: () => void; onNext: () => void },
 ): void {
   const list = body.querySelector<HTMLElement>('[data-list]')!
   const countEl = body.querySelector<HTMLElement>('[data-count]')
+  const totalPagesEl = body.querySelector<HTMLElement>('[data-total-pages]')
+  const totalTimeEl = body.querySelector<HTMLElement>('[data-total-time]')
 
-  const renumber = () => {
-    const rows = list.querySelectorAll<HTMLElement>('[data-row]')
+  const pagesOf = (row: HTMLElement): number => {
+    const v = Number(row.querySelector<HTMLInputElement>('[data-pages]')?.value)
+    return Number.isFinite(v) && v > 0 ? Math.round(v) : 1
+  }
+
+  // Refresh numbering, per-part time labels, and the overall total.
+  const recalc = () => {
+    const rows = Array.from(list.querySelectorAll<HTMLElement>('[data-row]'))
+    const contentSum = rows.reduce((sum, r) => sum + pagesOf(r), 0)
+    const totalPages = contentSum + 2 // + cover + end
+    const perPage = minutes && totalPages > 0 ? minutes / totalPages : 1.3
     rows.forEach((row, i) => {
       const idx = row.querySelector<HTMLElement>('[data-index]')
       if (idx) idx.textContent = String(i + 1)
@@ -175,8 +197,12 @@ function wireEditor(
       const down = row.querySelector<HTMLButtonElement>('[data-down]')
       if (up) up.disabled = i === 0
       if (down) down.disabled = i === rows.length - 1
+      const timeEl = row.querySelector<HTMLElement>('[data-time]')
+      if (timeEl) timeEl.textContent = `· ~${Math.max(1, Math.round(pagesOf(row) * perPage))} 分钟`
     })
     if (countEl) countEl.textContent = String(rows.length)
+    if (totalPagesEl) totalPagesEl.textContent = String(totalPages)
+    if (totalTimeEl) totalTimeEl.textContent = `${Math.max(1, Math.round(totalPages * perPage))} 分钟`
   }
 
   list.addEventListener('click', (e) => {
@@ -186,19 +212,30 @@ function wireEditor(
     if (!row) return
     if (btn.dataset.up !== undefined && row.previousElementSibling) {
       list.insertBefore(row, row.previousElementSibling)
-      renumber()
+      recalc()
     } else if (btn.dataset.down !== undefined && row.nextElementSibling) {
       list.insertBefore(row.nextElementSibling, row)
-      renumber()
+      recalc()
     } else if (btn.dataset.del !== undefined) {
       row.remove()
-      renumber()
+      recalc()
+    } else if (btn.dataset.inc !== undefined || btn.dataset.dec !== undefined) {
+      const input = row.querySelector<HTMLInputElement>('[data-pages]')
+      if (input) {
+        const next = Math.min(15, Math.max(1, pagesOf(row) + (btn.dataset.inc !== undefined ? 1 : -1)))
+        input.value = String(next)
+        recalc()
+      }
     }
   })
 
+  list.addEventListener('input', (e) => {
+    if ((e.target as HTMLElement).matches('[data-pages]')) recalc()
+  })
+
   body.querySelector('[data-add]')!.addEventListener('click', () => {
-    list.insertAdjacentHTML('beforeend', renderSecRow({ title: '', brief: '' }))
-    renumber()
+    list.insertAdjacentHTML('beforeend', renderSecRow({ title: '', brief: '', pages: 3 }))
+    recalc()
   })
 
   const themeChips = body.querySelector<HTMLElement>('[data-theme-chips]')
@@ -213,7 +250,7 @@ function wireEditor(
   body.querySelector('[data-regen]')!.addEventListener('click', h.onRegen)
   body.querySelector('[data-go]')!.addEventListener('click', h.onNext)
 
-  renumber()
+  recalc()
 }
 
 function collectStructure(body: HTMLElement, topic: string): Structure {
@@ -227,7 +264,9 @@ function collectStructure(body: HTMLElement, topic: string): Structure {
   body.querySelectorAll<HTMLElement>('[data-row]').forEach((row) => {
     const t = row.querySelector<HTMLInputElement>('[data-title]')?.value.trim() ?? ''
     const brief = row.querySelector<HTMLInputElement>('[data-brief]')?.value.trim() || undefined
-    if (t || brief) sections.push({ title: t || (brief as string), brief: t ? brief : undefined })
+    const pagesRaw = Number(row.querySelector<HTMLInputElement>('[data-pages]')?.value)
+    const pages = Number.isFinite(pagesRaw) && pagesRaw > 0 ? Math.round(pagesRaw) : 3
+    if (t || brief) sections.push({ title: t || (brief as string), brief: t ? brief : undefined, pages })
   })
 
   return { understanding, title, subtitle, theme, sections }

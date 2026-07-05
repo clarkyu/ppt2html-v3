@@ -128,6 +128,8 @@ export interface Section {
   title: string
   /** One-line summary of what this part covers. */
   brief?: string
+  /** Estimated number of pages for this part, including its section-divider page. */
+  pages?: number
 }
 
 /** The high-level structure the user reviews first (parts), before pages. */

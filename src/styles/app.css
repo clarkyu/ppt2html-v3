@@ -303,6 +303,33 @@ button { font-family: inherit; }
 .gen__error { color: #fca5b5; }
 .gen__actions { margin-top: 22px; display: flex; gap: 12px; justify-content: center; }
 
+/* ---------- Live generation feedback (streamed page titles) ---------- */
+.gen-live {
+  list-style: none; margin: 18px 0 0; padding: 0;
+  max-height: 240px; overflow-y: auto;
+  text-align: left; display: flex; flex-direction: column; gap: 6px;
+}
+.gen-live--tall { max-height: 320px; }
+.gen-live li {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 14px; color: var(--text); line-height: 1.4;
+  padding: 7px 11px; border-radius: 9px; background: var(--surface-2);
+  animation: live-in 0.18s ease;
+}
+@keyframes live-in { from { opacity: 0; transform: translateY(4px); } }
+.gen-live__n {
+  flex: none; width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 6px; font-size: 12px; font-weight: 750;
+  color: var(--brand); background: color-mix(in srgb, var(--brand) 16%, transparent);
+}
+.gen-live__wait { color: var(--text-muted); background: transparent; animation: pulse 1.2s ease-in-out infinite; }
+
+/* ---------- Wizard (per-part detailing) header ---------- */
+.wizard__head { margin-bottom: 14px; text-align: left; }
+.wizard__crumb { font-size: 12px; font-weight: 700; color: var(--brand); margin-bottom: 6px; }
+.wizard__head h2 { font-size: 22px; margin: 0 0 4px; color: var(--text-strong); }
+.wizard__head p { margin: 0; color: var(--text-muted); font-size: 14px; }
+
 /* ---------- Guided clarifying questions ---------- */
 .clarify {
   width: min(680px, 100%);
@@ -372,6 +399,30 @@ button { font-family: inherit; }
 .understand { display: flex; flex-direction: column; gap: 6px; margin: 18px 0 6px; }
 .understand > label { font-size: 13px; font-weight: 650; color: var(--brand); }
 .understand__text { resize: vertical; line-height: 1.5; min-height: 52px; }
+
+.outline__total { margin-top: 8px; font-size: 13px; color: var(--text-muted); }
+.outline__total b { color: var(--text-strong); font-weight: 700; }
+
+/* Per-part page budget control on a structure row */
+.sec-row__budget { flex: none; display: inline-flex; align-items: center; gap: 4px; }
+.sec-row__pages {
+  width: 44px; text-align: center; -moz-appearance: textfield;
+  background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text-strong); font-size: 14px; font-family: inherit; padding: 5px 4px; outline: none;
+}
+.sec-row__pages::-webkit-inner-spin-button, .sec-row__pages::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.sec-row__pages:focus { border-color: color-mix(in srgb, var(--brand) 55%, transparent); }
+.sec-row__step {
+  width: 24px; height: 26px; border-radius: 7px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font-size: 16px; line-height: 1; cursor: pointer;
+}
+.sec-row__step:hover { background: var(--surface-hover); }
+.sec-row__unit { font-size: 13px; color: var(--text-dim); }
+.sec-row__time { font-size: 12.5px; color: var(--text-dim); white-space: nowrap; margin-left: 2px; }
+
+@media (max-width: 560px) {
+  .sec-row__budget { order: 4; margin-left: 36px; }
+}
 
 .outline__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 

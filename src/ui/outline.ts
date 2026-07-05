@@ -1,11 +1,20 @@
-import { generateOutlineFromStructure } from '../llm/outline'
+import { generatePartPages, assembleOutline } from '../llm/outline'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { generateAndPlay } from './generating'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
-import { LAYOUTS, type GenerateOptions, type Outline, type OutlineSlide, type SlideLayout, type Structure, type ThemeName } from '../types'
+import { liveTitles, renderLive } from '../lib/live'
+import {
+  LAYOUTS,
+  type GenerateOptions,
+  type Outline,
+  type OutlineSlide,
+  type SlideLayout,
+  type Structure,
+  type ThemeName,
+} from '../types'
 
 const LAYOUT_LABELS: Record<SlideLayout, string> = {
   cover: '封面',
@@ -29,8 +38,6 @@ const THEME_LABELS: Array<{ value: ThemeName; label: string }> = [
   { value: 'noir', label: '深邃' },
 ]
 
-// Group layouts into visual families so each row gets a consistent accent
-// colour — makes the outline scannable at a glance.
 const LAYOUT_FAMILY: Record<SlideLayout, string> = {
   cover: 'structure',
   section: 'structure',
@@ -46,9 +53,15 @@ const LAYOUT_FAMILY: Record<SlideLayout, string> = {
 }
 const famOf = (l: SlideLayout): string => LAYOUT_FAMILY[l] ?? 'content'
 
+type Step =
+  | { kind: 'cover' }
+  | { kind: 'part'; index: number }
+  | { kind: 'end' }
+
 /**
- * Step 2 of outlining: expand the confirmed structure into a page-level
- * outline, let the user review/edit/reorder it, then generate the full deck.
+ * Step 2 of outlining: detail the confirmed structure **one part at a time**,
+ * streaming each part live and confirming it before moving on
+ * (封面 → 各部分 → 结束 → 整份大纲总览 → 生成).
  */
 export function startPageOutline(topic: string, opts: GenerateOptions, structure: Structure): void {
   const trimmed = topic.trim()
@@ -67,27 +80,62 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
   el.innerHTML = `<div class="outline card"><div data-body></div></div>`
   document.body.appendChild(el)
   const body = el.querySelector<HTMLElement>('[data-body]')!
-  const close = () => el.remove()
+  const close = () => {
+    controller.abort()
+    el.remove()
+  }
   let controller = new AbortController()
 
-  const showLoading = () => {
-    body.innerHTML = `
-      <div class="gen" style="padding:8px">
-        <div class="gen__spinner"></div>
-        <h2>正在细化每页大纲…</h2>
-        <p>按已确认的 ${structure.sections.length} 个部分展开</p>
-        <div class="gen__actions"><button class="btn btn--ghost" data-cancel>取消</button></div>
-      </div>`
-    body.querySelector('[data-cancel]')!.addEventListener('click', () => {
-      controller.abort()
-      close()
+  const steps: Step[] = [
+    { kind: 'cover' },
+    ...structure.sections.map((_, index) => ({ kind: 'part', index }) as Step),
+    { kind: 'end' },
+  ]
+  const stepTotal = steps.length + 1 // + overview
+  const results: OutlineSlide[][] = new Array(steps.length)
+
+  const coverSlides = (): OutlineSlide[] => [
+    { layout: 'cover', title: structure.title, brief: structure.subtitle },
+  ]
+  const endSlides = (): OutlineSlide[] => [{ layout: 'end', title: '谢谢观看' }]
+
+  /* ----------------------------- streaming a part ----------------------------- */
+
+  const streamPart = (i: number, sIndex: number) => {
+    controller = new AbortController()
+    const sec = structure.sections[sIndex]
+    showStreaming(i, sec.title, sec.pages ?? 3)
+    const liveEl = body.querySelector<HTMLElement>('[data-live]')!
+    generatePartPages(trimmed, opts, structure, sIndex, loadSettings(), {
+      signal: controller.signal,
+      onToken: (full) => renderLive(liveEl, liveTitles(full)),
     })
+      .then((slides) => {
+        if (!controller.signal.aborted) showStepEditor(i, slides)
+      })
+      .catch((err: unknown) => {
+        if (!controller.signal.aborted) showStepError(i, err instanceof Error ? err.message : String(err))
+      })
   }
 
-  const showError = (msg: string) => {
+  const showStreaming = (i: number, partTitle: string, pages: number) => {
+    body.innerHTML = `
+      <div class="wizard__head">
+        <div class="wizard__crumb">环节 ${i + 1} / ${stepTotal}</div>
+        <h2>正在细化：${escapeHtml(partTitle)}</h2>
+        <p>约 ${pages} 页 · 逐页规划中，实时显示 ↓</p>
+      </div>
+      <ol class="gen-live" data-live><li class="gen-live__wait">正在连接模型…</li></ol>
+      <div class="outline__actions">
+        <button class="btn btn--ghost" data-cancel>取消</button>
+      </div>`
+    body.querySelector('[data-cancel]')!.addEventListener('click', close)
+  }
+
+  const showStepError = (i: number, msg: string) => {
     body.innerHTML = `
       <div class="gen" style="padding:8px">
-        <h2 class="gen__error">大纲生成失败</h2>
+        <h2 class="gen__error">这一环节生成失败</h2>
         <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>
         <div class="gen__actions">
           <button class="btn btn--ghost" data-cancel>关闭</button>
@@ -95,44 +143,95 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
         </div>
       </div>`
     body.querySelector('[data-cancel]')!.addEventListener('click', close)
-    body.querySelector('[data-retry]')!.addEventListener('click', () => {
-      controller = new AbortController()
-      run()
+    body.querySelector('[data-retry]')!.addEventListener('click', () => runStep(i))
+  }
+
+  /* ------------------------------ per-step editor ------------------------------ */
+
+  const runStep = (i: number) => {
+    const step = steps[i]
+    if (step.kind === 'part') {
+      if (results[i]) showStepEditor(i, results[i]) // navigated back — reuse
+      else streamPart(i, step.index)
+    } else {
+      showStepEditor(i, results[i] ?? (step.kind === 'cover' ? coverSlides() : endSlides()))
+    }
+  }
+
+  const stepMeta = (i: number): { title: string; sub: string; canRegen: boolean } => {
+    const step = steps[i]
+    const nth = `第 ${i + 1} 步 / 共 ${stepTotal} 步`
+    if (step.kind === 'cover') return { title: '封面页', sub: `确认课件封面 · ${nth}`, canRegen: false }
+    if (step.kind === 'end') return { title: '结束页', sub: `确认收尾页 · ${nth}`, canRegen: false }
+    const sec = structure.sections[step.index]
+    return {
+      title: `第 ${step.index + 1} 部分 · ${sec.title}`,
+      sub: `约 ${sec.pages ?? 3} 页 · 确认这一环节 · ${nth}`,
+      canRegen: true,
+    }
+  }
+
+  const showStepEditor = (i: number, slides: OutlineSlide[]) => {
+    const meta = stepMeta(i)
+    const last = i === steps.length - 1
+    body.innerHTML = `
+      <div class="wizard__head">
+        <div class="wizard__crumb">环节 ${i + 1} / ${stepTotal}</div>
+        <h2>${escapeHtml(meta.title)}</h2>
+        <p>${escapeHtml(meta.sub)}</p>
+      </div>
+      <ol class="outline__list" data-list>${slides.map(renderRow).join('')}</ol>
+      <button class="btn btn--ghost btn--sm outline__add" data-add>${icons.plus} 添加一页</button>
+      <div class="outline__actions">
+        <button class="btn btn--ghost" data-cancel>取消</button>
+        ${i > 0 ? '<button class="btn btn--ghost" data-prev>← 上一环节</button>' : ''}
+        ${meta.canRegen ? `<button class="btn btn--ghost" data-regen>${icons.refresh} 重新细化</button>` : ''}
+        <button class="btn btn--primary" data-next>${last ? '确认，看总览 →' : '确认，下一环节 →'}</button>
+      </div>`
+
+    wireRowList(body)
+    body.querySelector('[data-cancel]')!.addEventListener('click', close)
+    body.querySelector<HTMLElement>('[data-prev]')?.addEventListener('click', () => {
+      results[i] = collectRows(body)
+      runStep(i - 1)
+    })
+    body.querySelector<HTMLElement>('[data-regen]')?.addEventListener('click', () => {
+      const step = steps[i]
+      if (step.kind === 'part') streamPart(i, step.index)
+    })
+    body.querySelector('[data-next]')!.addEventListener('click', () => {
+      const collected = collectRows(body)
+      if (!collected.length) {
+        toast('至少保留一页')
+        return
+      }
+      results[i] = collected
+      if (last) showOverview()
+      else runStep(i + 1)
     })
   }
 
-  const showEditor = (outline: Outline) => {
+  /* ------------------------------ final overview ------------------------------ */
+
+  const showOverview = () => {
+    const outline = assembleOutline(structure, results.map((r) => r ?? []))
     body.innerHTML = renderEditor(outline)
     wireEditor(body, {
       onCancel: close,
-      onRegen: () => {
-        controller = new AbortController()
-        run()
-      },
+      onRegen: () => runStep(0),
       onGenerate: () => {
         const edited = collectOutline(body, trimmed)
         if (!edited.slides.length) {
           toast('至少保留一页')
           return
         }
-        close()
+        el.remove()
         generateAndPlay(trimmed, opts, edited)
       },
     })
   }
 
-  const run = () => {
-    showLoading()
-    generateOutlineFromStructure(trimmed, opts, structure, loadSettings(), controller.signal)
-      .then((outline) => {
-        if (!controller.signal.aborted) showEditor(outline)
-      })
-      .catch((err: unknown) => {
-        if (!controller.signal.aborted) showError(err instanceof Error ? err.message : String(err))
-      })
-  }
-
-  run()
+  runStep(0)
 }
 
 /* ------------------------------ rendering ------------------------------ */
@@ -170,8 +269,8 @@ function renderEditor(outline: Outline): string {
 
   return `
     <div class="outline__head">
-      <h2>确认课件大纲 · 共 <span data-count>${outline.slides.length}</span> 页</h2>
-      <p>点文字即可改标题 / 要点，用 ↑↓ 调整顺序，左侧彩色标签选版式；满意后再生成完整课件。</p>
+      <h2>整份大纲总览 · 共 <span data-count>${outline.slides.length}</span> 页</h2>
+      <p>最后统一微调：点文字改标题 / 要点，用 ↑↓ 调整顺序，左侧彩色标签选版式；满意后再生成完整课件。</p>
     </div>
     <div class="outline__meta">
       <input class="form-input" data-deck-title value="${escapeHtml(outline.title)}" placeholder="课件标题">
@@ -184,21 +283,18 @@ function renderEditor(outline: Outline): string {
     <button class="btn btn--ghost btn--sm outline__add" data-add>${icons.plus} 添加一页</button>
     <div class="outline__actions">
       <button class="btn btn--ghost" data-cancel>取消</button>
-      <button class="btn btn--ghost" data-regen>${icons.refresh} 重新生成大纲</button>
+      <button class="btn btn--ghost" data-regen>${icons.refresh} 重新细化</button>
       <button class="btn btn--primary" data-go>生成课件 →</button>
     </div>`
 }
 
 /* ------------------------------ behavior ------------------------------ */
 
-function wireEditor(
-  body: HTMLElement,
-  h: { onCancel: () => void; onRegen: () => void; onGenerate: () => void },
-): void {
+/** Wire reorder / add / delete / layout-recolour / renumber for a `[data-list]`. */
+function wireRowList(body: HTMLElement): void {
   const list = body.querySelector<HTMLElement>('[data-list]')!
   const countEl = body.querySelector<HTMLElement>('[data-count]')
 
-  // Refresh page numbers and disable ↑ on the first row / ↓ on the last.
   const renumber = () => {
     const rows = list.querySelectorAll<HTMLElement>('[data-row]')
     rows.forEach((row, i) => {
@@ -229,7 +325,6 @@ function wireEditor(
     }
   })
 
-  // Recolour a row when its layout changes.
   list.addEventListener('change', (e) => {
     const sel = (e.target as HTMLElement).closest<HTMLSelectElement>('[data-layout]')
     if (!sel) return
@@ -242,7 +337,15 @@ function wireEditor(
     renumber()
   })
 
-  // Theme chips: single-select.
+  renumber()
+}
+
+function wireEditor(
+  body: HTMLElement,
+  h: { onCancel: () => void; onRegen: () => void; onGenerate: () => void },
+): void {
+  wireRowList(body)
+
   const themeChips = body.querySelector<HTMLElement>('[data-theme-chips]')
   themeChips?.addEventListener('click', (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLElement>('[data-theme]')
@@ -254,8 +357,17 @@ function wireEditor(
   body.querySelector('[data-cancel]')!.addEventListener('click', h.onCancel)
   body.querySelector('[data-regen]')!.addEventListener('click', h.onRegen)
   body.querySelector('[data-go]')!.addEventListener('click', h.onGenerate)
+}
 
-  renumber()
+function collectRows(body: HTMLElement): OutlineSlide[] {
+  const slides: OutlineSlide[] = []
+  body.querySelectorAll<HTMLElement>('[data-row]').forEach((row) => {
+    const layout = (row.querySelector<HTMLSelectElement>('[data-layout]')?.value ?? 'bullets') as SlideLayout
+    const t = row.querySelector<HTMLInputElement>('[data-title]')?.value.trim() ?? ''
+    const brief = row.querySelector<HTMLInputElement>('[data-brief]')?.value.trim() || undefined
+    if (t || brief || layout === 'cover' || layout === 'end') slides.push({ layout, title: t, brief })
+  })
+  return slides
 }
 
 function collectOutline(body: HTMLElement, topic: string): Outline {
@@ -263,16 +375,5 @@ function collectOutline(body: HTMLElement, topic: string): Outline {
   const subtitle = body.querySelector<HTMLInputElement>('[data-deck-subtitle]')?.value.trim() || undefined
   const activeTheme = body.querySelector<HTMLElement>('[data-theme].active')?.dataset.theme as ThemeName | undefined
   const theme: ThemeName = activeTheme ?? 'aurora'
-
-  const slides: OutlineSlide[] = []
-  body.querySelectorAll<HTMLElement>('[data-row]').forEach((row) => {
-    const layout = (row.querySelector<HTMLSelectElement>('[data-layout]')?.value ?? 'bullets') as SlideLayout
-    const t = row.querySelector<HTMLInputElement>('[data-title]')?.value.trim() ?? ''
-    const brief = row.querySelector<HTMLInputElement>('[data-brief]')?.value.trim() || undefined
-    if (t || brief || layout === 'cover' || layout === 'end') {
-      slides.push({ layout, title: t, brief })
-    }
-  })
-
-  return { title, subtitle, theme, slides }
+  return { title, subtitle, theme, slides: collectRows(body) }
 }
