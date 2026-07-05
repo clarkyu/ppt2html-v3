@@ -398,6 +398,17 @@ textarea.form-input { resize: vertical; line-height: 1.5; }
 }
 .clarify__head h2 { font-size: 22px; margin: 0 0 6px; color: var(--text-strong); }
 .clarify__head p { margin: 0; color: var(--text-muted); font-size: 15px; }
+.clarify__hint {
+  margin-top: 10px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand) 26%, transparent);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+.clarify__hint b { color: var(--brand); }
 .clarify__list { display: flex; flex-direction: column; gap: 16px; margin: 22px 0; }
 .clarify__q {
   background: var(--surface);

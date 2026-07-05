@@ -24,7 +24,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # A system-provided DeepSeek key (repo/Actions secret) is baked into the
+      # bundle so users can generate out-of-the-box. Absent → app falls back to
+      # BYOK-only. NOTE: in a static site this key ships publicly (accepted).
       - run: npm run build
+        env:
+          VITE_DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       # Enables GitHub Pages via the API if it isn't already, so the deploy
       # step doesn't 404 on a repo where Pages was never turned on.
       - name: Setup Pages
