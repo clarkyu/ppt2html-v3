@@ -48,6 +48,8 @@ const THEME_OPTIONS: Array<{ value: '' | ThemeName; label: string }> = [
   { value: 'sunrise', label: '暖阳（人文）' },
   { value: 'forest', label: '森林（自然）' },
   { value: 'noir', label: '深邃（高级）' },
+  { value: 'sand', label: '砂纸（温暖）' },
+  { value: 'rose', label: '玫瑰（明艳）' },
 ]
 
 export function renderHome(view: HTMLElement): () => void {

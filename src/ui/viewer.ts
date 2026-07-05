@@ -9,6 +9,7 @@ import { icons } from '../lib/icons'
 export function renderViewer(view: HTMLElement, id: string): () => void {
   let player: PlayerHandle | null = null
   let hideTimer = 0
+  let timerInt = 0
   const imgAbort = new AbortController()
 
   view.innerHTML = `
@@ -16,10 +17,27 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
       <div class="viewer__bar show">
         <button class="btn btn--sm" data-back>${icons.back} 返回</button>
         <div class="viewer__title" data-title></div>
+        <span class="viewer__timer" data-timer title="已用时间（点击归零）">${icons.clock}<b>00:00</b></span>
+        <button class="btn btn--sm" data-notes title="演讲者备注">${icons.note}</button>
         <button class="btn btn--sm" data-overview title="总览 (O)">${icons.grid}</button>
         <button class="btn btn--sm" data-edit title="编辑课件" hidden>${icons.edit} 编辑</button>
         <button class="btn btn--sm" data-print title="导出 PDF / 打印">${icons.print}</button>
         <button class="btn btn--sm" data-full title="全屏 (F)">${icons.expand}</button>
+        <button class="btn btn--sm" data-help title="快捷键">${icons.keyboard}</button>
+      </div>
+      <div class="viewer__notes" data-notes-panel hidden></div>
+      <div class="viewer__help" data-help-panel hidden>
+        <div class="viewer__help-card">
+          <h3>播放快捷键</h3>
+          <ul>
+            <li><kbd>←</kbd> <kbd>→</kbd> 上一页 / 下一页</li>
+            <li><kbd>F</kbd> 全屏 · <kbd>O</kbd> 幻灯总览</li>
+            <li><kbd>S</kbd> 演讲者视图（备注 + 计时）</li>
+            <li><kbd>Esc</kbd> 退出全屏 / 总览</li>
+            <li>手机：左右滑动翻页，横屏更清晰</li>
+          </ul>
+          <button class="btn btn--sm" data-help-close>知道了</button>
+        </div>
       </div>
       <div class="viewer__mount" data-mount></div>
       <div class="rotate-hint" data-rotate-hint>
@@ -66,6 +84,55 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
     else viewerEl.requestFullscreen?.()
   })
 
+  // Elapsed-time clock in the bar. Click to reset — handy when rehearsing.
+  const timerEl = view.querySelector<HTMLElement>('[data-timer]')!
+  const timerOut = timerEl.querySelector('b')!
+  let startedAt = Date.now()
+  const fmt = (ms: number) => {
+    const s = Math.max(0, Math.floor(ms / 1000))
+    const hh = Math.floor(s / 3600)
+    const mm = Math.floor((s % 3600) / 60)
+    const ss = s % 60
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return hh ? `${hh}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`
+  }
+  const tick = () => (timerOut.textContent = fmt(Date.now() - startedAt))
+  timerInt = window.setInterval(tick, 1000)
+  timerEl.addEventListener('click', () => {
+    startedAt = Date.now()
+    tick()
+  })
+
+  // Speaker-notes panel: an inline strip at the bottom (no popup window, so it
+  // works on phones too). Content is refreshed on every slide change below.
+  const notesPanel = view.querySelector<HTMLElement>('[data-notes-panel]')!
+  const notesBtn = view.querySelector<HTMLButtonElement>('[data-notes]')!
+  let notesOn = false
+  const setNote = (text?: string) => {
+    notesPanel.textContent = ''
+    if (text && text.trim()) {
+      notesPanel.textContent = text
+    } else {
+      const em = document.createElement('em')
+      em.textContent = '本页没有备注'
+      notesPanel.appendChild(em)
+    }
+  }
+  notesBtn.addEventListener('click', () => {
+    notesOn = !notesOn
+    notesPanel.hidden = !notesOn
+    notesBtn.classList.toggle('active', notesOn)
+  })
+
+  // Keyboard-shortcuts help overlay.
+  const helpPanel = view.querySelector<HTMLElement>('[data-help-panel]')!
+  const toggleHelp = (show: boolean) => (helpPanel.hidden = !show)
+  view.querySelector('[data-help]')!.addEventListener('click', () => toggleHelp(!!helpPanel.hidden))
+  view.querySelector('[data-help-close]')!.addEventListener('click', () => toggleHelp(false))
+  helpPanel.addEventListener('click', (e) => {
+    if (e.target === helpPanel) toggleHelp(false)
+  })
+
   const load = id === 'sample' ? Promise.resolve(getSampleDeck()) : getDeck(id)
   load
     .then((deck) => {
@@ -80,6 +147,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         editBtn.addEventListener('click', () => navigate(`#/edit/${id}`))
       }
       player = mountPlayer(mount, deck)
+      player.onSlideChange((num) => setNote(deck.slides[num - 1]?.note))
 
       // Background images are fetched lazily, AFTER the deck is on screen, so a
       // slow / rate-limited image search never blocks the deck from opening.
@@ -113,6 +181,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
 
   return () => {
     window.clearTimeout(hideTimer)
+    window.clearInterval(timerInt)
     imgAbort.abort()
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
     player?.destroy()

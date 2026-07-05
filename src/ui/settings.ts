@@ -9,7 +9,7 @@ import {
   type LlmSettings,
   type Provider,
 } from '../llm/settings'
-import { MODEL_PRESETS, modelChoicesFor } from '../llm/models'
+import { MODEL_PRESETS, modelChoicesFor, modelNote } from '../llm/models'
 import { escapeHtml } from '../lib/markdown'
 import { toast } from '../lib/toast'
 
@@ -145,7 +145,13 @@ export function renderSettings(view: HTMLElement): () => void {
     const cfg = state[state.provider]
     const choices = modelChoicesFor(state.provider, cfg.baseUrl, cfg.model)
     modelSelect.innerHTML =
-      choices.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('') +
+      choices
+        .map((m) => {
+          const note = modelNote(m)
+          const label = note ? `${m} — ${note}` : m
+          return `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`
+        })
+        .join('') +
       `<option value="${CUSTOM_MODEL}">自定义…</option>`
     if (customModel) {
       modelSelect.value = CUSTOM_MODEL

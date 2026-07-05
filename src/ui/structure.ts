@@ -13,6 +13,8 @@ const THEME_LABELS: Array<{ value: ThemeName; label: string }> = [
   { value: 'sunrise', label: '暖阳' },
   { value: 'forest', label: '森林' },
   { value: 'noir', label: '深邃' },
+  { value: 'sand', label: '砂纸' },
+  { value: 'rose', label: '玫瑰' },
 ]
 
 /**

@@ -25,6 +25,10 @@ export const icons = {
   // "rotate device" — a phone with a curved arrow, hinting landscape playback.
   rotate: wrap('<rect x="7" y="2.5" width="10" height="19" rx="2"/><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"/><path d="M2.5 9.5a9 9 0 0 1 9-6" fill="none"/><polyline points="11.5 1 12 3.5 9.5 4.2"/>'),
   save: wrap('<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>'),
+  search: wrap('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
+  clock: wrap('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>'),
+  note: wrap('<path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="12" y2="13"/>'),
+  keyboard: wrap('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="6" y1="9" x2="6" y2="9"/><line x1="10" y1="9" x2="10" y2="9"/><line x1="14" y1="9" x2="14" y2="9"/><line x1="18" y1="9" x2="18" y2="9"/><line x1="7" y1="14" x2="17" y2="14"/>'),
 }
 
 export type IconName = keyof typeof icons
