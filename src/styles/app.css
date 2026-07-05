@@ -372,6 +372,15 @@ textarea.form-input { resize: vertical; line-height: 1.5; }
 .f-sub__head input { flex: 1; min-width: 0; }
 .f-sub__head select { flex: none; width: 90px; }
 
+/* AI-adjust box (wizard 环节 + editor 页面) */
+.adjust { display: flex; gap: 8px; align-items: center; margin: 12px 0 2px; }
+.adjust__input { flex: 1; min-width: 0; }
+.slide-card .adjust { margin: 12px 2px 0; }
+@media (max-width: 560px) {
+  .adjust { flex-wrap: wrap; }
+  .adjust .btn { width: 100%; }
+}
+
 @media (max-width: 720px) {
   .ed-meta { grid-template-columns: 1fr; }
   .slide-card__body { grid-template-columns: 1fr; }

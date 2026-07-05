@@ -101,15 +101,20 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
 
   /* ----------------------------- streaming a part ----------------------------- */
 
-  const streamPart = (i: number, sIndex: number) => {
+  const streamPart = (i: number, sIndex: number, instruction?: string) => {
     controller = new AbortController()
     const sec = structure.sections[sIndex]
     showStreaming(i, sec.title, sec.pages ?? 3)
     const liveEl = body.querySelector<HTMLElement>('[data-live]')!
-    generatePartPages(trimmed, opts, structure, sIndex, loadSettings(), {
-      signal: controller.signal,
-      onToken: (full) => renderLive(liveEl, liveTitles(full)),
-    })
+    generatePartPages(
+      trimmed,
+      opts,
+      structure,
+      sIndex,
+      loadSettings(),
+      { signal: controller.signal, onToken: (full) => renderLive(liveEl, liveTitles(full)) },
+      instruction,
+    )
       .then((slides) => {
         if (!controller.signal.aborted) showStepEditor(i, slides)
       })
@@ -182,10 +187,11 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
       </div>
       <ol class="outline__list" data-list>${slides.map(renderRow).join('')}</ol>
       <button class="btn btn--ghost btn--sm outline__add" data-add>${icons.plus} 添加一页</button>
+      ${meta.canRegen ? `<div class="adjust"><input class="input adjust__input" data-adjust placeholder="想怎么调整这一环节？（可选：多举例 / 精简为要点 / 换个切入角度…）"></div>` : ''}
       <div class="outline__actions">
         <button class="btn btn--ghost" data-cancel>取消</button>
         ${i > 0 ? '<button class="btn btn--ghost" data-prev>← 上一环节</button>' : ''}
-        ${meta.canRegen ? `<button class="btn btn--ghost" data-regen>${icons.refresh} 重新细化</button>` : ''}
+        ${meta.canRegen ? `<button class="btn btn--ghost" data-regen>${icons.refresh} 重新生成本环节</button>` : ''}
         <button class="btn btn--primary" data-next>${last ? '确认，看总览 →' : '确认，下一环节 →'}</button>
       </div>`
 
@@ -197,7 +203,10 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
     })
     body.querySelector<HTMLElement>('[data-regen]')?.addEventListener('click', () => {
       const step = steps[i]
-      if (step.kind === 'part') streamPart(i, step.index)
+      if (step.kind === 'part') {
+        const instruction = body.querySelector<HTMLInputElement>('[data-adjust]')?.value.trim() || undefined
+        streamPart(i, step.index, instruction)
+      }
     })
     body.querySelector('[data-next]')!.addEventListener('click', () => {
       const collected = collectRows(body)

@@ -1,6 +1,8 @@
 import { getDeck, saveDeck } from '../store/db'
 import { getSampleDeck } from '../sample'
 import { mountSlidePreview } from '../render/preview'
+import { regenerateSlide } from '../llm/edit'
+import { loadSettings, isConfigured } from '../llm/settings'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
@@ -191,6 +193,38 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     if (!card) return
     const i = Number(card.dataset.i)
 
+    if (btn.dataset.regenSlide !== undefined) {
+      const settings = loadSettings()
+      if (!isConfigured(settings)) {
+        toast('请先在「设置」中填写 API Key')
+        navigate('#/settings')
+        return
+      }
+      const instruction = card.querySelector<HTMLInputElement>('[data-instruct]')?.value.trim() ?? ''
+      if (!instruction) {
+        toast('先写下想怎么改这一页')
+        return
+      }
+      // Persist current edits on this card before regenerating.
+      deck.slides[i] = collectSlide(card, deck.slides[i].layout)
+      btn.setAttribute('disabled', '')
+      btn.textContent = 'AI 重写中…'
+      regenerateSlide(deck, i, instruction, settings)
+        .then((slide) => {
+          deck.slides[i] = slide
+          card.outerHTML = renderCard(slide, i, deck.slides.length)
+          mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+          setStatus('未保存')
+          toast('已重写这一页')
+        })
+        .catch((err: unknown) => {
+          toast('重写失败：' + (err instanceof Error ? err.message : String(err)))
+          btn.removeAttribute('disabled')
+          btn.textContent = 'AI 重写本页'
+        })
+      return
+    }
+
     if (btn.dataset.up !== undefined && i > 0) {
       ;[deck.slides[i - 1], deck.slides[i]] = [deck.slides[i], deck.slides[i - 1]]
       render()
@@ -254,6 +288,10 @@ function renderCard(s: Slide, i: number, total: number): string {
       <div class="slide-card__body">
         <div class="thumb slide-card__preview" data-preview></div>
         <div class="slide-card__fields">${renderFields(s)}</div>
+      </div>
+      <div class="adjust">
+        <input class="input adjust__input" data-instruct placeholder="想怎么改这一页的内容？（例如：换成更具体的例子、语气更活泼、补一个数据…）">
+        <button class="btn btn--ghost btn--sm" data-regen-slide>${icons.sparkles} AI 重写本页</button>
       </div>
     </div>`
 }

@@ -50,6 +50,13 @@ export function contextBlock(topic: string, opts: GenerateOptions): string {
   if (opts.tone) lines.push(`语气风格：${opts.tone}`)
   if (opts.durationMinutes) lines.push(`分享时长：约 ${opts.durationMinutes} 分钟（据此把控信息量与节奏）`)
   if (opts.slideCount) lines.push(`期望页数：约 ${opts.slideCount} 页`)
+  if (opts.richContent !== undefined) {
+    lines.push(
+      opts.richContent
+        ? '内容丰富度：**详实丰富**——每页给出具体、饱满的正文/要点（多用例子、数据、细节、解释），不要只写框架或空泛的一句话。'
+        : '内容丰富度：**简洁提纲**——每页点到为止，要点精炼，不铺陈。',
+    )
+  }
   if (opts.language) lines.push(`输出语言：${opts.language}`)
   if (opts.theme) lines.push(`指定主题配色：${opts.theme}`)
 

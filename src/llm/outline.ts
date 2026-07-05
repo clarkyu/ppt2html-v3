@@ -144,6 +144,7 @@ export async function generatePartPages(
   index: number,
   settings: LlmSettings,
   handlers: GenerateHandlers = {},
+  instruction?: string,
 ): Promise<OutlineSlide[]> {
   const sec = structure.sections[index]
   const pages = sec?.pages ?? 3
@@ -155,6 +156,7 @@ export async function generatePartPages(
     `${contextBlock(topic, opts)}\n\n` +
     `整份课件结构（供参考，保持连贯）：${JSON.stringify(overview)}\n\n` +
     `当前要细化的部分（第 ${index + 1}/${structure.sections.length} 个）：${JSON.stringify(sec)}\n\n` +
+    (instruction ? `用户对这一部分的额外调整要求（请据此重写）：${instruction}\n\n` : '') +
     `请只输出这一部分的 slides JSON，共约 ${pages} 页，第 1 页为 section 分隔页（标题：${sec?.title ?? ''}）。只输出 JSON。`
 
   const text = await streamText(PART_SYSTEM, user, settings, handlers)
