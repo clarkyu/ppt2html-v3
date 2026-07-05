@@ -49,6 +49,9 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
 
   let prefetch: Prefetch | null = null
   let touched = false
+  // Which step is on screen — so a late question-upgrade can't clobber the
+  // model step after the user goes back.
+  let step: 'model' | 'questions' = 'model'
 
   const startPrefetch = (s: LlmSettings) => {
     prefetch?.controller.abort()
@@ -65,6 +68,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
   /* ----------------------------- step 1: model ----------------------------- */
 
   const showModel = () => {
+    step = 'model'
     const draft = loadSettings()
     // Default to a provider that's actually usable (own key, or the system
     // DeepSeek fallback). Keep the saved one if it works; otherwise switch.
@@ -211,7 +215,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     showQuestions(DEFAULT_QUESTIONS, true)
     pf?.promise
       .then((q) => {
-        if (removed || touched || !q.length) return
+        if (removed || touched || step !== 'questions' || !q.length) return
         showQuestions(q, false)
       })
       .catch(() => {
@@ -220,6 +224,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
   }
 
   const showQuestions = (questions: ClarifyQuestion[], provisional: boolean) => {
+    step = 'questions'
     body.innerHTML = `
       <div class="clarify__head">
         <h2>回答 1~2 个关键问题</h2>
@@ -230,6 +235,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
         ${questions.map(renderQuestion).join('')}
       </div>
       <div class="clarify__actions">
+        <button class="btn btn--ghost" data-back>← 上一步</button>
         <button class="btn btn--ghost" data-skip>跳过，看整体结构</button>
         <div class="clarify__actions-right">
           <button class="btn btn--ghost" data-cancel>取消</button>
@@ -247,6 +253,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     })
     list.addEventListener('input', markTouched)
 
+    body.querySelector('[data-back]')!.addEventListener('click', showModel)
     body.querySelector('[data-cancel]')!.addEventListener('click', close)
     body.querySelector('[data-skip]')!.addEventListener('click', () => {
       close()
