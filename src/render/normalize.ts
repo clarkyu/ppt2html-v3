@@ -2,6 +2,7 @@ import {
   type Deck,
   type DeckSpec,
   type Slide,
+  type SlideBg,
   type SlideLayout,
   type ThemeName,
   type Column,
@@ -69,6 +70,19 @@ function asTimelineSteps(v: unknown): TimelineStep[] | undefined {
   return out.length ? out : undefined
 }
 
+function asSlideBg(v: unknown): SlideBg | undefined {
+  if (!v || typeof v !== 'object') return undefined
+  const o = v as Record<string, unknown>
+  const url = asString(o.url)
+  if (!url || !/^https?:\/\//i.test(url)) return undefined
+  return {
+    url,
+    source: asString(o.source) ?? 'unknown',
+    credit: asString(o.credit),
+    link: asString(o.link),
+  }
+}
+
 function coerceLayout(v: unknown, slide: Record<string, unknown>): SlideLayout {
   const raw = typeof v === 'string' ? v.trim() : ''
   if (LAYOUT_SET.has(raw)) return raw as SlideLayout
@@ -106,6 +120,8 @@ export function normalizeSlide(raw: unknown): Slide | null {
     language: asString(o.language),
     body: asString(o.body),
     note: asString(o.note),
+    imageQuery: asString(o.imageQuery),
+    bg: asSlideBg(o.bg),
   }
 
   // Drop slides that would render empty.

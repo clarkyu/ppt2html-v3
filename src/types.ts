@@ -37,6 +37,17 @@ export interface TimelineStep {
   text?: string
 }
 
+/** A resolved, subtle background image for a slide (from an online search). */
+export interface SlideBg {
+  url: string
+  /** 'openverse' | 'unsplash' | 'pexels' */
+  source: string
+  /** Attribution, e.g. "creator · provider". */
+  credit?: string
+  /** Link back to the source page. */
+  link?: string
+}
+
 /** One slide. Fields are optional; only those relevant to `layout` are used. */
 export interface Slide {
   layout: SlideLayout
@@ -57,6 +68,10 @@ export interface Slide {
   body?: string
   /** Optional speaker note, shown in the speaker view. */
   note?: string
+  /** Short English keywords for a fitting background image (from the model). */
+  imageQuery?: string
+  /** Resolved subtle background image for this slide. */
+  bg?: SlideBg
 }
 
 /** A fully validated, renderable deck. */

@@ -176,3 +176,15 @@ export function renderSlideInner(slide: Slide): string {
   const renderer = RENDERERS[slide.layout] ?? bullets
   return renderer(slide)
 }
+
+/**
+ * The subtle full-bleed background-image layer for a slide (empty when the
+ * slide has no resolved image). The URL is escaped for safe use inside a CSS
+ * `url('…')` in an inline style attribute.
+ */
+export function slideBgHtml(slide: Slide): string {
+  const u = slide.bg?.url
+  if (!u || !/^https?:\/\//i.test(u)) return ''
+  const safe = encodeURI(u).replace(/['"()<>\\]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)
+  return `<div class="deck-slide__bg" aria-hidden="true" style="background-image:url('${safe}')"></div>`
+}

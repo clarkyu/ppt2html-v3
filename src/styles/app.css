@@ -325,6 +325,12 @@ button { font-family: inherit; }
 }
 .gen-live__wait { color: var(--text-muted); background: transparent; animation: pulse 1.2s ease-in-out infinite; }
 
+/* ---------- Background-image fetch progress ---------- */
+.gen__imgs { margin-top: 16px; text-align: left; }
+.gen__imgs-label { font-size: 13px; color: var(--brand); margin-bottom: 8px; }
+.gen__bar { height: 6px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.gen__bar span { display: block; height: 100%; border-radius: 6px; background: var(--brand-grad); transition: width 0.2s ease; }
+
 /* ---------- Wizard (per-part detailing) header ---------- */
 .wizard__head { margin-bottom: 14px; text-align: left; }
 .wizard__crumb { font-size: 12px; font-weight: 700; color: var(--brand); margin-bottom: 6px; }
@@ -376,6 +382,8 @@ textarea.form-input { resize: vertical; line-height: 1.5; }
 .adjust { display: flex; gap: 8px; align-items: center; margin: 12px 0 2px; }
 .adjust__input { flex: 1; min-width: 0; }
 .slide-card .adjust { margin: 12px 2px 0; }
+.ed-bg { display: flex; gap: 8px; align-items: center; margin: 12px 2px 0; }
+.ed-bg__label { flex: 1; min-width: 0; font-size: 13px; color: var(--text-dim); }
 @media (max-width: 560px) {
   .adjust { flex-wrap: wrap; }
   .adjust .btn { width: 100%; }
