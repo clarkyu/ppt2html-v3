@@ -13,6 +13,8 @@ export interface LlmSettings {
   provider: Provider
   anthropic: ProviderConfig
   openai: ProviderConfig
+  /** Thinking / reasoning mode. Currently applied to DeepSeek V4 endpoints. */
+  thinking: boolean
 }
 
 const STORAGE_KEY = 'ppt2html.settings.v1'
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: LlmSettings = {
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o-mini',
   },
+  thinking: false,
 }
 
 export function loadSettings(): LlmSettings {
@@ -40,6 +43,7 @@ export function loadSettings(): LlmSettings {
       provider: parsed.provider === 'openai' ? 'openai' : 'anthropic',
       anthropic: { ...DEFAULT_SETTINGS.anthropic, ...parsed.anthropic },
       openai: { ...DEFAULT_SETTINGS.openai, ...parsed.openai },
+      thinking: parsed.thinking === true,
     }
   } catch {
     return structuredClone(DEFAULT_SETTINGS)

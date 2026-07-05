@@ -46,7 +46,28 @@ export async function streamText(
   const cfg = activeConfig(settings)
   return settings.provider === 'anthropic'
     ? streamAnthropic(cfg, system, user, handlers)
-    : streamOpenAI(cfg, system, user, handlers)
+    : streamOpenAI(cfg, system, user, handlers, providerExtras(settings))
+}
+
+function safeHost(url: string): string {
+  try {
+    return new URL(url).host.toLowerCase()
+  } catch {
+    return url.toLowerCase()
+  }
+}
+
+/**
+ * Provider-specific extra request-body fields. Currently: DeepSeek V4 thinking
+ * mode (`thinking: {type}`, plus reasoning_effort when enabled). Only sent to
+ * DeepSeek endpoints so other OpenAI-compatible services don't reject it.
+ */
+function providerExtras(settings: LlmSettings): Record<string, unknown> {
+  if (settings.provider !== 'openai') return {}
+  if (!safeHost(settings.openai.baseUrl).includes('deepseek')) return {}
+  return settings.thinking
+    ? { thinking: { type: 'enabled' }, reasoning_effort: 'high' }
+    : { thinking: { type: 'disabled' } }
 }
 
 async function streamAnthropic(
@@ -82,6 +103,7 @@ async function streamOpenAI(
   system: string,
   user: string,
   handlers: GenerateHandlers,
+  extras: Record<string, unknown> = {},
 ): Promise<string> {
   const res = await fetch(joinUrl(cfg.baseUrl, '/chat/completions'), {
     method: 'POST',
@@ -91,6 +113,7 @@ async function streamOpenAI(
       model: cfg.model,
       stream: true,
       response_format: { type: 'json_object' },
+      ...extras,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -119,7 +142,7 @@ export async function requestText(
   const maxTokens = opts.maxTokens ?? 1024
   return settings.provider === 'anthropic'
     ? requestAnthropic(cfg, system, user, maxTokens, opts.signal)
-    : requestOpenAI(cfg, system, user, opts.json ?? true, opts.signal)
+    : requestOpenAI(cfg, system, user, opts.json ?? true, opts.signal, providerExtras(settings))
 }
 
 async function requestAnthropic(
@@ -154,6 +177,7 @@ async function requestOpenAI(
   user: string,
   json: boolean,
   signal?: AbortSignal,
+  extras: Record<string, unknown> = {},
 ): Promise<string> {
   const res = await fetch(joinUrl(cfg.baseUrl, '/chat/completions'), {
     method: 'POST',
@@ -162,6 +186,7 @@ async function requestOpenAI(
     body: JSON.stringify({
       model: cfg.model,
       ...(json ? { response_format: { type: 'json_object' } } : {}),
+      ...extras,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },

@@ -259,6 +259,8 @@ button { font-family: inherit; }
   outline: none;
 }
 .form-input:focus { border-color: color-mix(in srgb, var(--brand) 55%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 14%, transparent); }
+.switch { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text); cursor: pointer; user-select: none; }
+.switch input { width: 18px; height: 18px; accent-color: var(--brand); cursor: pointer; flex: none; }
 .seg { display: inline-flex; padding: 4px; gap: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; }
 .seg button {
   padding: 8px 18px; border-radius: 9px; border: none; background: transparent;
