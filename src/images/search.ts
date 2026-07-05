@@ -49,10 +49,17 @@ export async function searchImage(
 export async function populateDeckImages(
   deck: Deck,
   settings: LlmSettings,
-  opts: { signal?: AbortSignal; onProgress?: (done: number, total: number) => void } = {},
+  opts: {
+    signal?: AbortSignal
+    onProgress?: (done: number, total: number) => void
+    /** Called as soon as each slide's image resolves (index into deck.slides). */
+    onImage?: (slideIndex: number, bg: SlideBg) => void
+  } = {},
 ): Promise<void> {
   if (!settings.images.enabled) return
-  const targets = deck.slides.filter((s) => !s.bg)
+  const targets = deck.slides
+    .map((slide, index) => ({ slide, index }))
+    .filter((t) => !t.slide.bg)
   const total = targets.length
   if (!total) return
 
@@ -64,7 +71,7 @@ export async function populateDeckImages(
   const worker = async (): Promise<void> => {
     while (idx < targets.length) {
       if (opts.signal?.aborted) return
-      const slide = targets[idx++]
+      const { slide, index } = targets[idx++]
       const bg = await searchImage(queryForSlide(slide, deck), settings, {
         signal: opts.signal,
         exclude: used,
@@ -72,6 +79,7 @@ export async function populateDeckImages(
       if (bg) {
         slide.bg = bg
         used.add(bg.url)
+        opts.onImage?.(index, bg)
       }
       done++
       opts.onProgress?.(done, total)

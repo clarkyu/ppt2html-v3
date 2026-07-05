@@ -6,8 +6,9 @@ import '../render/themes.css'
 import '../render/slides.css'
 import './player.css'
 
-import type { Deck } from '../types'
+import type { Deck, SlideBg } from '../types'
 import { renderDeckSlides } from '../render/renderDeck'
+import { bgCssUrl } from '../render/layouts'
 import { fitSlide } from '../render/fit'
 
 export interface PlayerHandle {
@@ -19,6 +20,8 @@ export interface PlayerHandle {
   prev: () => void
   getIndices: () => { h: number; v: number }
   onSlideChange: (cb: (index: number, total: number) => void) => void
+  /** Patch (or create) the background image of the slide at `index`, live. */
+  setSlideBackground: (index: number, bg: SlideBg) => void
 }
 
 const REVEAL_CONFIG = {
@@ -109,6 +112,20 @@ export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
       const emit = () => cb(reveal.getSlidePastCount() + 1, reveal.getTotalSlides())
       reveal.on('slidechanged', emit)
       reveal.on('ready', emit)
+    },
+    setSlideBackground: (index, bg) => {
+      const css = bgCssUrl(bg.url)
+      if (!css) return
+      const sec = slidesEl.children[index] as HTMLElement | undefined
+      if (!sec) return
+      let bgEl = sec.querySelector<HTMLElement>('.deck-slide__bg')
+      if (!bgEl) {
+        bgEl = document.createElement('div')
+        bgEl.className = 'deck-slide__bg'
+        bgEl.setAttribute('aria-hidden', 'true')
+        sec.insertBefore(bgEl, sec.firstChild)
+      }
+      bgEl.style.backgroundImage = css
     },
   }
 }
