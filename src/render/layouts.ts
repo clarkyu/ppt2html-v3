@@ -182,7 +182,10 @@ export function renderSlideInner(slide: Slide): string {
  * use inside an inline style attribute. Returns null for non-http(s) URLs.
  */
 export function bgCssUrl(url: string | undefined): string | null {
-  if (!url || !/^https?:\/\//i.test(url)) return null
+  if (!url) return null
+  // Generated abstract backgrounds are inline SVG data URIs (already URL-encoded).
+  if (/^data:image\//i.test(url)) return `url("${url}")`
+  if (!/^https?:\/\//i.test(url)) return null
   const safe = encodeURI(url).replace(/['"()<>\\]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)
   return `url('${safe}')`
 }
@@ -194,10 +197,18 @@ export function bgCssUrl(url: string | undefined): string | null {
 export function slideBgHtml(slide: Slide): string {
   const css = bgCssUrl(slide.bg?.url)
   if (!css) return ''
-  return `<div class="deck-slide__bg" aria-hidden="true" style="background-image:${css}"></div>`
+  // Generated backgrounds already match the theme and stay subtle, so they skip
+  // the photo darkening scrim (`--gen`).
+  const gen = slide.bg?.source === 'abstract' ? ' deck-slide__bg--gen' : ''
+  return `<div class="deck-slide__bg${gen}" aria-hidden="true" style="background-image:${css}"></div>`
 }
 
-const PLATFORM: Record<string, string> = { unsplash: 'Unsplash', pexels: 'Pexels', openverse: 'Openverse' }
+const PLATFORM: Record<string, string> = {
+  unsplash: 'Unsplash',
+  pexels: 'Pexels',
+  pixabay: 'Pixabay',
+  openverse: 'Openverse',
+}
 
 /**
  * A small photo-attribution caption for a background image (empty if none).

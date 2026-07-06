@@ -138,6 +138,8 @@ export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
         bgEl.setAttribute('aria-hidden', 'true')
         sec.insertBefore(bgEl, sec.firstChild)
       }
+      // Generated backgrounds skip the photo darkening scrim.
+      bgEl.classList.toggle('deck-slide__bg--gen', bg.source === 'abstract')
       bgEl.style.backgroundImage = css
       // Refresh the attribution caption for the new image.
       sec.querySelector('.deck-slide__credit')?.remove()

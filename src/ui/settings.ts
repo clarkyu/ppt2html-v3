@@ -86,10 +86,18 @@ export function renderSettings(view: HTMLElement): () => void {
       <div class="form-group">
         <label>${t('settings.bgImages')}</label>
         <label class="switch"><input type="checkbox" data-img-enabled><span>${t('settings.bgLabel')}</span></label>
-        <div class="hint">${(hasSystemImageKey ? t('settings.bgHint.system') : t('settings.bgHint.openverse')) + t('settings.bgHint.tail')}</div>
-        <input class="form-input" data-img-unsplash placeholder="${escapeHtml(t('settings.unsplashPlaceholder'))}" autocomplete="off" style="margin-top:10px">
-        <input class="form-input" data-img-pexels placeholder="${escapeHtml(t('settings.pexelsPlaceholder'))}" autocomplete="off" style="margin-top:8px">
-        <div class="hint">${t('settings.imgKeyHint')}</div>
+        <div class="seg" data-img-mode style="margin-top:10px">
+          <button type="button" data-mode="photo">${t('settings.bgMode.photo')}</button>
+          <button type="button" data-mode="abstract">${t('settings.bgMode.abstract')}</button>
+        </div>
+        <div class="hint" data-img-mode-note></div>
+        <div data-img-photo-keys>
+          <div class="hint">${(hasSystemImageKey ? t('settings.bgHint.system') : t('settings.bgHint.openverse')) + t('settings.bgHint.tail')}</div>
+          <input class="form-input" data-img-unsplash placeholder="${escapeHtml(t('settings.unsplashPlaceholder'))}" autocomplete="off" style="margin-top:10px">
+          <input class="form-input" data-img-pexels placeholder="${escapeHtml(t('settings.pexelsPlaceholder'))}" autocomplete="off" style="margin-top:8px">
+          <input class="form-input" data-img-pixabay placeholder="${escapeHtml(t('settings.pixabayPlaceholder'))}" autocomplete="off" style="margin-top:8px">
+          <div class="hint">${t('settings.imgKeyHint')}</div>
+        </div>
       </div>
 
       <div class="form-group">
@@ -123,6 +131,10 @@ export function renderSettings(view: HTMLElement): () => void {
   const imgEnabledEl = view.querySelector<HTMLInputElement>('[data-img-enabled]')!
   const imgUnsplashEl = view.querySelector<HTMLInputElement>('[data-img-unsplash]')!
   const imgPexelsEl = view.querySelector<HTMLInputElement>('[data-img-pexels]')!
+  const imgPixabayEl = view.querySelector<HTMLInputElement>('[data-img-pixabay]')!
+  const imgModeEl = view.querySelector<HTMLElement>('[data-img-mode]')!
+  const imgModeNoteEl = view.querySelector<HTMLElement>('[data-img-mode-note]')!
+  const imgPhotoKeysEl = view.querySelector<HTMLElement>('[data-img-photo-keys]')!
   const brandPresenterEl = view.querySelector<HTMLInputElement>('[data-brand-presenter]')!
   const brandOrgEl = view.querySelector<HTMLInputElement>('[data-brand-org]')!
   const brandLogoEl = view.querySelector<HTMLInputElement>('[data-brand-logo]')!
@@ -166,12 +178,24 @@ export function renderSettings(view: HTMLElement): () => void {
     imgEnabledEl.checked = state.images.enabled
     imgUnsplashEl.value = state.images.unsplashKey
     imgPexelsEl.value = state.images.pexelsKey
+    imgPixabayEl.value = state.images.pixabayKey
+    paintImgMode()
     brandPresenterEl.value = state.branding.presenter ?? ''
     brandOrgEl.value = state.branding.org ?? ''
     brandLogoEl.value = state.branding.logo ?? ''
     updateLogoPreview()
     updateKeyHint()
     rebuildModels()
+  }
+
+  const paintImgMode = () => {
+    const abstract = state.images.mode === 'abstract'
+    imgModeEl.querySelectorAll<HTMLElement>('[data-mode]').forEach((b) =>
+      b.classList.toggle('active', b.dataset.mode === state.images.mode),
+    )
+    // Stock-source keys only matter in photo mode.
+    imgPhotoKeysEl.style.display = abstract ? 'none' : ''
+    imgModeNoteEl.textContent = abstract ? t('settings.bgMode.abstractNote') : t('settings.bgMode.photoNote')
   }
 
   const updateLogoPreview = () => {
@@ -238,6 +262,13 @@ export function renderSettings(view: HTMLElement): () => void {
   imgEnabledEl.addEventListener('change', () => (state.images.enabled = imgEnabledEl.checked))
   imgUnsplashEl.addEventListener('input', () => (state.images.unsplashKey = imgUnsplashEl.value))
   imgPexelsEl.addEventListener('input', () => (state.images.pexelsKey = imgPexelsEl.value))
+  imgPixabayEl.addEventListener('input', () => (state.images.pixabayKey = imgPixabayEl.value))
+  imgModeEl.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')
+    if (!btn) return
+    state.images.mode = btn.dataset.mode === 'abstract' ? 'abstract' : 'photo'
+    paintImgMode()
+  })
   brandPresenterEl.addEventListener('input', () => (state.branding.presenter = brandPresenterEl.value))
   brandOrgEl.addEventListener('input', () => (state.branding.org = brandOrgEl.value))
   brandLogoEl.addEventListener('input', () => {
