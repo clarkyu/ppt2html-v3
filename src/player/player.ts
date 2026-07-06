@@ -1,5 +1,4 @@
 import Reveal from 'reveal.js'
-import RevealNotes from 'reveal.js/plugin/notes'
 import type { RevealApi } from 'reveal.js'
 import 'reveal.js/reveal.css'
 import '../render/themes.css'
@@ -88,7 +87,7 @@ export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
 
   const reveal: RevealApi = new Reveal(revealEl, {
     ...REVEAL_CONFIG,
-    plugins: [RevealNotes],
+    plugins: [],
   })
 
   // Fit the current slide so long titles and content never clip: shrink

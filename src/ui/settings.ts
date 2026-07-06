@@ -10,6 +10,7 @@ import {
   type Provider,
 } from '../llm/settings'
 import { MODEL_PRESETS, modelChoicesFor, modelNote } from '../llm/models'
+import { ABSTRACT_STYLES } from '../images/abstract'
 import { escapeHtml } from '../lib/markdown'
 import { toast } from '../lib/toast'
 import { t } from '../i18n'
@@ -91,6 +92,13 @@ export function renderSettings(view: HTMLElement): () => void {
           <button type="button" data-mode="abstract">${t('settings.bgMode.abstract')}</button>
         </div>
         <div class="hint" data-img-mode-note></div>
+        <div data-img-abstract>
+          <label style="margin-top:10px">${t('settings.abstractStyle')}</label>
+          <select class="form-input" data-img-style>
+            ${ABSTRACT_STYLES.map((s) => `<option value="${s}">${escapeHtml(t('settings.abstractStyle.' + s))}</option>`).join('')}
+          </select>
+          <div class="hint">${t('settings.abstractStyleHint')}</div>
+        </div>
         <div data-img-photo-keys>
           <div class="hint">${(hasSystemImageKey ? t('settings.bgHint.system') : t('settings.bgHint.openverse')) + t('settings.bgHint.tail')}</div>
           <input class="form-input" data-img-unsplash placeholder="${escapeHtml(t('settings.unsplashPlaceholder'))}" autocomplete="off" style="margin-top:10px">
@@ -135,6 +143,8 @@ export function renderSettings(view: HTMLElement): () => void {
   const imgModeEl = view.querySelector<HTMLElement>('[data-img-mode]')!
   const imgModeNoteEl = view.querySelector<HTMLElement>('[data-img-mode-note]')!
   const imgPhotoKeysEl = view.querySelector<HTMLElement>('[data-img-photo-keys]')!
+  const imgAbstractEl = view.querySelector<HTMLElement>('[data-img-abstract]')!
+  const imgStyleEl = view.querySelector<HTMLSelectElement>('[data-img-style]')!
   const brandPresenterEl = view.querySelector<HTMLInputElement>('[data-brand-presenter]')!
   const brandOrgEl = view.querySelector<HTMLInputElement>('[data-brand-org]')!
   const brandLogoEl = view.querySelector<HTMLInputElement>('[data-brand-logo]')!
@@ -179,6 +189,7 @@ export function renderSettings(view: HTMLElement): () => void {
     imgUnsplashEl.value = state.images.unsplashKey
     imgPexelsEl.value = state.images.pexelsKey
     imgPixabayEl.value = state.images.pixabayKey
+    imgStyleEl.value = state.images.abstractStyle
     paintImgMode()
     brandPresenterEl.value = state.branding.presenter ?? ''
     brandOrgEl.value = state.branding.org ?? ''
@@ -193,8 +204,9 @@ export function renderSettings(view: HTMLElement): () => void {
     imgModeEl.querySelectorAll<HTMLElement>('[data-mode]').forEach((b) =>
       b.classList.toggle('active', b.dataset.mode === state.images.mode),
     )
-    // Stock-source keys only matter in photo mode.
+    // Stock-source keys only matter in photo mode; the style picker only in abstract mode.
     imgPhotoKeysEl.style.display = abstract ? 'none' : ''
+    imgAbstractEl.style.display = abstract ? '' : 'none'
     imgModeNoteEl.textContent = abstract ? t('settings.bgMode.abstractNote') : t('settings.bgMode.photoNote')
   }
 
@@ -268,6 +280,9 @@ export function renderSettings(view: HTMLElement): () => void {
     if (!btn) return
     state.images.mode = btn.dataset.mode === 'abstract' ? 'abstract' : 'photo'
     paintImgMode()
+  })
+  imgStyleEl.addEventListener('change', () => {
+    state.images.abstractStyle = imgStyleEl.value as (typeof ABSTRACT_STYLES)[number]
   })
   brandPresenterEl.addEventListener('input', () => (state.branding.presenter = brandPresenterEl.value))
   brandOrgEl.addEventListener('input', () => (state.branding.org = brandOrgEl.value))

@@ -8,6 +8,7 @@
 // default. Any other model still requires the user's own key.
 
 import type { Branding } from '../types'
+import { ABSTRACT_STYLES, type AbstractStyle } from '../images/abstract'
 
 export type Provider = 'anthropic' | 'openai'
 
@@ -23,6 +24,8 @@ export interface ImageSettings {
   enabled: boolean
   /** 'photo' = search a stock source; 'abstract' = generate a themed pattern (no network). */
   mode: 'photo' | 'abstract'
+  /** Abstract pattern family; 'auto' picks one per deck. Only used in abstract mode. */
+  abstractStyle: AbstractStyle
   /** Unsplash Access Key (optional; preferred when set). */
   unsplashKey: string
   /** Pexels API Key (optional; used if no Unsplash key). */
@@ -95,7 +98,14 @@ export const DEFAULT_SETTINGS: LlmSettings = {
     model: 'gpt-4o-mini',
   },
   thinking: false,
-  images: { enabled: true, mode: 'photo', unsplashKey: '', pexelsKey: '', pixabayKey: '' },
+  images: {
+    enabled: true,
+    mode: 'photo',
+    abstractStyle: 'auto',
+    unsplashKey: '',
+    pexelsKey: '',
+    pixabayKey: '',
+  },
   branding: {},
 }
 
@@ -116,12 +126,14 @@ export function loadSettings(): LlmSettings {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return freshDefaults()
     const parsed = JSON.parse(raw) as Partial<LlmSettings>
+    const images = { ...DEFAULT_SETTINGS.images, ...parsed.images }
+    if (!ABSTRACT_STYLES.includes(images.abstractStyle)) images.abstractStyle = 'auto'
     return {
       provider: parsed.provider === 'openai' ? 'openai' : 'anthropic',
       anthropic: { ...DEFAULT_SETTINGS.anthropic, ...parsed.anthropic },
       openai: { ...DEFAULT_SETTINGS.openai, ...parsed.openai },
       thinking: parsed.thinking === true,
-      images: { ...DEFAULT_SETTINGS.images, ...parsed.images },
+      images,
       branding: { ...DEFAULT_SETTINGS.branding, ...parsed.branding },
     }
   } catch {
