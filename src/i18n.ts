@@ -380,6 +380,17 @@ const DICT: Record<string, Entry> = {
   },
   'settings.unsplashPlaceholder': { zh: 'Unsplash Access Key（可选）', en: 'Unsplash Access Key (optional)' },
   'settings.pexelsPlaceholder': { zh: 'Pexels API Key（可选）', en: 'Pexels API Key (optional)' },
+  'settings.pixabayPlaceholder': { zh: 'Pixabay API Key（可选，免署名可商用）', en: 'Pixabay API Key (optional, no attribution)' },
+  'settings.bgMode.photo': { zh: '照片', en: 'Photos' },
+  'settings.bgMode.abstract': { zh: '抽象生成', en: 'Abstract' },
+  'settings.bgMode.photoNote': {
+    zh: '从图库搜真实照片(Unsplash / Pexels / Pixabay / Openverse,自动挑)。',
+    en: 'Search real stock photos (Unsplash / Pexels / Pixabay / Openverse, auto-picked).',
+  },
+  'settings.bgMode.abstractNote': {
+    zh: '按主题 + 主题色生成抽象图案——免联网、免版权、秒出、每页不同。无需 Key。',
+    en: 'Generate an abstract pattern from the theme colors — offline, no license, instant, unique per slide. No key needed.',
+  },
   'settings.imgKeyHint': {
     zh: '这些是「图片搜索」Key，仅用于给页面配背景照片，只存本机。',
     en: 'These are image-search keys, used only to fetch slide backgrounds, stored locally.',

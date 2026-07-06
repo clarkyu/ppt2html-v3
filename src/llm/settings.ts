@@ -21,13 +21,17 @@ export interface ProviderConfig {
 export interface ImageSettings {
   /** Master toggle for auto background images. */
   enabled: boolean
+  /** 'photo' = search a stock source; 'abstract' = generate a themed pattern (no network). */
+  mode: 'photo' | 'abstract'
   /** Unsplash Access Key (optional; preferred when set). */
   unsplashKey: string
   /** Pexels API Key (optional; used if no Unsplash key). */
   pexelsKey: string
+  /** Pixabay API Key (optional; permissive license, no attribution needed). */
+  pixabayKey: string
 }
 
-export type ImageSource = 'unsplash' | 'pexels' | 'openverse'
+export type ImageSource = 'unsplash' | 'pexels' | 'pixabay' | 'openverse'
 
 export interface LlmSettings {
   provider: Provider
@@ -60,8 +64,10 @@ export const hasSystemKey = SYSTEM_DEEPSEEK.apiKey.length > 0
 export const SYSTEM_IMAGE = {
   unsplashKey: ((import.meta.env.VITE_UNSPLASH_KEY as string | undefined) ?? '').trim(),
   pexelsKey: ((import.meta.env.VITE_PEXELS_KEY as string | undefined) ?? '').trim(),
+  pixabayKey: ((import.meta.env.VITE_PIXABAY_KEY as string | undefined) ?? '').trim(),
 }
-export const hasSystemImageKey = SYSTEM_IMAGE.unsplashKey.length > 0 || SYSTEM_IMAGE.pexelsKey.length > 0
+export const hasSystemImageKey =
+  SYSTEM_IMAGE.unsplashKey.length > 0 || SYSTEM_IMAGE.pexelsKey.length > 0 || SYSTEM_IMAGE.pixabayKey.length > 0
 
 function isDeepSeekHost(url: string): boolean {
   try {
@@ -89,7 +95,7 @@ export const DEFAULT_SETTINGS: LlmSettings = {
     model: 'gpt-4o-mini',
   },
   thinking: false,
-  images: { enabled: true, unsplashKey: '', pexelsKey: '' },
+  images: { enabled: true, mode: 'photo', unsplashKey: '', pexelsKey: '', pixabayKey: '' },
   branding: {},
 }
 
@@ -148,10 +154,13 @@ export function isConfigured(settings: LlmSettings): boolean {
  * user's Unsplash → user's Pexels → system Unsplash → system Pexels → free Openverse.
  */
 export function effectiveImageProvider(settings: LlmSettings): { source: ImageSource; key: string } {
-  if (settings.images.unsplashKey.trim()) return { source: 'unsplash', key: settings.images.unsplashKey.trim() }
-  if (settings.images.pexelsKey.trim()) return { source: 'pexels', key: settings.images.pexelsKey.trim() }
+  const img = settings.images
+  if (img.unsplashKey.trim()) return { source: 'unsplash', key: img.unsplashKey.trim() }
+  if (img.pexelsKey.trim()) return { source: 'pexels', key: img.pexelsKey.trim() }
+  if (img.pixabayKey.trim()) return { source: 'pixabay', key: img.pixabayKey.trim() }
   if (SYSTEM_IMAGE.unsplashKey) return { source: 'unsplash', key: SYSTEM_IMAGE.unsplashKey }
   if (SYSTEM_IMAGE.pexelsKey) return { source: 'pexels', key: SYSTEM_IMAGE.pexelsKey }
+  if (SYSTEM_IMAGE.pixabayKey) return { source: 'pixabay', key: SYSTEM_IMAGE.pixabayKey }
   return { source: 'openverse', key: '' }
 }
 

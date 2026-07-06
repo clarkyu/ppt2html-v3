@@ -9,6 +9,7 @@
 
 import type { Deck, Slide, SlideBg } from '../types'
 import { effectiveImageProvider, type LlmSettings } from '../llm/settings'
+import { abstractBg } from './abstract'
 
 const REQ_TIMEOUT = 10000
 const CONCURRENCY = 4
@@ -38,7 +39,9 @@ export async function searchImage(
         ? await unsplash(q, key, opts.signal)
         : source === 'pexels'
           ? await pexels(q, key, opts.signal)
-          : await openverse(q, opts.signal)
+          : source === 'pixabay'
+            ? await pixabay(q, key, opts.signal)
+            : await openverse(q, opts.signal)
     const pick = candidates.find((c) => !opts.exclude?.has(c.url)) ?? candidates[0]
     if (!pick) return null
     // Unsplash API terms require pinging the download endpoint when a photo is used.
@@ -70,6 +73,19 @@ export async function populateDeckImages(
     .filter((t) => !t.slide.bg)
   const total = targets.length
   if (!total) return
+
+  // Abstract mode: generate a themed pattern per slide — instant, offline, no
+  // search, no attribution. Seeded by the slide's text so it's stable.
+  if (settings.images.mode === 'abstract') {
+    targets.forEach(({ slide, index }, i) => {
+      if (opts.signal?.aborted) return
+      const bg = abstractBg(`${queryForSlide(slide, deck)}#${index}`, deck.theme)
+      slide.bg = bg
+      opts.onImage?.(index, bg)
+      opts.onProgress?.(i + 1, total)
+    })
+    return
+  }
 
   const used = new Set<string>()
   for (const s of deck.slides) if (s.bg?.url) used.add(s.bg.url)
@@ -172,6 +188,26 @@ async function pexels(q: string, key: string, signal?: AbortSignal): Promise<Can
         source: 'pexels',
         credit: typeof p?.photographer === 'string' ? p.photographer : undefined,
         link: typeof p?.url === 'string' ? p.url : undefined,
+      }
+    })
+    .filter((x: Candidate | null): x is Candidate => x !== null)
+}
+
+async function pixabay(q: string, key: string, signal?: AbortSignal): Promise<Candidate[]> {
+  const url =
+    `https://pixabay.com/api/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}` +
+    `&image_type=photo&orientation=horizontal&safesearch=true&per_page=6&order=popular`
+  const data = await getJson(url, {}, signal)
+  const hits = Array.isArray(data?.hits) ? data.hits : []
+  return hits
+    .map((h: Record<string, any>): Candidate | null => {
+      const u = h?.largeImageURL || h?.webformatURL
+      if (typeof u !== 'string') return null
+      return {
+        url: u,
+        source: 'pixabay',
+        credit: typeof h?.user === 'string' ? h.user : undefined,
+        link: typeof h?.pageURL === 'string' ? h.pageURL : undefined,
       }
     })
     .filter((x: Candidate | null): x is Candidate => x !== null)

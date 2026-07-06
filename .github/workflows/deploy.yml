@@ -35,6 +35,7 @@ jobs:
           # backgrounds by default; absent → falls back to free Openverse.
           VITE_UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
           VITE_PEXELS_KEY: ${{ secrets.PEXELS_KEY }}
+          VITE_PIXABAY_KEY: ${{ secrets.PIXABAY_KEY }}
       # Enables GitHub Pages via the API if it isn't already, so the deploy
       # step doesn't 404 on a repo where Pages was never turned on.
       - name: Setup Pages
