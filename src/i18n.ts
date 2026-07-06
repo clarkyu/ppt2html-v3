@@ -278,6 +278,28 @@ const DICT: Record<string, Entry> = {
     en: 'Turn your phone sideways to fill the screen; swipe to flip.',
   },
   'viewer.rotate.dismiss': { zh: '仍要竖屏播放', en: 'Play in portrait anyway' },
+  'viewer.exportHtml': { zh: '导出独立 HTML(可离线播放)', en: 'Export standalone HTML (plays offline)' },
+  'viewer.exportHtmlDone': {
+    zh: '已导出独立 HTML —— 双击即可离线播放(照片背景需联网,抽象背景离线可见)。',
+    en: 'Standalone HTML exported — double-click to play offline (photo backgrounds need a connection; abstract ones work offline).',
+  },
+  'viewer.presenter': { zh: '演讲者视图 (S)', en: 'Presenter view (S)' },
+  'viewer.presenterBlocked': {
+    zh: '演讲者视图被浏览器拦截了 —— 请允许本站弹出窗口后重试。',
+    en: 'The presenter window was blocked — allow pop-ups for this site and try again.',
+  },
+
+  // Presenter (speaker) view
+  'presenter.title': { zh: '演讲者视图', en: 'Presenter view' },
+  'presenter.current': { zh: '当前页', en: 'Current' },
+  'presenter.next': { zh: '下一页', en: 'Next up' },
+  'presenter.notes': { zh: '本页备注', en: 'Speaker notes' },
+  'presenter.noNote': { zh: '本页没有备注', en: 'No notes for this slide' },
+  'presenter.upNext': { zh: '接下来:', en: 'Up next:' },
+  'presenter.atEnd': { zh: '已是最后一页', en: 'Last slide' },
+  'presenter.reset': { zh: '计时归零', en: 'Reset' },
+  'presenter.prev': { zh: '‹ 上一页', en: '‹ Previous' },
+  'presenter.nextBtn': { zh: '下一页 ›', en: 'Next ›' },
 
   // Deck default text
   'deck.thanks': { zh: '谢谢观看', en: 'Thank you' },
@@ -395,6 +417,18 @@ const DICT: Record<string, Entry> = {
     zh: '这些是「图片搜索」Key，仅用于给页面配背景照片，只存本机。',
     en: 'These are image-search keys, used only to fetch slide backgrounds, stored locally.',
   },
+  'settings.abstractStyle': { zh: '图案风格', en: 'Pattern style' },
+  'settings.abstractStyleHint': {
+    zh: '「自动」按课件主题挑一种,全篇统一;也可指定一种。',
+    en: '“Auto” picks one per deck (consistent throughout); or choose a specific style.',
+  },
+  'settings.abstractStyle.auto': { zh: '自动(按主题挑选)', en: 'Auto (per deck)' },
+  'settings.abstractStyle.blobs': { zh: '柔光色块', en: 'Soft blobs' },
+  'settings.abstractStyle.mesh': { zh: '渐变网格', en: 'Gradient mesh' },
+  'settings.abstractStyle.grid': { zh: '网格线', en: 'Grid' },
+  'settings.abstractStyle.dots': { zh: '圆点阵', en: 'Dots' },
+  'settings.abstractStyle.waves': { zh: '波浪', en: 'Waves' },
+  'settings.abstractStyle.rays': { zh: '斜纹光束', en: 'Diagonal rays' },
   'settings.branding': { zh: '署名信息（人 / 单位 / Logo）', en: 'Branding (presenter / org / logo)' },
   'settings.brandingHint': {
     zh: '填一次作为全局默认，新课件自动带上；每份课件也可在编辑器里单独覆盖。日期默认用生成当天。会显示在封面/结束页与每页角落。',

@@ -9,7 +9,7 @@
 
 import type { Deck, Slide, SlideBg } from '../types'
 import { effectiveImageProvider, type LlmSettings } from '../llm/settings'
-import { abstractBg } from './abstract'
+import { abstractBg, resolveAbstractStyle } from './abstract'
 
 const REQ_TIMEOUT = 10000
 const CONCURRENCY = 4
@@ -75,11 +75,13 @@ export async function populateDeckImages(
   if (!total) return
 
   // Abstract mode: generate a themed pattern per slide — instant, offline, no
-  // search, no attribution. Seeded by the slide's text so it's stable.
+  // search, no attribution. Seeded by the slide's text so it's stable. 'auto' is
+  // resolved once per deck so every page shares one pattern family.
   if (settings.images.mode === 'abstract') {
+    const style = resolveAbstractStyle(settings.images.abstractStyle, deck.id || deck.title || deck.theme)
     targets.forEach(({ slide, index }, i) => {
       if (opts.signal?.aborted) return
-      const bg = abstractBg(`${queryForSlide(slide, deck)}#${index}`, deck.theme)
+      const bg = abstractBg(`${queryForSlide(slide, deck)}#${index}`, deck.theme, style)
       slide.bg = bg
       opts.onImage?.(index, bg)
       opts.onProgress?.(i + 1, total)

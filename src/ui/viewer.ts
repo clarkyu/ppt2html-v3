@@ -6,9 +6,15 @@ import { loadSettings } from '../llm/settings'
 import { navigate } from '../router'
 import { icons } from '../lib/icons'
 import { t } from '../i18n'
+import { toast } from '../lib/toast'
+import { downloadStandalone } from '../export/standalone'
+import { openPresenter, type PresenterHandle } from '../player/presenter'
+import type { Deck } from '../types'
 
 export function renderViewer(view: HTMLElement, id: string): () => void {
   let player: PlayerHandle | null = null
+  let loadedDeck: Deck | null = null
+  let presenter: PresenterHandle | null = null
   let hideTimer = 0
   let timerInt = 0
   const imgAbort = new AbortController()
@@ -20,9 +26,11 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         <div class="viewer__title" data-title></div>
         <span class="viewer__timer" data-timer title="${t('viewer.timerTitle')}">${icons.clock}<b>00:00</b></span>
         <button class="btn btn--sm" data-notes title="${t('viewer.notes')}">${icons.note}</button>
+        <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}">${icons.presenter}</button>
         <button class="btn btn--sm" data-overview title="${t('viewer.overview')}">${icons.grid}</button>
         <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
         <button class="btn btn--sm" data-print title="${t('viewer.print')}">${icons.print}</button>
+        <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}">${icons.download}</button>
         <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}">${icons.expand}</button>
         <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}">${icons.keyboard}</button>
       </div>
@@ -80,6 +88,38 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
   view.querySelector('[data-back]')!.addEventListener('click', goBack)
   view.querySelector('[data-overview]')!.addEventListener('click', () => player?.toggleOverview())
   view.querySelector('[data-print]')!.addEventListener('click', () => window.print())
+
+  // Export the deck as a single, offline-playable .html file.
+  view.querySelector('[data-export]')!.addEventListener('click', () => {
+    if (!loadedDeck) return
+    downloadStandalone(loadedDeck, Date.now())
+    toast(t('viewer.exportHtmlDone'))
+  })
+
+  // Presenter view: a second window with notes, timer and a next-slide preview.
+  const togglePresenter = () => {
+    if (presenter && !presenter.closed()) {
+      presenter.focus()
+      return
+    }
+    // A previously-opened window the user closed leaves a stale ticker — clear it.
+    presenter?.close()
+    if (!loadedDeck || !player) return
+    presenter = openPresenter(loadedDeck, player)
+    if (!presenter) toast(t('viewer.presenterBlocked'))
+  }
+  view.querySelector('[data-presenter]')!.addEventListener('click', togglePresenter)
+
+  // `S` opens the presenter view (unless the user is typing in a field).
+  const onKey = (e: KeyboardEvent) => {
+    const el = e.target as HTMLElement | null
+    if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return
+    if ((e.key === 's' || e.key === 'S') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault()
+      togglePresenter()
+    }
+  }
+  window.addEventListener('keydown', onKey)
   view.querySelector('[data-full]')!.addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen()
     else viewerEl.requestFullscreen?.()
@@ -141,6 +181,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         mount.innerHTML = `<div class="empty" style="color:#fff"><h3>${t('viewer.notFound')}</h3><p>${t('viewer.notFoundHint')}</p></div>`
         return
       }
+      loadedDeck = deck
       titleEl.textContent = deck.title
       const editBtn = view.querySelector<HTMLButtonElement>('[data-edit]')!
       if (id !== 'sample') {
@@ -148,7 +189,10 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         editBtn.addEventListener('click', () => navigate(`#/edit/${id}`))
       }
       player = mountPlayer(mount, deck)
-      player.onSlideChange((num) => setNote(deck.slides[num - 1]?.note))
+      player.onSlideChange((num) => {
+        setNote(deck.slides[num - 1]?.note)
+        presenter?.update(num)
+      })
 
       // Background images are fetched lazily, AFTER the deck is on screen, so a
       // slow / rate-limited image search never blocks the deck from opening.
@@ -183,7 +227,9 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
   return () => {
     window.clearTimeout(hideTimer)
     window.clearInterval(timerInt)
+    window.removeEventListener('keydown', onKey)
     imgAbort.abort()
+    presenter?.close()
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
     player?.destroy()
   }

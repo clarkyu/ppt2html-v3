@@ -27,8 +27,8 @@ export function backupFilename(now: number): string {
 }
 
 /** Trigger a browser download of `text` as `filename`. */
-export function downloadText(filename: string, text: string): void {
-  const blob = new Blob([text], { type: 'application/json' })
+export function downloadText(filename: string, text: string, type = 'application/json'): void {
+  const blob = new Blob([text], { type })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
