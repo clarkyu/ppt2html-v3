@@ -110,6 +110,13 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
     const sec = structure.sections[sIndex]
     showStreaming(i, sec.title, sec.pages ?? 3)
     const liveEl = body.querySelector<HTMLElement>('[data-live]')!
+    // Earlier parts' confirmed pages (steps: [cover, part0..partN, end] →
+    // part k lives at results[1+k]) give the model cross-part context so it
+    // doesn't repeat their topics or drift in terminology.
+    const confirmed = results
+      .slice(1, 1 + sIndex)
+      .filter((g): g is OutlineSlide[] => Array.isArray(g))
+      .flat()
     generatePartPages(
       trimmed,
       opts,
@@ -118,6 +125,7 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
       loadSettings(),
       { signal: controller.signal, onToken: (full) => renderLive(liveEl, liveTitles(full)) },
       instruction,
+      confirmed,
     )
       .then((slides) => {
         if (!controller.signal.aborted) showStepEditor(i, slides)
