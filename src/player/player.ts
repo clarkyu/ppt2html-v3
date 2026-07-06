@@ -7,7 +7,7 @@ import './player.css'
 
 import type { Deck, SlideBg } from '../types'
 import { renderDeckSlides } from '../render/renderDeck'
-import { bgCssUrl, creditHtml } from '../render/layouts'
+import { bgCssUrl, creditHtml, imgtextVisualInner } from '../render/layouts'
 import { fitSlide } from '../render/fit'
 
 export interface PlayerHandle {
@@ -130,16 +130,23 @@ export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
       if (!css) return
       const sec = slidesEl.children[index] as HTMLElement | undefined
       if (!sec) return
-      let bgEl = sec.querySelector<HTMLElement>('.deck-slide__bg')
-      if (!bgEl) {
-        bgEl = document.createElement('div')
-        bgEl.className = 'deck-slide__bg'
-        bgEl.setAttribute('aria-hidden', 'true')
-        sec.insertBefore(bgEl, sec.firstChild)
+      // image-text shows the image inside its framed visual, not full-bleed.
+      if (sec.dataset.layout === 'image-text') {
+        const vis = sec.querySelector<HTMLElement>('.s-imgtext__visual')
+        if (vis) vis.innerHTML = imgtextVisualInner({ layout: 'image-text', bg })
+        sec.querySelector<HTMLElement>('.deck-slide__bg')?.remove()
+      } else {
+        let bgEl = sec.querySelector<HTMLElement>('.deck-slide__bg')
+        if (!bgEl) {
+          bgEl = document.createElement('div')
+          bgEl.className = 'deck-slide__bg'
+          bgEl.setAttribute('aria-hidden', 'true')
+          sec.insertBefore(bgEl, sec.firstChild)
+        }
+        // Generated backgrounds skip the photo darkening scrim.
+        bgEl.classList.toggle('deck-slide__bg--gen', bg.source === 'abstract')
+        bgEl.style.backgroundImage = css
       }
-      // Generated backgrounds skip the photo darkening scrim.
-      bgEl.classList.toggle('deck-slide__bg--gen', bg.source === 'abstract')
-      bgEl.style.backgroundImage = css
       // Refresh the attribution caption for the new image.
       sec.querySelector('.deck-slide__credit')?.remove()
       const credit = creditHtml(bg)

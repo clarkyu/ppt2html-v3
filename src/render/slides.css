@@ -66,8 +66,62 @@
 .reveal.deck .deck-slide__bg--gen::before { opacity: 0.28; }
 .reveal.deck .deck-slide__bg--gen::after { opacity: 0.22; }
 
+/* Hero pages (cover / section dividers / closing): let the photo actually show.
+   The default double scrim leaves ~15% of the image visible — fine behind body
+   text, lifeless on a title page. These pages have little text, protected by
+   the directional tint, so the photo can carry the composition. Abstract
+   patterns keep their own lighter tint (see --gen above). */
+.reveal.deck .deck-slide[data-layout='cover'] .deck-slide__bg:not(.deck-slide__bg--gen)::before,
+.reveal.deck .deck-slide[data-layout='section'] .deck-slide__bg:not(.deck-slide__bg--gen)::before,
+.reveal.deck .deck-slide[data-layout='end'] .deck-slide__bg:not(.deck-slide__bg--gen)::before {
+  opacity: 0.3;
+}
+.reveal.deck .deck-slide[data-layout='cover'] .deck-slide__bg:not(.deck-slide__bg--gen)::after,
+.reveal.deck .deck-slide[data-layout='section'] .deck-slide__bg:not(.deck-slide__bg--gen)::after,
+.reveal.deck .deck-slide[data-layout='end'] .deck-slide__bg:not(.deck-slide__bg--gen)::after {
+  opacity: 0.52;
+}
+
 /* Keep all slide content above the background layer. */
 .reveal.deck .deck-slide > .s { position: relative; z-index: 1; }
+
+/* Giant ghost part number on section-divider pages — sits behind the content,
+   bleeding off the bottom-right corner (the slide's overflow:hidden clips it). */
+.reveal.deck .deck-slide__ghost {
+  position: absolute;
+  right: 28px;
+  bottom: -70px;
+  z-index: 0;
+  font-family: var(--font-display);
+  font-size: 400px;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: color-mix(in srgb, var(--accent) 15%, transparent);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Smart emphasis: the model is told to **bold** 1-2 keywords per page — light
+   them up in the accent, with a soft highlighter wash. Scoped to body-text
+   containers (titles are already heavy; .s-big__value is gradient-clipped). */
+.reveal.deck .s-list__text strong,
+.reveal.deck .s-cmp__points strong,
+.reveal.deck .s-tl__label strong,
+.reveal.deck .s-tl__text strong,
+.reveal.deck .s-prose strong,
+.reveal.deck .s-col strong,
+.reveal.deck .s-quote__text strong,
+.reveal.deck .s-big__caption strong,
+.reveal.deck .s-cover__subtitle strong,
+.reveal.deck .s-section__subtitle strong,
+.reveal.deck .s-end__subtitle strong {
+  color: var(--accent2);
+  font-weight: 700;
+  background: linear-gradient(transparent 64%, color-mix(in srgb, var(--accent2) 24%, transparent) 0);
+  border-radius: 3px;
+  padding: 0 1px;
+}
 
 /* Photo attribution caption (Unsplash/Pexels/CC). Small + subtle, bottom-left
    corner where the scrim is most opaque so it stays legible. */
@@ -475,6 +529,15 @@
   overflow: hidden;
   background: var(--card);
   border: 1px solid var(--card-border);
+}
+/* Real photo (or generated pattern) filling the visual frame — used whenever
+   the slide has a resolved background image; the CSS blobs are the fallback. */
+.reveal.deck .s-imgtext__photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .reveal.deck .s-imgtext__visual .blob { position: absolute; border-radius: 50%; filter: blur(30px); opacity: 0.8; }
 .reveal.deck .blob-a { width: 320px; height: 320px; left: -40px; top: -40px; background: var(--accent); opacity: 0.7; }

@@ -9,12 +9,33 @@
 
 /* Content marked `.fragment` (bullets, cards, timeline steps) should be fully
    visible as soon as a slide is shown — we don't use click-to-reveal stepping
-   (see `fragments: false`). This guarantees content shows even if reveal leaves
-   fragments hidden. */
+   (see `fragments: false`). This out-specifies reveal's own `.fragment` hiding
+   without !important, so the entrance animation below can still run. */
 .player .reveal .slides section .fragment {
-  opacity: 1 !important;
-  visibility: visible !important;
-  transform: none !important;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+
+/* Entrance choreography: when a slide becomes current, its content settles in —
+   headings first, then list items / cards / steps cascade (each carries its
+   index in --i from the renderer). Pure presentation: end state is identical
+   to no animation, so measuring/fitting and printing are unaffected. */
+@media (prefers-reduced-motion: no-preference) {
+  .player .reveal .slides > section.present .s > * {
+    animation: deck-enter 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  }
+  .player .reveal .slides > section.present .s > *:nth-child(2) { animation-delay: 70ms; }
+  .player .reveal .slides > section.present .s > *:nth-child(3) { animation-delay: 140ms; }
+  .player .reveal .slides > section.present .s > *:nth-child(n + 4) { animation-delay: 200ms; }
+  .player .reveal .slides > section.present .fragment {
+    animation: deck-enter 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+    animation-delay: calc(180ms + var(--i, 0) * 70ms);
+  }
+}
+@keyframes deck-enter {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
 }
 
 .player__bg {
@@ -90,6 +111,8 @@
   .player, .player * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    /* A slide mid-entrance would print half-faded — freeze at the end state. */
+    animation: none !important;
   }
   .player {
     position: static !important;

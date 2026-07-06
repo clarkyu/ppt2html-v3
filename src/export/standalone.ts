@@ -31,8 +31,22 @@ body { background: var(--bg); font-family: var(--font-body); }
   transition: opacity .3s ease;
 }
 .reveal.deck .slides > section.active { opacity: 1; visibility: visible; }
-.reveal.deck .fragment {
-  opacity: 1 !important; visibility: visible !important; transform: none !important;
+.reveal.deck .fragment { opacity: 1; visibility: visible; transform: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .reveal.deck .slides > section.active .s > * {
+    animation: deck-enter .5s cubic-bezier(.2,.7,.3,1) both;
+  }
+  .reveal.deck .slides > section.active .s > *:nth-child(2) { animation-delay: 70ms; }
+  .reveal.deck .slides > section.active .s > *:nth-child(3) { animation-delay: 140ms; }
+  .reveal.deck .slides > section.active .s > *:nth-child(n+4) { animation-delay: 200ms; }
+  .reveal.deck .slides > section.active .fragment {
+    animation: deck-enter .5s cubic-bezier(.2,.7,.3,1) both;
+    animation-delay: calc(180ms + var(--i, 0) * 70ms);
+  }
+}
+@keyframes deck-enter {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
 }
 /* Speaker notes are for the presenter view, never rendered on the slide. */
 .reveal.deck .notes { display: none !important; }
@@ -56,6 +70,7 @@ body { background: var(--bg); font-family: var(--font-body); }
   body, body * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    animation: none !important;
   }
   .exp-nav { display: none !important; }
   .reveal.deck { position: static; }
