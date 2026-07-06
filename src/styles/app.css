@@ -335,6 +335,77 @@ button { font-family: inherit; }
 .gen__actions { margin-top: 22px; display: flex; gap: 12px; justify-content: center; }
 
 /* ---------- Live generation feedback (streamed page titles) ---------- */
+/* ---------- Generating: live thumbnail wall ---------- */
+.gen--film { width: min(880px, 100%); }
+.gen-film {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 8px 0 18px;
+  max-height: 48vh;
+  overflow-y: auto;
+  text-align: left;
+  padding: 2px;
+}
+.gen-film__cell {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.gen-film__thumb { border-radius: 9px; }
+/* Skeleton shimmer until the page's JSON closes in the stream. */
+.gen-film__cell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.08) 50%, transparent 70%);
+  background-size: 220% 100%;
+  animation: film-shimmer 1.4s linear infinite;
+}
+.gen-film__cell.is-on::before { display: none; }
+.gen-film__cell.is-on { animation: film-pop 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+.gen-film__num {
+  position: absolute;
+  right: 7px;
+  bottom: 5px;
+  z-index: 2;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #fff;
+  opacity: 0.75;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+@keyframes film-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -20% 0; }
+}
+@keyframes film-pop {
+  from { opacity: 0.25; transform: scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- Home: resumable draft note ---------- */
+.draft-note {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+}
+.draft-note__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.draft-note__text b { color: var(--text-strong); font-size: 14.5px; }
+.draft-note__text span {
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draft-note__actions { display: flex; gap: 8px; flex: none; }
+
 .gen-live {
   list-style: none; margin: 18px 0 0; padding: 0;
   max-height: 240px; overflow-y: auto;
