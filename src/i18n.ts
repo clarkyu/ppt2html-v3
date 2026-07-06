@@ -126,9 +126,16 @@ const DICT: Record<string, Entry> = {
   'gen.subtitle': { zh: '「{topic}」 · 共 {n} 页', en: '“{topic}” · {n} slides' },
   'gen.connecting': { zh: '正在连接模型…', en: 'Connecting to the model…' },
   'gen.failed': { zh: '生成失败', en: 'Generation failed' },
+  'gen.pageProgress': { zh: '已生成 {x} / {n} 页', en: 'Generated {x} / {n} slides' },
+  'gen.segmentFailed': { zh: '第 {i} 段生成失败', en: 'Segment {i} failed' },
+  'gen.retrySegment': { zh: '重试这一段（已生成的不重来）', en: 'Retry this segment (keeps finished pages)' },
+  'gen.backToOutline': { zh: '返回大纲', en: 'Back to outline' },
 
   // Home
   'home.kicker': { zh: 'AI 课件生成器', en: 'AI Deck Maker' },
+  'home.draftTitle': { zh: '有未完成的课件草稿', en: 'Unfinished deck draft' },
+  'home.draftResume': { zh: '继续制作', en: 'Resume' },
+  'home.draftDiscard': { zh: '丢弃', en: 'Discard' },
   'home.titlePre': { zh: '一句话，生成', en: 'One line becomes a ' },
   'home.titleHi': { zh: '精美课件', en: 'beautiful deck' },
   'home.subtitle': {
@@ -355,6 +362,11 @@ const DICT: Record<string, Entry> = {
   'outline.addPageHere': { zh: '在此环节加一页', en: 'Add a slide here' },
   'outline.ovPrev': { zh: '← 上一步（逐环节修改）', en: '← Back (edit by part)' },
   'outline.ovGenerate': { zh: '生成课件 →', en: 'Generate deck →' },
+  'outline.backStep': { zh: '← 返回上一步', en: '← Back a step' },
+  'outline.exitConfirm': {
+    zh: '退出向导？当前进度已保存为草稿，可回首页「继续制作」。',
+    en: 'Exit the wizard? Your progress is saved as a draft — resume from Home.',
+  },
 
   // Settings
   'settings.systemNotice': {

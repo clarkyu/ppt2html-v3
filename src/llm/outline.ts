@@ -1,5 +1,4 @@
 import {
-  type DeckSpec,
   type GenerateOptions,
   type Outline,
   type OutlineSlide,
@@ -16,7 +15,6 @@ import { extractJson } from './extractJson'
 import { DECK_SCHEMA_GUIDE, contextBlock } from './prompt'
 import { slidesForMinutes } from '../lib/duration'
 import { deckIsCjk } from '../lib/lang'
-import { t } from '../i18n'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
 const THEME_SET = new Set<string>(THEMES)
@@ -254,31 +252,137 @@ function normalizeOutline(raw: unknown, topic: string, themeHint?: ThemeName): O
 }
 
 /* ----------------------- deck from confirmed page outline ----------------------- */
+// The final pass runs SEGMENTED: one LLM call per 环节-sized chunk. A single
+// monolithic call for a 20+ page deck runs into provider output caps and
+// spreads quality thin across pages; segments keep every call small, allow
+// per-segment retry without redoing finished pages, and enable live per-slide
+// previews while streaming.
 
-const FROM_OUTLINE_SYSTEM = `${DECK_SCHEMA_GUIDE}
+const SEGMENT_SYSTEM = `${DECK_SCHEMA_GUIDE}
 
-重要：下面会给你一份**用户已确认的大纲**。请严格遵守：
-- 页数、顺序、每一页的 layout 与 title 都**照大纲执行，不要增删或重排页面**。
-- 你的任务是把每页内容**充实到位**：按该页的 layout 填好对应字段（bullets / items / steps / left / right / value / caption / text / code / body 等），内容准确、精炼、有信息量。
-- 每页的 brief 是**用户确认过的该页要点**：成稿内容必须**覆盖并深化 brief**，不得偏题，不得丢弃 brief 中给出的数字 / 案例 / 结论。
-- 若要求「详实丰富」，体现在措辞更具体、例子更完整、note 更充分——**页数与大纲一致，不增删**。
-- 保持大纲给定的 theme。`
+现在你在为一份**用户已确认大纲**的课件生成其中**一段连续的页面**。请严格遵守：
+- 只输出一个 JSON 对象：{ "slides": [ SlideObject, ... ] } —— 只含本段页面，按给定顺序。
+- 每页的 layout 与 title 照大纲执行，**不要增删或重排**。
+- 每页的 brief 是用户确认过的要点：成稿内容必须**覆盖并深化 brief**，不得偏题，不得丢弃 brief 中给出的数字 / 案例 / 结论。
+- 与「前文已生成页面」保持连贯：延续其术语与口径，不重复其内容。
+- 若要求「详实丰富」，体现在措辞更具体、例子更完整、note 更充分——页数不变。`
 
-export async function generateDeckFromOutline(
+/** Split outline slides into generation segments: a new segment starts at each
+    section divider (the cover rides with the first chunk); oversized segments
+    are chunked so a single call never nears provider output caps. */
+export function splitOutlineSegments(outline: Outline): OutlineSlide[][] {
+  const MAX = 8
+  const segs: OutlineSlide[][] = []
+  let cur: OutlineSlide[] = []
+  for (const s of outline.slides) {
+    if (s.layout === 'section' && cur.length) {
+      segs.push(cur)
+      cur = []
+    }
+    cur.push(s)
+    if (cur.length >= MAX) {
+      segs.push(cur)
+      cur = []
+    }
+  }
+  if (cur.length) segs.push(cur)
+  return segs
+}
+
+/**
+ * Incremental parser: the complete top-level objects inside `"slides": [ … ` of
+ * a (possibly still-streaming) JSON text. Lets the UI reveal each page as soon
+ * as its JSON closes, long before the segment finishes.
+ */
+export function completeSlides(text: string): unknown[] {
+  const key = text.indexOf('"slides"')
+  const arr = key >= 0 ? text.indexOf('[', key) : -1
+  if (arr < 0) return []
+  const out: unknown[] = []
+  let inStr = false
+  let esc = false
+  let depth = 0
+  let start = -1
+  for (let i = arr + 1; i < text.length; i++) {
+    const c = text[i]
+    if (esc) {
+      esc = false
+      continue
+    }
+    if (inStr) {
+      if (c === '\\') esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') {
+      inStr = true
+      continue
+    }
+    if (c === '{') {
+      if (!depth) start = i
+      depth++
+    } else if (c === '}') {
+      depth--
+      if (!depth && start >= 0) {
+        try {
+          out.push(JSON.parse(text.slice(start, i + 1)))
+        } catch {
+          /* malformed object — skip it, later ones may still parse */
+        }
+        start = -1
+      }
+    } else if (c === ']' && !depth) {
+      break
+    }
+  }
+  return out
+}
+
+/**
+ * Generate ONE segment's slides (streamed). Returns raw slide objects aligned
+ * to the segment's outline: the layout is pinned per page, missing pages are
+ * padded from the outline entry (so a confirmed page is never lost) and extras
+ * are dropped.
+ */
+export async function generateSegmentSlides(
   topic: string,
   opts: GenerateOptions,
   outline: Outline,
+  segments: OutlineSlide[][],
+  segIndex: number,
+  /** Titles of pages already generated in earlier segments (for coherence). */
+  priorTitles: string[],
   settings: LlmSettings,
   handlers: GenerateHandlers = {},
-): Promise<DeckSpec> {
+): Promise<Array<Record<string, unknown>>> {
+  const seg = segments[segIndex]
   const user =
     `${contextBlock(topic, opts)}\n\n` +
-    `已确认的大纲（请严格照此生成完整课件）：\n${JSON.stringify(outline)}\n\n` +
-    `请输出符合 schema 的完整课件 JSON，页数/顺序/每页 layout 与 title 与大纲一致。只输出 JSON。`
+    `课件标题：《${outline.title}》${outline.subtitle ? `（${outline.subtitle}）` : ''}，theme=${outline.theme}\n` +
+    `整份大纲（供连贯参考）：${JSON.stringify(outline.slides.map((s, n) => ({ n: n + 1, layout: s.layout, title: s.title })))}\n\n` +
+    (priorTitles.length ? `前文已生成页面的标题：${JSON.stringify(priorTitles)}\n\n` : '') +
+    `本段要生成的页面（第 ${segIndex + 1}/${segments.length} 段，共 ${seg.length} 页）：${JSON.stringify(seg)}\n\n` +
+    `请输出本段的 {"slides":[...]} JSON，共 ${seg.length} 页，每页 layout/title 与上面一致。只输出 JSON。`
 
-  const spec = (await genJson(() => streamText(FROM_OUTLINE_SYSTEM, user, settings, handlers))) as DeckSpec
-  if (!spec || typeof spec !== 'object' || !Array.isArray(spec.slides) || !spec.slides.length) {
-    throw new Error(t('err.invalidDeck'))
+  const raw = await genJson(() => streamText(SEGMENT_SYSTEM, user, settings, handlers))
+  const o = asObj(raw)
+  const rawSlides = (Array.isArray(o.slides) ? o.slides : []).map(asObj)
+
+  const out: Array<Record<string, unknown>> = []
+  for (let k = 0; k < seg.length; k++) {
+    const cand = rawSlides[k]
+    if (cand && Object.keys(cand).length) {
+      cand.layout = seg[k].layout
+      if (!asStr(cand.title) && seg[k].title) cand.title = seg[k].title
+      out.push(cand)
+    } else {
+      // Model dropped this page — keep the confirmed outline's skeleton.
+      out.push({
+        layout: seg[k].layout,
+        title: seg[k].title,
+        ...(seg[k].brief ? { bullets: [seg[k].brief] } : {}),
+      })
+    }
   }
-  return spec
+  return out
 }

@@ -5,6 +5,8 @@ import { mountThumb } from '../render/preview'
 import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
 import { startGuidedGeneration } from './guided'
+import { startPageOutline } from './outline'
+import { loadDraft, clearDraft } from '../lib/draft'
 import { durationOptions, slidesForMinutes } from '../lib/duration'
 import { getLang, t } from '../i18n'
 import type { GenerateOptions, ThemeName } from '../types'
@@ -134,6 +136,33 @@ export function renderHome(view: HTMLElement): () => void {
   const themeEl = view.querySelector<HTMLSelectElement>('[data-theme]')!
   const durationEl = view.querySelector<HTMLSelectElement>('[data-duration]')!
   const toneEl = view.querySelector<HTMLSelectElement>('[data-tone]')!
+
+  // Unfinished outline-wizard draft → offer to resume where the user left off.
+  const draft = loadDraft()
+  if (draft) {
+    const note = document.createElement('div')
+    note.className = 'draft-note card'
+    note.innerHTML = `
+      <div class="draft-note__text">
+        <b>${t('home.draftTitle')}</b>
+        <span>${escapeHtml(draft.structure.title || draft.topic)}</span>
+      </div>
+      <div class="draft-note__actions">
+        <button class="btn btn--primary btn--sm" data-draft-resume>${t('home.draftResume')}</button>
+        <button class="btn btn--ghost btn--sm" data-draft-discard>${t('home.draftDiscard')}</button>
+      </div>`
+    view.querySelector('.hero')!.after(note)
+    note.querySelector('[data-draft-resume]')!.addEventListener('click', () => {
+      startPageOutline(draft.topic, draft.opts, draft.structure, {
+        results: draft.results,
+        step: draft.step,
+      })
+    })
+    note.querySelector('[data-draft-discard]')!.addEventListener('click', () => {
+      clearDraft()
+      note.remove()
+    })
+  }
 
   const collectOptions = (): GenerateOptions => {
     const minutes = durationEl.value ? Number(durationEl.value) : undefined

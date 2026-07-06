@@ -6,6 +6,7 @@ import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
 import { liveTitles, renderLive } from '../lib/live'
+import { saveDraft } from '../lib/draft'
 import { t } from '../i18n'
 import {
   LAYOUTS,
@@ -66,7 +67,13 @@ type Step =
  * streaming each part live and confirming it before moving on
  * (封面 → 各部分 → 结束 → 整份大纲总览 → 生成).
  */
-export function startPageOutline(topic: string, opts: GenerateOptions, structure: Structure): void {
+export function startPageOutline(
+  topic: string,
+  opts: GenerateOptions,
+  structure: Structure,
+  /** Resume a persisted draft: previously confirmed groups + the step to show. */
+  restore?: { results: Array<OutlineSlide[] | null>; step: number },
+): void {
   const trimmed = topic.trim()
   if (!trimmed) {
     toast(t('err.noTopic'))
@@ -85,6 +92,7 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
   const body = el.querySelector<HTMLElement>('[data-body]')!
   const close = () => {
     controller.abort()
+    prefetch?.controller.abort()
     el.remove()
   }
   let controller = new AbortController()
@@ -97,6 +105,68 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
   let steps: Step[] = buildSteps()
   const stepCount = () => steps.length + 1 // + overview
   const results: OutlineSlide[][] = new Array(steps.length)
+  if (restore) {
+    restore.results.slice(0, steps.length).forEach((g, i) => {
+      if (Array.isArray(g) && g.length) results[i] = g
+    })
+  }
+
+  // Everything confirmed so far is kept as a resumable draft (cleared once the
+  // deck is actually generated and saved).
+  let current = restore ? Math.min(restore.step, steps.length - 1) : 0
+  const persist = () => {
+    saveDraft({ topic: trimmed, opts, structure, results: Array.from(results, (g) => g ?? null), step: current })
+  }
+
+  // Exit deliberately: progress stays in the draft, resumable from Home.
+  const confirmExit = () => {
+    if (!confirm(t('outline.exitConfirm'))) return
+    persist()
+    close()
+  }
+
+  /* ------------------------- next-part prefetch ------------------------- */
+  // While the user reviews a part, the NEXT part is generated in the
+  // background — by the time they hit "下一环节" it's usually ready. The
+  // prefetch is keyed to the exact confirmed context it was built from; if the
+  // user edits the current part before confirming, the context signature no
+  // longer matches and the prefetch is discarded.
+  let prefetch: {
+    step: number
+    sig: string
+    controller: AbortController
+    promise: Promise<OutlineSlide[]>
+  } | null = null
+
+  const confirmedFor = (sIndex: number): OutlineSlide[] =>
+    results
+      .slice(1, 1 + sIndex)
+      .filter((g): g is OutlineSlide[] => Array.isArray(g))
+      .flat()
+
+  const startPrefetch = (stepIdx: number, shownSlides: OutlineSlide[]) => {
+    const nxt = stepIdx + 1
+    const st = steps[nxt]
+    if (!st || st.kind !== 'part' || results[nxt]) return
+    prefetch?.controller.abort()
+    const step = steps[stepIdx]
+    const ctx = [
+      ...results
+        .slice(1, stepIdx)
+        .filter((g): g is OutlineSlide[] => Array.isArray(g))
+        .flat(),
+      ...(step.kind === 'part' ? shownSlides : []),
+    ]
+    const pc = new AbortController()
+    prefetch = {
+      step: nxt,
+      sig: JSON.stringify(ctx),
+      controller: pc,
+      promise: generatePartPages(trimmed, opts, structure, st.index, loadSettings(), { signal: pc.signal }, undefined, ctx),
+    }
+    // Swallow background failures — consumption falls back to a fresh stream.
+    prefetch.promise.catch(() => {})
+  }
 
   const coverSlides = (): OutlineSlide[] => [
     { layout: 'cover', title: structure.title, brief: structure.subtitle },
@@ -106,6 +176,9 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
   /* ----------------------------- streaming a part ----------------------------- */
 
   const streamPart = (i: number, sIndex: number, instruction?: string) => {
+    // A fresh stream invalidates any prefetch built on the current state.
+    prefetch?.controller.abort()
+    prefetch = null
     controller = new AbortController()
     const sec = structure.sections[sIndex]
     showStreaming(i, sec.title, sec.pages ?? 3)
@@ -113,10 +186,6 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
     // Earlier parts' confirmed pages (steps: [cover, part0..partN, end] →
     // part k lives at results[1+k]) give the model cross-part context so it
     // doesn't repeat their topics or drift in terminology.
-    const confirmed = results
-      .slice(1, 1 + sIndex)
-      .filter((g): g is OutlineSlide[] => Array.isArray(g))
-      .flat()
     generatePartPages(
       trimmed,
       opts,
@@ -125,7 +194,7 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
       loadSettings(),
       { signal: controller.signal, onToken: (full) => renderLive(liveEl, liveTitles(full)) },
       instruction,
-      confirmed,
+      confirmedFor(sIndex),
     )
       .then((slides) => {
         if (!controller.signal.aborted) showStepEditor(i, slides)
@@ -144,9 +213,14 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
       </div>
       <ol class="gen-live" data-live><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
       <div class="outline__actions">
-        <button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button>
+        <button class="btn btn--ghost" data-back>${t('outline.backStep')}</button>
       </div>`
-    body.querySelector('[data-cancel]')!.addEventListener('click', close)
+    // Backing out of a stream returns to the previous step — it must not nuke
+    // the wizard (confirmed parts live in `results`).
+    body.querySelector('[data-back]')!.addEventListener('click', () => {
+      controller.abort()
+      runStep(Math.max(0, i - 1))
+    })
   }
 
   const showStepError = (i: number, msg: string) => {
@@ -155,21 +229,42 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
         <h2 class="gen__error">${t('outline.partFailed')}</h2>
         <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>
         <div class="gen__actions">
-          <button class="btn btn--ghost" data-cancel>${t('common.close')}</button>
+          <button class="btn btn--ghost" data-back>${t('outline.backStep')}</button>
           <button class="btn btn--primary" data-retry>${t('common.retry')}</button>
         </div>
       </div>`
-    body.querySelector('[data-cancel]')!.addEventListener('click', close)
+    body.querySelector('[data-back]')!.addEventListener('click', () => runStep(Math.max(0, i - 1)))
     body.querySelector('[data-retry]')!.addEventListener('click', () => runStep(i))
   }
 
   /* ------------------------------ per-step editor ------------------------------ */
 
   const runStep = (i: number) => {
+    current = i
+    persist()
     const step = steps[i]
     if (step.kind === 'part') {
-      if (results[i]) showStepEditor(i, results[i]) // navigated back — reuse
-      else streamPart(i, step.index)
+      if (results[i]) {
+        showStepEditor(i, results[i]) // navigated back — reuse
+        return
+      }
+      // Ready-made (or in-flight) prefetch whose context still matches?
+      if (prefetch && prefetch.step === i && prefetch.sig === JSON.stringify(confirmedFor(step.index))) {
+        const p = prefetch
+        prefetch = null
+        controller = p.controller // so the back button can abort it
+        const sec = structure.sections[step.index]
+        showStreaming(i, sec.title, sec.pages ?? 3)
+        p.promise
+          .then((slides) => {
+            if (!p.controller.signal.aborted) showStepEditor(i, slides)
+          })
+          .catch((err: unknown) => {
+            if (!p.controller.signal.aborted) showStepError(i, err instanceof Error ? err.message : String(err))
+          })
+        return
+      }
+      streamPart(i, step.index)
     } else {
       showStepEditor(i, results[i] ?? (step.kind === 'cover' ? coverSlides() : endSlides()))
     }
@@ -208,9 +303,10 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
       </div>`
 
     wireRowList(body)
-    body.querySelector('[data-cancel]')!.addEventListener('click', close)
+    body.querySelector('[data-cancel]')!.addEventListener('click', confirmExit)
     body.querySelector<HTMLElement>('[data-prev]')?.addEventListener('click', () => {
       results[i] = collectRows(body)
+      persist()
       runStep(i - 1)
     })
     body.querySelector<HTMLElement>('[data-regen]')?.addEventListener('click', () => {
@@ -227,9 +323,13 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
         return
       }
       results[i] = collected
+      persist()
       if (last) showOverview()
       else runStep(i + 1)
     })
+
+    // While the user reads this step, quietly generate the next part.
+    startPrefetch(i, slides)
   }
 
   /* ------------------------------ final overview ------------------------------ */
@@ -252,13 +352,15 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
     const title = assembleOutline(structure, results.map((r) => r ?? [])).title
     body.innerHTML = renderOverview(structure, title, groups)
     wireOverview(body, {
-      onCancel: close,
+      onCancel: confirmExit,
       onPrev: () => {
         syncOverviewIntoResults()
+        persist()
         runStep(steps.length - 1)
       },
       onGoto: (i) => {
         syncOverviewIntoResults()
+        persist()
         runStep(i)
       },
       onDeletePart: (i) => {
@@ -268,6 +370,7 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
         structure.sections.splice(step.index, 1)
         results.splice(i, 1)
         steps = buildSteps()
+        persist()
         showOverview()
       },
       onAddPart: () => {
@@ -276,6 +379,7 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
         // Insert the new part's pages just before the 结束 group.
         results.splice(Math.max(1, results.length - 1), 0, [{ layout: 'section', title: t('struct.newPart') }])
         steps = buildSteps()
+        persist()
         showOverview()
       },
       onGenerate: () => {
@@ -284,13 +388,22 @@ export function startPageOutline(topic: string, opts: GenerateOptions, structure
           toast(t('outline.keepOnePage'))
           return
         }
-        el.remove()
-        generateAndPlay(trimmed, opts, edited)
+        syncOverviewIntoResults()
+        persist()
+        // The wizard stays alive UNDER the generating overlay: cancelling or a
+        // failed generation drops the user back on this overview instead of
+        // vaporizing every confirmed part.
+        generateAndPlay(trimmed, opts, edited, {
+          onDone: () => el.remove(),
+          onDismiss: () => {
+            /* overview is still rendered beneath — nothing to do */
+          },
+        })
       },
     })
   }
 
-  runStep(0)
+  runStep(current)
 }
 
 /* ------------------------------ rendering ------------------------------ */
