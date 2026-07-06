@@ -80,6 +80,19 @@ function safeHost(url: string): string {
 }
 
 /**
+ * Explicit output-token limit for OpenAI-compatible endpoints. Without one,
+ * providers apply a small default (DeepSeek: ~4K) that silently truncates a
+ * long deck's JSON mid-stream — the whole generation then fails. DeepSeek caps
+ * output at 8192; newer OpenAI models (o-series, gpt-5 family) reject
+ * `max_tokens` and want `max_completion_tokens` instead.
+ */
+function tokenLimit(cfg: ProviderConfig, want: number): Record<string, number> {
+  if (safeHost(cfg.baseUrl).includes('deepseek')) return { max_tokens: Math.min(want, 8192) }
+  if (/^(o\d|gpt-5)/i.test(cfg.model.trim())) return { max_completion_tokens: want }
+  return { max_tokens: want }
+}
+
+/**
  * Provider-specific extra request-body fields. Currently: DeepSeek V4 thinking
  * mode (`thinking: {type}`, plus reasoning_effort when enabled). Only sent to
  * DeepSeek endpoints so other OpenAI-compatible services don't reject it.
@@ -135,6 +148,7 @@ async function streamOpenAI(
     body: JSON.stringify({
       model: cfg.model,
       stream: true,
+      ...tokenLimit(cfg, MAX_TOKENS),
       ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
       ...extras,
       messages: [
@@ -166,7 +180,7 @@ export async function requestText(
   const maxTokens = opts.maxTokens ?? 1024
   return settings.provider === 'anthropic'
     ? requestAnthropic(cfg, system, user, maxTokens, opts.signal)
-    : requestOpenAI(cfg, system, user, (opts.json ?? true) && !thinkingActive(extras), opts.signal, extras)
+    : requestOpenAI(cfg, system, user, maxTokens, (opts.json ?? true) && !thinkingActive(extras), opts.signal, extras)
 }
 
 async function requestAnthropic(
@@ -199,6 +213,7 @@ async function requestOpenAI(
   cfg: ProviderConfig,
   system: string,
   user: string,
+  maxTokens: number,
   json: boolean,
   signal?: AbortSignal,
   extras: Record<string, unknown> = {},
@@ -209,6 +224,9 @@ async function requestOpenAI(
     headers: openaiHeaders(cfg),
     body: JSON.stringify({
       model: cfg.model,
+      // Floor at 2K: these one-shot calls previously ran on the provider default
+      // (≥4K) — a lower explicit cap must not introduce new truncation.
+      ...tokenLimit(cfg, Math.max(maxTokens, 2048)),
       ...(json ? { response_format: { type: 'json_object' } } : {}),
       ...extras,
       messages: [

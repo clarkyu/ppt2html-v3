@@ -1,6 +1,7 @@
 import type { Deck, Branding } from '../types'
 import { renderSlideInner, slideBgHtml, slideCreditHtml } from './layouts'
 import { escapeHtml } from '../lib/markdown'
+import { deckIsCjk } from '../lib/lang'
 
 function validLogo(u?: string): string {
   const s = (u ?? '').trim()
@@ -24,6 +25,9 @@ export function renderDeckSlides(deck: Deck): string {
   const total = deck.slides.length
   let sectionNum = 0
   let sectionTitle = ''
+  // Baked-in labels follow the deck's language (an English deck must not get
+  // a Chinese "环节" corner label).
+  const partWord = deckIsCjk(deck) ? '环节' : 'Part'
 
   const logo = validLogo(deck.branding?.logo)
   const logoHtml = logo ? `<img class="deck-slide__logo" src="${escapeHtml(logo)}" alt="">` : ''
@@ -41,7 +45,7 @@ export function renderDeckSlides(deck: Deck): string {
       const showSection =
         sectionNum > 0 && slide.layout !== 'cover' && slide.layout !== 'end' && slide.layout !== 'section'
       const sectionHtml = showSection
-        ? `<div class="deck-slide__section">环节 ${sectionNum}${sectionTitle ? ` · ${escapeHtml(sectionTitle)}` : ''}</div>`
+        ? `<div class="deck-slide__section">${partWord} ${sectionNum}${sectionTitle ? ` · ${escapeHtml(sectionTitle)}` : ''}</div>`
         : ''
       const pageHtml = `<div class="deck-slide__pagenum">${i + 1} / ${total}</div>`
       // Presenter · org · date on the title & closing slides.

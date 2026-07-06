@@ -12,6 +12,7 @@ import {
   THEMES,
 } from '../types'
 import { genId } from '../lib/dom'
+import { deckIsCjk } from '../lib/lang'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
 const THEME_SET = new Set<string>(THEMES)
@@ -122,6 +123,7 @@ export function normalizeSlide(raw: unknown): Slide | null {
     note: asString(o.note),
     imageQuery: asString(o.imageQuery),
     bg: asSlideBg(o.bg),
+    bgOff: o.bgOff === true ? true : undefined,
   }
 
   // Drop slides that would render empty.
@@ -164,9 +166,9 @@ export function normalizeDeck(
     slides.unshift({ layout: 'cover', title, subtitle: asString(spec.subtitle) })
   }
 
-  // Guarantee a closing slide.
+  // Guarantee a closing slide (in the deck's own language).
   if (slides.length && slides[slides.length - 1].layout !== 'end') {
-    slides.push({ layout: 'end', title: '谢谢观看' })
+    slides.push({ layout: 'end', title: deckIsCjk({ title, slides }) ? '谢谢观看' : 'Thank You' })
   }
 
   const now = meta.createdAt ?? Date.now()

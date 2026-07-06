@@ -4,6 +4,7 @@ import { requestText } from './client'
 import { extractJson } from './extractJson'
 import { normalizeSlide } from '../render/normalize'
 import { DECK_SCHEMA_GUIDE } from './prompt'
+import { t } from '../i18n'
 
 const EDIT_SYSTEM = `${DECK_SCHEMA_GUIDE}
 
@@ -33,7 +34,10 @@ export async function regenerateSlide(
 
   const text = await requestText(EDIT_SYSTEM, user, settings, { signal, maxTokens: 1600 })
   const norm = normalizeSlide(extractJson(text))
-  // Never change the layout; keep the existing background image; fall back to
-  // the original slide if parsing failed.
-  return norm ? { ...norm, layout: slide.layout, bg: slide.bg, imageQuery: slide.imageQuery } : slide
+  // A response that parses but normalizes to nothing is a failure — throw so
+  // the editor shows a retryable error instead of silently keeping the old
+  // content while toasting success.
+  if (!norm) throw new Error(t('err.noJson'))
+  // Never change the layout; keep the existing background state.
+  return { ...norm, layout: slide.layout, bg: slide.bg, bgOff: slide.bgOff, imageQuery: slide.imageQuery }
 }

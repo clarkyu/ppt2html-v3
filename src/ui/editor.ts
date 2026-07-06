@@ -3,6 +3,7 @@ import { getSampleDeck } from '../sample'
 import { mountSlidePreview } from '../render/preview'
 import { regenerateSlide } from '../llm/edit'
 import { searchImage, queryForSlide } from '../images/search'
+import { abstractBg, resolveAbstractStyle } from '../images/abstract'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
@@ -257,6 +258,9 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     if (btn.dataset.bgRemove !== undefined) {
       const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       slide.bg = undefined
+      // Mark the removal as deliberate, or the player's lazy image fill would
+      // just search a new background for this "empty" slide on next playback.
+      slide.bgOff = true
       deck.slides[i] = slide
       card.outerHTML = renderCard(slide, i, deck.slides.length)
       mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
@@ -271,6 +275,21 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
         return
       }
       deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
+
+      // Abstract mode: re-roll a themed pattern locally (same family the player
+      // uses) — a photo search here would clash with the user's chosen style.
+      if (settings.images.mode === 'abstract') {
+        const style = resolveAbstractStyle(settings.images.abstractStyle, deck.id || deck.title || deck.theme)
+        const seed = `${queryForSlide(deck.slides[i], deck)}#${i}#${Date.now()}`
+        deck.slides[i].bg = abstractBg(seed, deck.theme, style)
+        deck.slides[i].bgOff = undefined
+        card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
+        mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+        setStatus(t('ed.unsaved'))
+        toast(t('ed.bgChanged'))
+        return
+      }
+
       const used = new Set<string>()
       for (const s of deck.slides) if (s.bg?.url) used.add(s.bg.url)
       btn.setAttribute('disabled', '')
@@ -282,6 +301,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
             return
           }
           deck.slides[i].bg = bg
+          deck.slides[i].bgOff = undefined
           card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
           mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
           setStatus(t('ed.unsaved'))
@@ -460,7 +480,7 @@ function collectSlide(card: HTMLElement, layout: SlideLayout, prev?: Slide): Sli
   const und = (f: string): string | undefined => v(f) || undefined
   const list = (f: string): string[] => raw(f).split('\n').map((x) => x.trim()).filter(Boolean)
   // Carry over fields that have no form input, so edits don't drop them.
-  const s: Slide = { layout, bg: prev?.bg, imageQuery: prev?.imageQuery }
+  const s: Slide = { layout, bg: prev?.bg, bgOff: prev?.bgOff, imageQuery: prev?.imageQuery }
 
   switch (layout) {
     case 'cover':
