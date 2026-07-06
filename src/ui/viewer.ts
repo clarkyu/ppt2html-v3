@@ -9,6 +9,7 @@ import { t } from '../i18n'
 import { toast } from '../lib/toast'
 import { downloadStandalone } from '../export/standalone'
 import { openPresenter, type PresenterHandle } from '../player/presenter'
+import { fitSlide } from '../render/fit'
 import type { Deck } from '../types'
 
 export function renderViewer(view: HTMLElement, id: string): () => void {
@@ -88,6 +89,22 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
   view.querySelector('[data-back]')!.addEventListener('click', goBack)
   view.querySelector('[data-overview]')!.addEventListener('click', () => player?.toggleOverview())
   view.querySelector('[data-print]')!.addEventListener('click', () => window.print())
+
+  // Print prep: the player only overflow-fits a slide when it's shown, so pages
+  // never visited would print "raw" — long titles clipped by the per-page
+  // overflow:hidden. Fit every slide right before printing (covers both the
+  // toolbar button and Ctrl+P — beforeprint fires for window.print() too).
+  const fitAllForPrint = () => {
+    mount.querySelectorAll<HTMLElement>('.reveal .slides > section').forEach((sec) => {
+      const prev = { display: sec.style.display, visibility: sec.style.visibility }
+      sec.style.display = 'block'
+      sec.style.visibility = 'hidden'
+      fitSlide(sec)
+      sec.style.display = prev.display
+      sec.style.visibility = prev.visibility
+    })
+  }
+  window.addEventListener('beforeprint', fitAllForPrint)
 
   // Export the deck as a single, offline-playable .html file.
   view.querySelector('[data-export]')!.addEventListener('click', () => {
@@ -199,7 +216,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
       // Each image patches its slide live and the deck is re-saved so replays
       // (and the editor) get them for free. Sample deck is ephemeral — skip.
       const settings = loadSettings()
-      if (id !== 'sample' && settings.images.enabled && deck.slides.some((s) => !s.bg)) {
+      if (id !== 'sample' && settings.images.enabled && deck.slides.some((s) => !s.bg && !s.bgOff)) {
         let saveTimer = 0
         const scheduleSave = () => {
           window.clearTimeout(saveTimer)
@@ -228,6 +245,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
     window.clearTimeout(hideTimer)
     window.clearInterval(timerInt)
     window.removeEventListener('keydown', onKey)
+    window.removeEventListener('beforeprint', fitAllForPrint)
     imgAbort.abort()
     presenter?.close()
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})

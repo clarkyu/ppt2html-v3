@@ -15,6 +15,7 @@ import { requestText, streamText, type GenerateHandlers } from './client'
 import { extractJson } from './extractJson'
 import { DECK_SCHEMA_GUIDE, contextBlock } from './prompt'
 import { slidesForMinutes } from '../lib/duration'
+import { deckIsCjk } from '../lib/lang'
 import { t } from '../i18n'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
@@ -233,7 +234,7 @@ function normalizeOutline(raw: unknown, topic: string, themeHint?: ThemeName): O
     slides.unshift({ layout: 'cover', title })
   }
   if (!slides.length || slides[slides.length - 1].layout !== 'end') {
-    slides.push({ layout: 'end', title: '谢谢观看' })
+    slides.push({ layout: 'end', title: deckIsCjk({ title, slides }) ? '谢谢观看' : 'Thank You' })
   }
 
   return {

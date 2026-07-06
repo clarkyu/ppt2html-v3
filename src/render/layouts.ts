@@ -1,5 +1,6 @@
 import type { Slide, SlideBg, Column, CompareItem, TimelineStep } from '../types'
 import { mdInline, mdProse, escapeHtml } from '../lib/markdown'
+import { hasCjk } from '../lib/lang'
 
 // Each renderer returns the inner HTML for a slide's <section>.
 // Styling lives in slides.css; themes.css supplies the palette via CSS variables.
@@ -45,7 +46,7 @@ function cover(s: Slide): string {
 
 function section(s: Slide): string {
   return `<div class="s s-section">
-    ${eyebrow(s.eyebrow ?? '章节')}
+    ${eyebrow(s.eyebrow ?? (hasCjk(s.title) ? '章节' : 'Chapter'))}
     <h2 class="s-section__title">${mdInline(s.title)}</h2>
     ${s.subtitle ? `<p class="s-section__subtitle">${mdInline(s.subtitle)}</p>` : ''}
   </div>`
@@ -152,7 +153,7 @@ function imageText(s: Slide): string {
 function end(s: Slide): string {
   return `<div class="s s-end">
     <div class="s-end__mark" aria-hidden="true"></div>
-    <h2 class="s-end__title">${mdInline(s.title ?? '谢谢观看')}</h2>
+    <h2 class="s-end__title">${mdInline(s.title ?? (hasCjk(s.subtitle) ? '谢谢观看' : 'Thank You'))}</h2>
     ${s.subtitle ? `<p class="s-end__subtitle">${mdInline(s.subtitle)}</p>` : ''}
   </div>`
 }
@@ -184,7 +185,10 @@ export function renderSlideInner(slide: Slide): string {
 export function bgCssUrl(url: string | undefined): string | null {
   if (!url) return null
   // Generated abstract backgrounds are inline SVG data URIs (already URL-encoded).
-  if (/^data:image\//i.test(url)) return `url("${url}")`
+  // Single-quote the CSS string (escaping any raw ' the encoder left behind):
+  // slideBgHtml embeds this inside a double-quoted style attribute, where a
+  // double-quoted url("…") would terminate the attribute and kill the image.
+  if (/^data:image\//i.test(url)) return `url('${url.replace(/'/g, '%27')}')`
   if (!/^https?:\/\//i.test(url)) return null
   const safe = encodeURI(url).replace(/['"()<>\\]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)
   return `url('${safe}')`

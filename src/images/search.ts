@@ -70,7 +70,8 @@ export async function populateDeckImages(
   if (!settings.images.enabled) return
   const targets = deck.slides
     .map((slide, index) => ({ slide, index }))
-    .filter((t) => !t.slide.bg)
+    // bgOff = the user explicitly removed this slide's background; respect it.
+    .filter((t) => !t.slide.bg && !t.slide.bgOff)
   const total = targets.length
   if (!total) return
 

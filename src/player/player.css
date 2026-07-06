@@ -71,12 +71,31 @@
 /* Print / export to PDF: lay every slide out one per page. */
 @media print {
   @page { size: 1280px 720px; margin: 0; }
+  /* reveal (embedded: false) pins <html> to 100dvh with overflow: hidden, and
+     the viewer shell is position: fixed — either one makes Chrome print a
+     single page (a hidden-overflow root is *the* classic print bug). Undo both. */
+  html.reveal-full-page, html.reveal-full-page body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .viewer { position: static !important; }
+  .viewer__mount { position: static !important; inset: auto !important; }
   html, body { background: #fff !important; }
-  .appbar, .viewer__bar, .toast,
+  .appbar, .viewer__bar, .viewer__notes, .viewer__help, .rotate-hint, .toast,
   .reveal .controls, .reveal .progress, .reveal .slide-number, .reveal .backgrounds {
     display: none !important;
   }
-  .player { position: static !important; }
+  /* Chrome skips backgrounds by default; 5 of 7 themes are dark-on-dark, which
+     would otherwise print as near-blank white pages. Force colors through. */
+  .player, .player * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .player {
+    position: static !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
   .player .reveal,
   .player .reveal .slides {
     position: static !important;

@@ -51,6 +51,12 @@ body { background: var(--bg); font-family: var(--font-body); }
 @media print {
   @page { size: 1280px 720px; margin: 0; }
   html, body { overflow: visible; height: auto; background: #fff !important; }
+  /* Chrome skips backgrounds by default — dark themes would print as blank
+     white pages without this. */
+  body, body * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   .exp-nav { display: none !important; }
   .reveal.deck { position: static; }
   .reveal.deck .slides {
@@ -109,6 +115,7 @@ ${slides}
 </div></div>
 <div class="exp-nav">
   <button data-prev type="button" aria-label="Previous">&lsaquo;</button>
+  <span class="exp-pos" data-pos></span>
   <button data-next type="button" aria-label="Next">&rsaquo;</button>
 </div>
 <script>${PLAYER_JS}</script>

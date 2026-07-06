@@ -84,6 +84,8 @@ export interface Slide {
   imageQuery?: string
   /** Resolved subtle background image for this slide. */
   bg?: SlideBg
+  /** User removed the background in the editor — auto-fill must not re-add one. */
+  bgOff?: boolean
 }
 
 /** A fully validated, renderable deck. */
