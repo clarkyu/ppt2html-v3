@@ -17,8 +17,8 @@ function bulletList(items: string[] | undefined, fragment = true): string {
   if (!items?.length) return ''
   const li = items
     .map(
-      (b) =>
-        `<li class="s-list__item${fragment ? ' fragment fade-up' : ''}">` +
+      (b, i) =>
+        `<li class="s-list__item${fragment ? ' fragment fade-up' : ''}" style="--i:${i}">` +
         `<span class="s-list__mark" aria-hidden="true"></span>` +
         `<span class="s-list__text">${mdInline(b)}</span></li>`,
     )
@@ -88,11 +88,11 @@ function quote(s: Slide): string {
   </div>`
 }
 
-function compareCard(item: CompareItem): string {
+function compareCard(item: CompareItem, i: number): string {
   const points = (item.points ?? [])
     .map((p) => `<li>${mdInline(p)}</li>`)
     .join('')
-  return `<div class="s-cmp fragment fade-up s-cmp--${item.tone ?? 'neutral'}">
+  return `<div class="s-cmp fragment fade-up s-cmp--${item.tone ?? 'neutral'}" style="--i:${i}">
     <h3 class="s-cmp__heading">${mdInline(item.heading)}</h3>
     ${points ? `<ul class="s-cmp__points">${points}</ul>` : ''}
   </div>`
@@ -108,7 +108,7 @@ function comparison(s: Slide): string {
 }
 
 function timelineStep(step: TimelineStep, i: number): string {
-  return `<li class="s-tl__item fragment fade-up">
+  return `<li class="s-tl__item fragment fade-up" style="--i:${i}">
     <span class="s-tl__node" aria-hidden="true">${i + 1}</span>
     <div class="s-tl__body">
       <div class="s-tl__label">${mdInline(step.label)}</div>
@@ -137,11 +137,19 @@ function code(s: Slide): string {
   </div>`
 }
 
+/** The framed visual for image-text: the slide's real image when it has one
+    (photo or generated pattern), else the decorative blob placeholder. */
+export function imgtextVisualInner(s: Slide): string {
+  const url = s.bg?.url
+  if (url && /^(https?:\/\/|data:image\/)/i.test(url)) {
+    return `<img class="s-imgtext__photo" src="${escapeHtml(url)}" alt="" loading="lazy">`
+  }
+  return `<span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>`
+}
+
 function imageText(s: Slide): string {
   return `<div class="s s-imgtext">
-    <div class="s-imgtext__visual" aria-hidden="true">
-      <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>
-    </div>
+    <div class="s-imgtext__visual" aria-hidden="true">${imgtextVisualInner(s)}</div>
     <div class="s-imgtext__body">
       ${eyebrow(s.eyebrow)}
       ${title(s.title)}
@@ -199,6 +207,9 @@ export function bgCssUrl(url: string | undefined): string | null {
  * slide has no resolved image).
  */
 export function slideBgHtml(slide: Slide): string {
+  // image-text shows its image inside the framed visual instead — a full-bleed
+  // copy behind it would double the same picture.
+  if (slide.layout === 'image-text' && slide.bg?.url) return ''
   const css = bgCssUrl(slide.bg?.url)
   if (!css) return ''
   // Generated backgrounds already match the theme and stay subtle, so they skip

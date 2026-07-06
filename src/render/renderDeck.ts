@@ -48,12 +48,19 @@ export function renderDeckSlides(deck: Deck): string {
         ? `<div class="deck-slide__section">${partWord} ${sectionNum}${sectionTitle ? ` · ${escapeHtml(sectionTitle)}` : ''}</div>`
         : ''
       const pageHtml = `<div class="deck-slide__pagenum">${i + 1} / ${total}</div>`
+      // Section dividers get a giant ghost part number behind the content —
+      // the page already knows its number, so give it presence.
+      const ghostHtml =
+        slide.layout === 'section'
+          ? `<div class="deck-slide__ghost" aria-hidden="true">${String(sectionNum).padStart(2, '0')}</div>`
+          : ''
       // Presenter · org · date on the title & closing slides.
       const brandHtml = slide.layout === 'cover' || slide.layout === 'end' ? brandLineHtml(deck.branding) : ''
 
       return (
         `<section data-layout="${slide.layout}" class="deck-slide">` +
         slideBgHtml(slide) +
+        ghostHtml +
         renderSlideInner(slide) +
         logoHtml +
         sectionHtml +
