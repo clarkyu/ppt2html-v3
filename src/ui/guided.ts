@@ -5,6 +5,7 @@ import {
   isConfigured,
   hasSystemKey,
   hasSystemImageKey,
+  systemKeyApplies,
   type LlmSettings,
   type Provider,
 } from '../llm/settings'
@@ -294,7 +295,16 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     })
   }
 
-  showModel()
+  // System-key users still on the default DeepSeek go straight to the
+  // questions — forcing a provider/model screen on someone who never
+  // configured anything is the flow's biggest first-step drop-off. The
+  // questions screen's ← back button still reaches the model step.
+  if (systemKeyApplies(initial) && !initial[initial.provider].apiKey.trim()) {
+    startPrefetch(initial)
+    goQuestions()
+  } else {
+    showModel()
+  }
 }
 
 function hostOf(url: string): string {

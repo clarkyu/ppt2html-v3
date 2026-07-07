@@ -11,9 +11,19 @@
    visible as soon as a slide is shown — we don't use click-to-reveal stepping
    (see `fragments: false`). This out-specifies reveal's own `.fragment` hiding
    without !important, so the entrance animation below can still run. */
-.player .reveal .slides section .fragment {
+.player:not(.player--step) .reveal .slides section .fragment {
   opacity: 1;
   visibility: visible;
+  transform: none;
+}
+
+/* Step mode (逐条播放): reveal's own fragment stepping takes over — give the
+   items a gentle rise as each one is clicked in. */
+.player--step .reveal .slides section .fragment {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  transform: translateY(12px);
+}
+.player--step .reveal .slides section .fragment.visible {
   transform: none;
 }
 
@@ -28,7 +38,9 @@
   .player .reveal .slides > section.present .s > *:nth-child(2) { animation-delay: 70ms; }
   .player .reveal .slides > section.present .s > *:nth-child(3) { animation-delay: 140ms; }
   .player .reveal .slides > section.present .s > *:nth-child(n + 4) { animation-delay: 200ms; }
-  .player .reveal .slides > section.present .fragment {
+  /* In step mode the fragments are revealed by click — the auto-cascade would
+     override reveal's hidden state (animations beat normal declarations). */
+  .player:not(.player--step) .reveal .slides > section.present .fragment {
     animation: deck-enter 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
     animation-delay: calc(180ms + var(--i, 0) * 70ms);
   }

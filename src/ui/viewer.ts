@@ -28,6 +28,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         <span class="viewer__timer" data-timer title="${t('viewer.timerTitle')}">${icons.clock}<b>00:00</b></span>
         <button class="btn btn--sm viewer__more" data-more title="${t('viewer.more')}">⋯</button>
         <div class="viewer__tools" data-tools>
+          <button class="btn btn--sm" data-step title="${t('viewer.stepMode')}">${icons.steps}</button>
           <button class="btn btn--sm" data-notes title="${t('viewer.notes')}">${icons.note}</button>
           <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}">${icons.presenter}</button>
           <button class="btn btn--sm" data-overview title="${t('viewer.overview')}">${icons.grid}</button>
@@ -218,6 +219,14 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         editBtn.addEventListener('click', () => navigate(`#/edit/${id}`))
       }
       player = mountPlayer(mount, deck)
+      const stepBtn = view.querySelector<HTMLButtonElement>('[data-step]')!
+      stepBtn.classList.toggle('active', player.stepMode())
+      stepBtn.addEventListener('click', () => {
+        const on = !player!.stepMode()
+        player!.setStepMode(on)
+        stepBtn.classList.toggle('active', on)
+        toast(on ? t('viewer.stepOn') : t('viewer.stepOff'))
+      })
       // Remember the playback position per deck (session-scoped): a refresh or
       // an accidental back no longer dumps the presenter to slide 1.
       const posKey = `ppt2html.pos.${id}`
