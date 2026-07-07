@@ -6,6 +6,7 @@ import { THEMES, type CustomTheme, type ThemeName } from '../types'
 import { isLightCustom } from '../render/customTheme'
 import { loadStyles, addStyle, removeStyle } from '../lib/styles'
 import { icons } from '../lib/icons'
+import { escapeHtml } from '../lib/markdown'
 import { t } from '../i18n'
 
 export type StyleSelection = { kind: 'builtin'; theme: ThemeName } | { kind: 'custom'; theme: CustomTheme }
@@ -34,11 +35,12 @@ function customSwatch(ct: CustomTheme): Swatch {
 }
 
 function cardInner(s: Swatch, label: string): string {
+  // `label` may be a user-typed style name — escape it (stored self-XSS).
   return (
     `<span class="stylepick__aa" style="color:${s.fg}">Aa</span>` +
     `<span class="stylepick__bar" style="background:${s.accent}"></span>` +
     `<span class="stylepick__dots"><i style="background:${s.accent}"></i><i style="background:${s.accent2}"></i><i style="background:${s.fg}"></i></span>` +
-    `<span class="stylepick__name">${label}</span>`
+    `<span class="stylepick__name">${escapeHtml(label)}</span>`
   )
 }
 

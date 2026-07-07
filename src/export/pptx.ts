@@ -9,6 +9,7 @@
 
 import type { CustomTheme, Deck, Slide, ThemeName } from '../types'
 import { deckIsCjk } from '../lib/lang'
+import { isLightBg, normalizeHex } from '../render/customTheme'
 
 interface Pal {
   bg: string
@@ -45,22 +46,18 @@ function blend(a: string, b: string, t: number): string {
   return pa.map((v, i) => Math.round(v * t + pb[i] * (1 - t)).toString(16).padStart(2, '0')).join('').toUpperCase()
 }
 
-/** Perceived sRGB luminance 0..1 of a bare-or-#-prefixed hex. */
-function luminance(hex: string): number {
-  const h = hex.replace(/^#/, '')
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
 /** Build a flat-hex Pal from a custom "我的风格" — mirrors themes.css derivation. */
 function paletteFromCustom(ct: CustomTheme): Pal {
-  const hx = (s: string) => s.replace(/^#/, '').toUpperCase() // blend()/pptxgenjs want bare hex
-  const bg = hx(ct.bg)
-  const light = luminance(bg) > 0.5
+  // Normalize (expand #abc, validate) then strip '#' + uppercase: blend() and
+  // pptxgenjs want bare 6-digit hex. Bad input falls back to aurora colors, and
+  // light/dark uses the same WCAG-contrast decision as the on-screen palette.
+  const bare = (hex: string, fallback: string) => (normalizeHex(hex) ?? fallback).slice(1).toUpperCase()
+  const bg = bare(ct.bg, '#0b1020')
+  const light = isLightBg(`#${bg}`)
   return {
     bg,
-    accent: hx(ct.accent),
-    accent2: hx(ct.accent2),
+    accent: bare(ct.accent, '#8b7cff'),
+    accent2: bare(ct.accent2, '#22d3ee'),
     light,
     fg: light ? blend('000000', bg, 0.82) : blend('FFFFFF', bg, 0.9),
     strong: light ? '111111' : 'FFFFFF',

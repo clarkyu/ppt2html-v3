@@ -3,6 +3,7 @@
 // `customTheme` (which is a snapshot copied in when applied).
 
 import type { CustomTheme } from '../types'
+import { sanitizeCustomTheme } from '../render/customTheme'
 
 const KEY = 'ppt2html.styles.v1'
 
@@ -18,10 +19,13 @@ export function loadStyles(): SavedStyle[] {
     if (!raw) return []
     const arr = JSON.parse(raw)
     if (!Array.isArray(arr)) return []
-    return arr.filter(
-      (s): s is SavedStyle =>
-        s && typeof s.id === 'string' && typeof s.name === 'string' && s.theme && typeof s.theme.bg === 'string',
-    )
+    // Validate the whole palette (all colors), not just `bg`, so a corrupted
+    // entry can't crash on apply.
+    return arr.flatMap((s): SavedStyle[] => {
+      if (!s || typeof s.id !== 'string' || typeof s.name !== 'string') return []
+      const theme = sanitizeCustomTheme(s.theme)
+      return theme ? [{ id: s.id, name: s.name, theme }] : []
+    })
   } catch {
     return []
   }

@@ -34,6 +34,30 @@ function parseHex(hex: string): [number, number, number] {
   const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
   return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16) || 0) as [number, number, number]
 }
+
+/** Canonicalize any hex-ish string to `#rrggbb` lowercase; null if unusable. */
+export function normalizeHex(hex: unknown): string | null {
+  if (typeof hex !== 'string') return null
+  const h = hex.trim().replace(/^#/, '')
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  return /^[0-9a-fA-F]{6}$/.test(full) ? `#${full.toLowerCase()}` : null
+}
+
+/**
+ * Validate a possibly-untrusted custom theme (from a share link or localStorage)
+ * into one with canonical `#rrggbb` colors — or undefined if any color is bad,
+ * so a malformed palette silently falls back to the named theme instead of
+ * emitting invalid CSS / NaN export colors.
+ */
+export function sanitizeCustomTheme(ct: unknown): CustomTheme | undefined {
+  if (!ct || typeof ct !== 'object') return undefined
+  const c = ct as Record<string, unknown>
+  const bg = normalizeHex(c.bg)
+  const accent = normalizeHex(c.accent)
+  const accent2 = normalizeHex(c.accent2)
+  if (!bg || !accent || !accent2) return undefined
+  return { bg, accent, accent2, serif: c.serif === true }
+}
 function toHex(rgb: [number, number, number]): string {
   const c = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')
   return `#${c(rgb[0])}${c(rgb[1])}${c(rgb[2])}`
@@ -49,26 +73,51 @@ function rgba(hex: string, a: number): string {
   return `rgba(${r}, ${g}, ${b}, ${a})`
 }
 
-/** sRGB relative luminance, 0 (black) → 1 (white). */
-export function luminance(hex: string): number {
-  const [r, g, b] = parseHex(hex).map((v) => v / 255)
+/** WCAG relative luminance (gamma-corrected), 0 (black) → 1 (white). */
+function relLuminance(hex: string): number {
+  const [r, g, b] = parseHex(hex).map((v) => {
+    const c = v / 255
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  })
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+function contrast(l1: number, l2: number): number {
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+}
+
+/**
+ * Should this background use a light (dark-text) UI? Decided by which of pure
+ * black vs white text actually contrasts better — robust for saturated
+ * mid-luminance colors where a fixed luminance threshold picks unreadable text.
+ * Shared by the CSS and PPTX derivations so they never disagree.
+ */
+export function isLightBg(hex: string): boolean {
+  const L = relLuminance(normalizeHex(hex) ?? '#000000')
+  return contrast(L, 0) >= contrast(L, 1) // black text wins → treat bg as light
 }
 
 /** Is the custom theme a light (bright-background) one? */
 export function isLightCustom(ct: CustomTheme): boolean {
-  return luminance(ct.bg) > 0.5
+  return isLightBg(ct.bg)
 }
 
 /** The `{base,a1,a2,light}` shape abstract.ts wants, from a custom theme. */
 export function customAbstractPalette(ct: CustomTheme): { base: string; a1: string; a2: string; light: boolean } {
-  return { base: ct.bg, a1: ct.accent, a2: ct.accent2, light: isLightCustom(ct) }
+  return {
+    base: normalizeHex(ct.bg) ?? '#0b1020',
+    a1: normalizeHex(ct.accent) ?? '#8b7cff',
+    a2: normalizeHex(ct.accent2) ?? '#22d3ee',
+    light: isLightCustom(ct),
+  }
 }
 
 /** The derived CSS custom properties for a custom theme. */
 export function customThemeVars(ct: CustomTheme): Record<string, string> {
-  const { bg, accent, accent2 } = ct
-  const light = luminance(bg) > 0.5
+  // Normalize first so a `#`-less or 3-digit color can't emit invalid CSS.
+  const bg = normalizeHex(ct.bg) ?? '#0b1020'
+  const accent = normalizeHex(ct.accent) ?? '#8b7cff'
+  const accent2 = normalizeHex(ct.accent2) ?? '#22d3ee'
+  const light = isLightBg(bg)
 
   const fg = light ? mix('#000000', bg, 0.82) : mix('#ffffff', bg, 0.9)
   const fgStrong = light ? mix('#000000', bg, 0.92) : '#ffffff'

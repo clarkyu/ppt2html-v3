@@ -8,6 +8,7 @@
 // via the existing lazy image fill. http(s) photo URLs are small and kept.
 
 import type { Deck } from '../types'
+import { sanitizeCustomTheme } from '../render/customTheme'
 
 const B64 = { '+': '-', '/': '_', '=': '' } as const
 
@@ -67,7 +68,9 @@ export async function decodeDeckFromHash(data: string): Promise<Deck> {
     title: spec.title || 'Untitled',
     subtitle: spec.subtitle,
     theme: (spec.theme as Deck['theme']) || 'aurora',
-    customTheme: spec.customTheme,
+    // Untrusted (attacker-controllable) payload — validate before it reaches
+    // rendering, or a malformed palette would crash the deck / poison a copy.
+    customTheme: sanitizeCustomTheme(spec.customTheme),
     slides: spec.slides,
     prompt: spec.prompt || '',
     branding: spec.branding,
