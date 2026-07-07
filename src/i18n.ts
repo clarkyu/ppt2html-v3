@@ -325,6 +325,20 @@ const DICT: Record<string, Entry> = {
     en: 'PPTX exported — text and shapes are fully editable in PowerPoint.',
   },
   'viewer.exportPptxFailed': { zh: 'PPTX 导出失败,请重试。', en: 'PPTX export failed — please retry.' },
+  'viewer.narrate': {
+    zh: '语音讲解（朗读每页讲稿，读完自动翻页）',
+    en: 'Narrated auto-play (reads each page’s script, then advances)',
+  },
+  'viewer.narrateOn': {
+    zh: '语音讲解已开启——朗读讲稿并自动翻页，再点一次停止。',
+    en: 'Narration on — the script is read aloud and pages auto-advance. Click again to stop.',
+  },
+  'viewer.narrateOff': { zh: '语音讲解已停止。', en: 'Narration stopped.' },
+  'viewer.narrateEnd': { zh: '讲解完毕——全篇已放映结束。', en: 'Narration finished — the deck played through.' },
+  'viewer.narrateNoTts': {
+    zh: '当前浏览器不支持语音合成，无法语音讲解。',
+    en: 'This browser has no speech synthesis — narration is unavailable.',
+  },
   'viewer.genNotes': {
     zh: '生成演讲稿（AI 为每页写可直接照读的逐字稿）',
     en: 'Write speaker script (AI writes read-aloud notes for every page)',
