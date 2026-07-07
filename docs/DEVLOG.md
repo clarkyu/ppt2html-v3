@@ -3,10 +3,25 @@
 按 PR 逆序记录每次落地的内容与关键决策,供后续会话/协作者快速恢复上下文。
 项目约定与架构地图见仓库根 `CLAUDE.md`。
 
-## 会话三(2026-07,PR #37–#48)
+## 会话三(2026-07,PR #37–#49)
 
 起点:一次 **103-agent 多代理审计**(6 个维度 + 对抗验证),产出 11 个确认 bug
-+ 56 条 worthIt 建议,随后逐一落地。
++ 56 条 worthIt 建议,随后逐一落地;审计收口后继续做新方向(#44 起)。
+
+### PR #49 — 自定义主题「我的风格」(全链路生效)
+- `src/render/customTheme.ts`(新):用户选底色/双强调色/衬线,其余(正文/次要/卡片/
+  边框/代码色/背景渐变)按亮度推导为整套 CSS 变量;`applyCustomTheme` 内联到播放根,
+  `customThemeStyleAttr` 供导出内联。`Deck.customTheme` 覆盖命名 theme。
+- `src/lib/styles.ts`(新):localStorage 风格库(增删查);`stylePicker.ts` 画廊加
+  「我的风格」区(取色表单+实时预览/应用/删除),回调改 tagged `StyleSelection`。
+- 全链路感知 customTheme:player / preview / presenter / editor / 独立 HTML / PPTX
+  (`paletteFromCustom`)/ 分享链接。抽象背景按自定义色板重掷(`abstractBgWith`)。
+- 顺带修复:导出/演讲者视图 body 加 `.player` 类(`--font-body`/`--pos`/`--neg` 一直未解析)。
+- **流程**:先 6-agent 摸清主题系统全部接触点 → 实现 → 2 个对抗性审查员,修其发现的
+  真实 bug:①畸形色值(分享链接/localStorage)致 parseHex 抛错白屏 + PPTX NaN 颜色
+  → `normalizeHex`/`sanitizeCustomTheme` 入口校验;②亮/暗判定改 WCAG 对比度(非
+  `luminance>0.5`,修高饱和中亮度色选错文字);③风格名 innerHTML 未转义(自 XSS)
+  → escapeHtml。28 项无头验证全过。
 
 ### PR #48 — 存档(本文件 + CLAUDE.md)
 
