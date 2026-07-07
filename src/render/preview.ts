@@ -1,5 +1,6 @@
-import type { Deck, Slide, ThemeName } from '../types'
+import type { CustomTheme, Deck, Slide, ThemeName } from '../types'
 import { renderSlideInner, slideBgHtml, slideCreditHtml } from './layouts'
+import { applyCustomTheme } from './customTheme'
 import { fitSlide } from './fit'
 import './themes.css'
 import './slides.css'
@@ -7,9 +8,14 @@ import './slides.css'
 /**
  * Render a static, scaled preview of a single arbitrary slide into `container`
  * (expected to carry the `.thumb` class for the visibility overrides).
- * Returns a cleanup function.
+ * Returns a cleanup function. Pass `custom` to preview a "我的风格" palette.
  */
-export function mountSlidePreview(container: HTMLElement, theme: ThemeName, slide: Slide): () => void {
+export function mountSlidePreview(
+  container: HTMLElement,
+  theme: ThemeName,
+  slide: Slide,
+  custom?: CustomTheme,
+): () => void {
   container.innerHTML =
     `<div class="thumb__stage">` +
     `<div class="player theme-${theme}">` +
@@ -18,6 +24,7 @@ export function mountSlidePreview(container: HTMLElement, theme: ThemeName, slid
     `<section class="deck-slide" data-layout="${slide.layout}">${slideBgHtml(slide)}${renderSlideInner(slide)}${slideCreditHtml(slide)}</section>` +
     `</div></div></div></div>`
 
+  applyCustomTheme(container.querySelector<HTMLElement>('.player')!, custom)
   fitSlide(container)
 
   const stage = container.querySelector<HTMLElement>('.thumb__stage')!
@@ -45,6 +52,7 @@ export function mountThumb(container: HTMLElement, deck: Deck): () => void {
     `<section class="deck-slide">${slideBgHtml(cover)}${renderSlideInner(cover)}</section>` +
     `</div></div></div></div>`
 
+  applyCustomTheme(container.querySelector<HTMLElement>('.player')!, deck.customTheme)
   fitSlide(container)
 
   const stage = container.querySelector<HTMLElement>('.thumb__stage')!

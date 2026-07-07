@@ -119,7 +119,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     const box = card.querySelector<HTMLElement>('[data-preview]')
     if (!box || !deck.slides[i]) return
     previewCleanups.get(box)?.()
-    const cleanup = mountSlidePreview(box, deck.theme, deck.slides[i])
+    const cleanup = mountSlidePreview(box, deck.theme, deck.slides[i], deck.customTheme)
     previewCleanups.set(box, cleanup)
   }
 
@@ -238,6 +238,8 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     }
     if (target.matches('[data-meta="theme"]')) {
       deck.theme = (target as HTMLSelectElement).value as ThemeName
+      // Picking a built-in theme here drops any custom "我的风格" palette.
+      deck.customTheme = undefined
       render() // re-render all previews with the new theme
       setStatus(t('ed.unsaved'))
       return

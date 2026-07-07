@@ -8,6 +8,7 @@ import './player.css'
 import type { Deck, SlideBg } from '../types'
 import { renderDeckSlides } from '../render/renderDeck'
 import { bgCssUrl, creditHtml, imgtextVisualInner } from '../render/layouts'
+import { applyCustomTheme } from '../render/customTheme'
 import { fitSlide } from '../render/fit'
 
 export interface PlayerHandle {
@@ -85,6 +86,8 @@ export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
 
   const root = document.createElement('div')
   root.className = `player theme-${deck.theme}${stepping ? ' player--step' : ''}`
+  // A custom "我的风格" palette overrides the named theme via inline vars.
+  applyCustomTheme(root, deck.customTheme)
 
   const bg = document.createElement('div')
   bg.className = 'player__bg'

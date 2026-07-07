@@ -903,7 +903,37 @@ body.playing .appbar { display: none; }
 .stylepick__bar { display: block; width: 34px; height: 4px; border-radius: 2px; }
 .stylepick__dots { display: flex; gap: 5px; }
 .stylepick__dots i { width: 10px; height: 10px; border-radius: 50%; }
-.stylepick__name { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+.stylepick__name { font-size: 12px; opacity: 0.85; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stylepick__sub { margin: 4px 0 10px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.stylepick__slot { position: relative; }
+.stylepick__slot .stylepick__item { width: 100%; }
+.stylepick__del {
+  position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 6px;
+  border: none; cursor: pointer; display: grid; place-items: center; opacity: 0;
+  background: rgba(0,0,0,0.45); color: #fff; transition: opacity 0.12s ease;
+}
+.stylepick__slot:hover .stylepick__del { opacity: 1; }
+.stylepick__del svg { width: 13px; height: 13px; }
+.stylepick__new {
+  border: 1.5px dashed var(--card-border); border-radius: 12px; cursor: pointer;
+  background: transparent; color: var(--muted); min-height: 92px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+.stylepick__new:hover { border-color: var(--accent); color: var(--fg); }
+.stylepick__new svg { width: 20px; height: 20px; }
+.stylepick__new span { font-size: 12px; }
+.styleform { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.styleform__row { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.styleform__row > span { flex: none; width: 84px; color: var(--muted); }
+.styleform__row .form-input { flex: 1; min-width: 0; }
+.styleform__row input[type="color"] {
+  width: 48px; height: 30px; padding: 0; border: 1px solid var(--card-border);
+  border-radius: 8px; background: none; cursor: pointer;
+}
+.styleform__row--check { justify-content: flex-start; }
+.styleform__row--check > span { width: auto; color: var(--fg); }
+.stylepick__actions { display: flex; gap: 10px; justify-content: flex-end; }
 
 /* Share panel (link + QR) */
 .sharepanel {

@@ -41,6 +41,7 @@ function portable(deck: Deck): Record<string, unknown> {
     title: deck.title,
     subtitle: deck.subtitle,
     theme: deck.theme,
+    customTheme: deck.customTheme,
     prompt: deck.prompt,
     branding: deck.branding,
     slides: deck.slides.map((s) => {
@@ -66,6 +67,7 @@ export async function decodeDeckFromHash(data: string): Promise<Deck> {
     title: spec.title || 'Untitled',
     subtitle: spec.subtitle,
     theme: (spec.theme as Deck['theme']) || 'aurora',
+    customTheme: spec.customTheme,
     slides: spec.slides,
     prompt: spec.prompt || '',
     branding: spec.branding,

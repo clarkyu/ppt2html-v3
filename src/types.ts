@@ -101,12 +101,31 @@ export interface Slide {
   bgOff?: boolean
 }
 
+/**
+ * A user-defined "我的风格": a base background color + two accents + a serif
+ * toggle. Everything else (text/muted/card/code colors) is derived by luminance
+ * at apply time (see render/customTheme.ts). When present on a deck it overrides
+ * the named `theme` everywhere via inline CSS variables.
+ */
+export interface CustomTheme {
+  /** Base background color, hex (e.g. "#0b1020"). */
+  bg: string
+  /** Primary accent, hex. */
+  accent: string
+  /** Secondary accent, hex. */
+  accent2: string
+  /** Serif display face when true, else the sans default. */
+  serif: boolean
+}
+
 /** A fully validated, renderable deck. */
 export interface Deck {
   id: string
   title: string
   subtitle?: string
   theme: ThemeName
+  /** Optional custom palette; when set it overrides `theme` for rendering/export. */
+  customTheme?: CustomTheme
   slides: Slide[]
   /** Original one-sentence prompt the user typed. */
   prompt: string

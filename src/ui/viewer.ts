@@ -12,9 +12,10 @@ import { openPresenter, type PresenterHandle } from '../player/presenter'
 import { startNarration, type NarratorHandle } from '../player/narrate'
 import { openStylePicker } from './stylePicker'
 import { openSharePanel } from './sharePanel'
-import { abstractBg } from '../images/abstract'
+import { abstractBg, abstractBgWith } from '../images/abstract'
+import { applyCustomTheme, customAbstractPalette, isLightCustom } from '../render/customTheme'
 import { fitSlide } from '../render/fit'
-import type { Deck } from '../types'
+import type { Deck, ThemeName } from '../types'
 
 /**
  * Deck playback screen. `shareData` (route `#/s/<blob>`) plays a deck decoded
@@ -301,21 +302,45 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         toast(t('viewer.narrateOn'))
       })
 
-      // One-click restyle: swap the theme class live and re-roll any abstract
-      // backgrounds so their colors follow the new palette. No regeneration.
+      // One-click restyle: swap the theme (built-in class OR a custom inline
+      // palette) live and re-roll any abstract backgrounds to follow the new
+      // colors. No regeneration.
+      const setBaseTheme = (base: ThemeName): void => {
+        player!.root.classList.remove(`theme-${deck.theme}`)
+        player!.root.classList.add(`theme-${base}`)
+        deck.theme = base
+      }
       view.querySelector('[data-style]')!.addEventListener('click', () => {
-        openStylePicker(viewerEl, deck.theme, (th) => {
-          if (th === deck.theme) return
-          player!.root.classList.remove(`theme-${deck.theme}`)
-          player!.root.classList.add(`theme-${th}`)
-          deck.theme = th
-          deck.slides.forEach((s, i) => {
-            if (s.bg?.source !== 'abstract') return
-            s.bg = abstractBg(`${deck.title}#${i}#${th}`, th, loadSettings().images.abstractStyle)
-            player!.setSlideBackground(i, s.bg)
-          })
+        openStylePicker(viewerEl, { theme: deck.theme, custom: deck.customTheme }, (sel) => {
+          const style = loadSettings().images.abstractStyle
+          let label: string
+          if (sel.kind === 'builtin') {
+            deck.customTheme = undefined
+            applyCustomTheme(player!.root, undefined)
+            setBaseTheme(sel.theme)
+            deck.slides.forEach((s, i) => {
+              if (s.bg?.source !== 'abstract') return
+              s.bg = abstractBg(`${deck.title}#${i}#${sel.theme}`, sel.theme, style)
+              player!.setSlideBackground(i, s.bg)
+            })
+            label = t(`theme.${sel.theme}`)
+          } else {
+            const ct = sel.theme
+            deck.customTheme = ct
+            // Keep a neutral base class matching lightness so no named-theme
+            // signature (noir caps, rose skew) bleeds through; inline vars win.
+            setBaseTheme(isLightCustom(ct) ? 'ink' : 'aurora')
+            applyCustomTheme(player!.root, ct)
+            const pal = customAbstractPalette(ct)
+            deck.slides.forEach((s, i) => {
+              if (s.bg?.source !== 'abstract') return
+              s.bg = abstractBgWith(`${deck.title}#${i}#${ct.bg}${ct.accent}`, pal, style)
+              player!.setSlideBackground(i, s.bg)
+            })
+            label = t('style.mine')
+          }
           if (persistable) void saveDeck(deck)
-          toast(t('style.applied').replace('{name}', t(`theme.${th}`)))
+          toast(t('style.applied').replace('{name}', label))
         })
       })
 
