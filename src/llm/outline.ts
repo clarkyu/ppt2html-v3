@@ -10,7 +10,7 @@ import {
   THEMES,
 } from '../types'
 import type { LlmSettings } from './settings'
-import { requestText, streamText, type GenerateHandlers } from './client'
+import { streamText, type GenerateHandlers } from './client'
 import { extractJson } from './extractJson'
 import { DECK_SCHEMA_GUIDE, contextBlock } from './prompt'
 import { slidesForMinutes } from '../lib/duration'
@@ -72,10 +72,24 @@ export async function generateStructure(
   topic: string,
   opts: GenerateOptions,
   settings: LlmSettings,
-  signal?: AbortSignal,
+  handlers: GenerateHandlers = {},
+  /** Re-plan on top of the user's current (possibly edited) structure. */
+  current?: Structure,
+  instruction?: string,
 ): Promise<Structure> {
-  const user = `${contextBlock(topic, opts)}\n\n请先输出「整体结构」JSON（只列几个部分，不要展开到每一页）。只输出 JSON。`
-  const raw = await genJson(() => requestText(STRUCTURE_SYSTEM, user, settings, { signal, maxTokens: 1400 }))
+  const user =
+    `${contextBlock(topic, opts)}\n\n` +
+    (current
+      ? `当前结构（用户可能已手动编辑，请在此基础上调整而非从零重来）：${JSON.stringify({
+          title: current.title,
+          subtitle: current.subtitle,
+          sections: current.sections,
+        })}\n\n`
+      : '') +
+    (instruction ? `用户对结构的调整要求（请据此重新规划）：${instruction}\n\n` : '') +
+    `请先输出「整体结构」JSON（只列几个部分，不要展开到每一页）。只输出 JSON。`
+  // Streamed so thinking-heavy models don't leave the user on a bare spinner.
+  const raw = await genJson(() => streamText(STRUCTURE_SYSTEM, user, settings, handlers))
   return normalizeStructure(raw, topic, opts)
 }
 

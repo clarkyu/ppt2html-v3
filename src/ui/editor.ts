@@ -124,10 +124,29 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
 
   const refreshPreview = (card: HTMLElement) => mountPreview(card)
 
+  let dirty = false
   const setStatus = (text: string) => {
+    dirty = text === t('ed.unsaved')
     const el = root.querySelector<HTMLElement>('[data-status]')
     if (el) el.textContent = text
   }
+
+  // Unsaved edits shouldn't be droppable by an accidental close/back.
+  const onBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (dirty) {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+  }
+  window.addEventListener('beforeunload', onBeforeUnload)
+  cleanups.push(() => window.removeEventListener('beforeunload', onBeforeUnload))
+  const backLink = root.parentElement?.querySelector<HTMLAnchorElement>('a[href="#/library"]')
+  backLink?.addEventListener('click', (e) => {
+    if (dirty && !confirm(t('ed.leaveConfirm'))) e.preventDefault()
+  })
+
+  // One-level undo for the last AI rewrite.
+  let lastRewrite: { i: number; slide: Slide } | null = null
 
   render()
 
@@ -147,6 +166,12 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       return
     }
     const card = target.closest<HTMLElement>('[data-card]')
+    if (card && target.matches('[data-img-query]')) {
+      const i = Number(card.dataset.i)
+      deck.slides[i].imageQuery = (target as HTMLInputElement).value.trim() || undefined
+      setStatus(t('ed.unsaved'))
+      return
+    }
     if (card && target.closest('[data-field]')) {
       const i = Number(card.dataset.i)
       deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
@@ -238,13 +263,22 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       }
       // Persist current edits on this card before regenerating.
       deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
+      const before = structuredClone(deck.slides[i])
       btn.setAttribute('disabled', '')
       btn.textContent = t('ed.rewriting')
       regenerateSlide(deck, i, instruction, settings)
         .then((slide) => {
           deck.slides[i] = slide
+          lastRewrite = { i, slide: before }
           card.outerHTML = renderCard(slide, i, deck.slides.length)
-          mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+          const fresh = root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!
+          mountPreview(fresh)
+          fresh
+            .querySelector('[data-regen-slide]')
+            ?.insertAdjacentHTML(
+              'afterend',
+              `<button class="btn btn--ghost btn--sm" data-undo-rewrite>${t('ed.undoRewrite')}</button>`,
+            )
           setStatus(t('ed.unsaved'))
           toast(t('ed.rewritten'))
         })
@@ -253,6 +287,18 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
           btn.removeAttribute('disabled')
           btn.textContent = t('ed.aiRewrite')
         })
+      return
+    }
+
+    if (btn.dataset.undoRewrite !== undefined) {
+      if (lastRewrite && lastRewrite.i === i) {
+        deck.slides[i] = lastRewrite.slide
+        lastRewrite = null
+        card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
+        mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+        setStatus(t('ed.unsaved'))
+        toast(t('ed.rewriteUndone'))
+      }
       return
     }
 
@@ -276,6 +322,8 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
         return
       }
       deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
+      const editedQuery = card.querySelector<HTMLInputElement>('[data-img-query]')?.value.trim()
+      deck.slides[i].imageQuery = editedQuery || undefined
 
       // Abstract mode: re-roll a themed pattern locally (same family the player
       // uses) — a photo search here would clash with the user's chosen style.
@@ -381,6 +429,7 @@ function renderCard(s: Slide, i: number, total: number): string {
       </div>
       <div class="ed-bg">
         <span class="ed-bg__label">${s.bg ? t('ed.bgOn') : t('ed.bgOff')}</span>
+        <input class="input ed-bg__query" data-img-query value="${escapeHtml(s.imageQuery ?? '')}" placeholder="${escapeHtml(t('ed.imgQuery'))}">
         <button class="btn btn--ghost btn--sm" data-bg-refresh>${icons.refresh} ${t('ed.bgRefresh')}</button>
         ${s.bg ? `<button class="btn btn--ghost btn--sm" data-bg-remove>${t('ed.bgRemove')}</button>` : ''}
       </div>

@@ -59,7 +59,13 @@ export function renderDeckSlides(deck: Deck): string {
       const sectionHtml = showSection
         ? `<div class="deck-slide__section">${partWord} ${sectionNum}${sectionTitle ? ` · ${escapeHtml(sectionTitle)}` : ''}</div>`
         : ''
-      const pageHtml = `<div class="deck-slide__pagenum">${i + 1} / ${total}</div>`
+      // Ceremony pages stay clean: no page number on the cover / closing slide
+      // (the progress bar still shows position).
+      const hero = slide.layout === 'cover' || slide.layout === 'end'
+      const pageHtml = hero ? '' : `<div class="deck-slide__pagenum">${i + 1} / ${total}</div>`
+      // Differentiated pacing: chapter dividers and the closing slide fade in
+      // instead of sliding — a beat change at each act break.
+      const transition = slide.layout === 'section' || slide.layout === 'end' ? ' data-transition="fade"' : ''
       // Section dividers get a giant ghost part number behind the content —
       // the page already knows its number, so give it presence.
       const ghostHtml =
@@ -71,7 +77,7 @@ export function renderDeckSlides(deck: Deck): string {
       const endRecapHtml = slide.layout === 'end' ? recapHtml : ''
 
       return (
-        `<section data-layout="${slide.layout}" class="deck-slide">` +
+        `<section data-layout="${slide.layout}" class="deck-slide"${transition}>` +
         slideBgHtml(slide) +
         ghostHtml +
         renderSlideInner(slide) +

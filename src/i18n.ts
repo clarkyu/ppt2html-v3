@@ -104,6 +104,10 @@ const DICT: Record<string, Entry> = {
     en: 'Generate richer content (prose / bullet points, not just an outline)',
   },
   'struct.addPart': { zh: '添加一个部分', en: 'Add a part' },
+  'struct.adjustPlaceholder': {
+    zh: '想怎么调整结构?(可选:合并前两部分 / 加一个案例部分 / 更偏实操…)',
+    en: 'How should the structure change? (optional: merge parts 1-2 / add a case-study part…)',
+  },
   'struct.regen': { zh: '重新规划', en: 'Re-plan' },
   'struct.next': { zh: '下一步：逐环节细化 →', en: 'Next: detail each part →' },
 
@@ -313,6 +317,7 @@ const DICT: Record<string, Entry> = {
     en: 'Standalone HTML exported — double-click to play offline (photo backgrounds need a connection; abstract ones work offline).',
   },
   'viewer.presenter': { zh: '演讲者视图 (S)', en: 'Presenter view (S)' },
+  'viewer.more': { zh: '更多工具', en: 'More tools' },
   'viewer.presenterBlocked': {
     zh: '演讲者视图被浏览器拦截了 —— 请允许本站弹出窗口后重试。',
     en: 'The presenter window was blocked — allow pop-ups for this site and try again.',
@@ -544,6 +549,13 @@ const DICT: Record<string, Entry> = {
   'ed.f.note': { zh: '讲者备注', en: 'Speaker note' },
   'ed.f.value': { zh: '关键数字', en: 'Key number' },
   'ed.f.stats': { zh: '数据卡(每行:数值|说明)', en: 'Stat cards (per line: value|label)' },
+  'ed.imgQuery': { zh: '配图关键词(英文)', en: 'Image keywords (English)' },
+  'ed.undoRewrite': { zh: '撤销重写', en: 'Undo rewrite' },
+  'ed.rewriteUndone': { zh: '已还原重写前的内容。', en: 'Restored the pre-rewrite content.' },
+  'ed.leaveConfirm': {
+    zh: '有未保存的修改,确定离开吗?',
+    en: 'You have unsaved changes — leave anyway?',
+  },
   'ed.f.caption': { zh: '说明', en: 'Caption' },
   'ed.f.quote': { zh: '金句', en: 'Quote' },
   'ed.f.author': { zh: '出处', en: 'Attribution' },

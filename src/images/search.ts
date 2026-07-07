@@ -42,7 +42,10 @@ export async function searchImage(
           : source === 'pixabay'
             ? await pixabay(q, key, opts.signal)
             : await openverse(q, opts.signal)
-    const pick = candidates.find((c) => !opts.exclude?.has(c.url)) ?? candidates[0]
+    // No fallback to an already-used candidate: "change background" clicking
+    // through to the same image reads as a dead button — null lets the caller
+    // say so (or fall back to a generated pattern).
+    const pick = candidates.find((c) => !opts.exclude?.has(c.url))
     if (!pick) return null
     // Unsplash API terms require pinging the download endpoint when a photo is used.
     if (pick.source === 'unsplash' && pick._download) void triggerUnsplashDownload(pick._download, key)
@@ -92,6 +95,7 @@ export async function populateDeckImages(
 
   const used = new Set<string>()
   for (const s of deck.slides) if (s.bg?.url) used.add(s.bg.url)
+  const fallbackStyle = resolveAbstractStyle(settings.images.abstractStyle, deck.id || deck.title || deck.theme)
 
   let done = 0
   let idx = 0
@@ -99,10 +103,15 @@ export async function populateDeckImages(
     while (idx < targets.length) {
       if (opts.signal?.aborted) return
       const { slide, index } = targets[idx++]
-      const bg = await searchImage(queryForSlide(slide, deck), settings, {
+      const found = await searchImage(queryForSlide(slide, deck), settings, {
         signal: opts.signal,
         exclude: used,
       })
+      // Photo search came up empty (network, rate limit, no results)? Fall
+      // back to a generated pattern so the deck never mixes "has background"
+      // and "bare gradient" pages.
+      const bg =
+        found ?? (opts.signal?.aborted ? null : abstractBg(`${queryForSlide(slide, deck)}#${index}`, deck.theme, fallbackStyle))
       if (bg) {
         slide.bg = bg
         used.add(bg.url)
@@ -141,11 +150,14 @@ async function openverse(q: string, signal?: AbortSignal): Promise<Candidate[]> 
   const results = Array.isArray(data?.results) ? data.results : []
   return results
     .map((r: Record<string, unknown>): Candidate | null => {
+      // Prefer the full-size image; the ~600px thumbnail visibly blurs when
+      // stretched across a 1280×720 slide. Thumbnail stays as the fallback.
+      const full = typeof r.url === 'string' && /^https?:\/\//i.test(r.url) ? r.url : ''
       const thumb = typeof r.thumbnail === 'string' ? r.thumbnail : ''
-      if (!thumb) return null
+      if (!full && !thumb) return null
       const credit = [r.creator, r.provider].filter((x) => typeof x === 'string').join(' · ')
       return {
-        url: thumb,
+        url: full || thumb,
         source: 'openverse',
         credit: credit || undefined,
         link: typeof r.foreign_landing_url === 'string' ? r.foreign_landing_url : undefined,
@@ -162,7 +174,10 @@ async function unsplash(q: string, key: string, signal?: AbortSignal): Promise<C
   const results = Array.isArray(data?.results) ? data.results : []
   return results
     .map((r: Record<string, any>): Candidate | null => {
-      const u = r?.urls?.regular
+      // `raw` + imgix params gives a sharp 1600px render (regular is 1080px,
+      // slightly soft on a full-bleed slide); regular stays as the fallback.
+      const raw = typeof r?.urls?.raw === 'string' ? `${r.urls.raw}&w=1600&fit=max&q=80` : ''
+      const u = raw || r?.urls?.regular
       if (typeof u !== 'string') return null
       const html = typeof r?.links?.html === 'string' ? r.links.html : undefined
       return {

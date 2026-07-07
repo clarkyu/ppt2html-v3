@@ -26,14 +26,17 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         <button class="btn btn--sm" data-back>${icons.back} ${t('common.back')}</button>
         <div class="viewer__title" data-title></div>
         <span class="viewer__timer" data-timer title="${t('viewer.timerTitle')}">${icons.clock}<b>00:00</b></span>
-        <button class="btn btn--sm" data-notes title="${t('viewer.notes')}">${icons.note}</button>
-        <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}">${icons.presenter}</button>
-        <button class="btn btn--sm" data-overview title="${t('viewer.overview')}">${icons.grid}</button>
-        <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
-        <button class="btn btn--sm" data-print title="${t('viewer.print')}">${icons.print}</button>
-        <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}">${icons.download}</button>
-        <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}">${icons.expand}</button>
-        <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}">${icons.keyboard}</button>
+        <button class="btn btn--sm viewer__more" data-more title="${t('viewer.more')}">⋯</button>
+        <div class="viewer__tools" data-tools>
+          <button class="btn btn--sm" data-notes title="${t('viewer.notes')}">${icons.note}</button>
+          <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}">${icons.presenter}</button>
+          <button class="btn btn--sm" data-overview title="${t('viewer.overview')}">${icons.grid}</button>
+          <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
+          <button class="btn btn--sm" data-print title="${t('viewer.print')}">${icons.print}</button>
+          <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}">${icons.download}</button>
+          <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}">${icons.expand}</button>
+          <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}">${icons.keyboard}</button>
+        </div>
       </div>
       <div class="viewer__notes" data-notes-panel hidden></div>
       <div class="viewer__help" data-help-panel hidden>
@@ -79,6 +82,15 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
   viewerEl.addEventListener('mousemove', nudgeBar)
   viewerEl.addEventListener('pointerdown', nudgeBar)
   nudgeBar()
+
+  // Narrow screens tuck the secondary tools behind a "⋯" menu; any tool click
+  // closes it again.
+  const toolsEl = view.querySelector<HTMLElement>('[data-tools]')!
+  view.querySelector('[data-more]')!.addEventListener('click', (e) => {
+    e.stopPropagation()
+    toolsEl.classList.toggle('open')
+  })
+  toolsEl.addEventListener('click', () => toolsEl.classList.remove('open'))
 
   // Portrait phones show a "rotate to landscape" nudge (a 16:9 deck is tiny in
   // portrait). It's playable either way; dismissing hides it for the session.
@@ -206,7 +218,24 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         editBtn.addEventListener('click', () => navigate(`#/edit/${id}`))
       }
       player = mountPlayer(mount, deck)
+      // Remember the playback position per deck (session-scoped): a refresh or
+      // an accidental back no longer dumps the presenter to slide 1.
+      const posKey = `ppt2html.pos.${id}`
+      let posRestored = false
       player.onSlideChange((num) => {
+        if (!posRestored) {
+          posRestored = true
+          const saved = Number(sessionStorage.getItem(posKey))
+          if (Number.isFinite(saved) && saved > 1 && saved <= deck.slides.length && num === 1) {
+            player?.reveal.slide(saved - 1)
+            return
+          }
+        }
+        try {
+          sessionStorage.setItem(posKey, String(num))
+        } catch {
+          /* best-effort */
+        }
         setNote(deck.slides[num - 1]?.note)
         presenter?.update(num)
       })

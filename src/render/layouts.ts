@@ -141,11 +141,19 @@ function timelineStep(step: TimelineStep, i: number): string {
 }
 
 function timeline(s: Slide): string {
-  const steps = (s.steps ?? []).map(timelineStep).join('')
+  const items = s.steps ?? []
+  // Short flows read better as a horizontal band (and stop the vertical list
+  // from triggering whole-slide shrink at 5 steps); long descriptions stay
+  // vertical where text has room.
+  const horizontal =
+    items.length >= 3 &&
+    items.length <= 5 &&
+    items.every((st) => (st.label ?? '').length <= 14 && (st.text ?? '').length <= 44)
+  const steps = items.map(timelineStep).join('')
   return `<div class="s s-timeline">
     ${eyebrow(s.eyebrow)}
     ${title(s.title)}
-    <ol class="s-tl">${steps}</ol>
+    <ol class="s-tl${horizontal ? ' s-tl--h' : ''}">${steps}</ol>
   </div>`
 }
 

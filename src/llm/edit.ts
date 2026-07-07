@@ -39,5 +39,5 @@ export async function regenerateSlide(
   // content while toasting success.
   if (!norm) throw new Error(t('err.noJson'))
   // Never change the layout; keep the existing background state.
-  return { ...norm, layout: slide.layout, bg: slide.bg, bgOff: slide.bgOff, imageQuery: slide.imageQuery }
+  return { ...norm, layout: slide.layout, bg: slide.bg, bgOff: slide.bgOff, imageQuery: norm.imageQuery ?? slide.imageQuery }
 }
