@@ -53,20 +53,23 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
   `edit.ts`(单页改写)、`notes.ts`(演讲稿逐字稿,批量 6 页/次)、`settings.ts`
   (BYOK + 系统密钥 VITE_DEEPSEEK_API_KEY;imageGen 配置)
 - **渲染**:`src/render/renderDeck.ts`、`layouts.ts`、`normalize.ts`、`fit.ts`、
-  `semanticIcons.ts`(33 个语义图标)、`slides.css`、`themes.css`(7 主题)
+  `semanticIcons.ts`(33 个语义图标)、`slides.css`、`themes.css`(7 主题)、
+  `customTheme.ts`(自定义主题:色板按 WCAG 对比度推导全套 CSS 变量 + 归一化/校验)、
+  `preview.ts`(缩略图/单页预览,感知 customTheme)
 - **播放**:`src/player/player.ts`(mountPlayer/PlayerHandle/步进模式)、`presenter.ts`
   (演讲者视图)、`narrate.ts`(TTS 语音讲解自动放映)、`player.css`
 - **UI**:`src/ui/home.ts`(快速/逐步双入口)、`guided.ts`+`outline.ts`(向导,
   prefetch/草稿续作)、`generating.ts`(分段成稿+胶片墙)、`viewer.ts`(播放页全部工具)、
   `editor.ts`(逐页编辑/AI 改写/候选图/AI 配图)、`settings.ts`、`stylePicker.ts`
-  (一键换风格)、`sharePanel.ts`(分享+二维码)
+  (换风格画廊:7 内置 + 我的风格)、`sharePanel.ts`(分享+二维码)
 - **图片**:`src/images/search.ts`(Unsplash/Pexels/Pixabay/Openverse 混合+候选)、
   `abstract.ts`(7 族抽象 SVG 背景)、`genai.ts`(OpenAI 兼容图像生成,BYOK)
 - **导出**:`src/export/standalone.ts`(单文件 HTML)、`pptx.ts`(可编辑 PPTX,
   pptxgenjs 动态 import)
-- **分享**:`src/lib/share.ts`(deflate→base64url→`#/s/` 路由,data: 背景剥离)
+- **分享**:`src/lib/share.ts`(deflate→base64url→`#/s/` 路由,data: 背景剥离,
+  customTheme 入口 sanitize)
 - **其他**:`src/lib/lang.ts`(CJK 检测,课件语言跟随)、`highlight.ts`(零依赖代码高亮)、
-  `draft.ts`(向导草稿 24h)、`i18n.ts`(全部文案 zh/en)
+  `draft.ts`(向导草稿 24h)、`styles.ts`(我的风格 localStorage 库)、`i18n.ts`(全部文案 zh/en)
 
 ## 已知坑(踩过、修过,别再踩)
 
@@ -82,24 +85,33 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 - **编辑器 collectSlide**:carry-over 模式——没有表单控件的字段必须显式从 prev 带过来,
   否则保存即丢(note 字段曾因此在非 bullets 版式上静默丢失)。
 - **分享链接**:二维码容量 ~2.9K 字符;data: URI 背景必须剥离(QR_MAX_CHARS 在 share.ts)。
+- **自定义主题**:任何进入渲染的色值必须先 `normalizeHex`/`sanitizeCustomTheme`——
+  分享链接/localStorage 的畸形色值会让 parseHex 抛错致白屏、PPTX 出 NaN 颜色;
+  亮/暗判定用 WCAG 对比度(取黑/白文字对比更高者),别用 `luminance>0.5`(高饱和中
+  亮度色会选错);CSS 与 PPTX 两条推导共用同一判定,别各写一套。用户可输入的风格名
+  进 innerHTML 必须 `escapeHtml`(存储型自 XSS)。
+- **导出/演讲者视图**:body/html 需带 `.player` 类,否则 `--font-body`/`--pos`/`--neg`
+  (只在 `.player` 里定义)不解析——曾导致导出件字体退化。
 - 系统密钥经 GitHub Actions secrets 注入(VITE_DEEPSEEK_API_KEY / VITE_UNSPLASH_KEY /
   VITE_PEXELS_KEY / VITE_PIXABAY_KEY),打进静态包=公开可读,是已接受的取舍。
 
-## 功能全景(截至 PR #47,全部已上线)
+## 功能全景(截至 PR #49,全部已上线)
 
 生成:引导问答(1~2 问)→ 结构确认 → 分部大纲 → 分段成稿(胶片墙揭幕/断段重试/
 草稿续作/预取);快速一次成稿模式;单页 AI 改写(可撤销)。
 内容:12 版式、语义图标、stats 数据卡、代码高亮、**加粗**强调、CJK/英文自适应、
 演讲稿逐字稿(批量后置生成)。
 播放:reveal.js、逐条步进、语音讲解自动放映(TTS)、演讲者视图、位置记忆、打印适配。
-视觉:7 主题(可一键换装)、抽象 SVG 背景 7 族、照片背景(4 源+候选挑选)、AI 配图(BYOK)。
+视觉:7 内置主题 + 自定义主题「我的风格」(自选底色/双强调色/衬线,按亮度推导全套色,
+可一键换装、跨课件复用,全链路生效)、抽象 SVG 背景 7 族、照片背景(4 源+候选挑选)、AI 配图(BYOK)。
 导出/分享:独立 HTML、PDF 打印、可编辑 PPTX(备注/主题色/背景全带)、
 无后端链接分享+二维码+保存副本。
 
 ## 候选方向(未做,按讨论价值排序)
 
-1. 自定义主题(用户自选色板/字体,存为「我的风格」)
-2. 课件模板库(常见场景骨架:培训/汇报/发布会/课堂)
-3. 导入 PPTX 反向转换(pptx → 本工具课件)
-4. 多语言课件一键翻译(整套 deck 翻译为另一语言)
-5. 练习模式(按讲稿估时逐页排练、超时提示)
+1. 课件模板库(常见场景骨架:培训/汇报/发布会/课堂)
+2. 导入 PPTX 反向转换(pptx → 本工具课件)
+3. 多语言课件一键翻译(整套 deck 翻译为另一语言)
+4. 练习模式(按讲稿估时逐页排练、超时提示)
+
+已完成(曾在候选里):自定义主题「我的风格」= PR #49。
