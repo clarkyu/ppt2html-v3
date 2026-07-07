@@ -21,7 +21,12 @@ export interface PlayerHandle {
   onSlideChange: (cb: (index: number, total: number) => void) => void
   /** Patch (or create) the background image of the slide at `index`, live. */
   setSlideBackground: (index: number, bg: SlideBg) => void
+  /** Toggle click-to-reveal fragment stepping (persisted preference). */
+  setStepMode: (on: boolean) => void
+  stepMode: () => boolean
 }
+
+const STEP_PREF_KEY = 'ppt2html.stepmode'
 
 const REVEAL_CONFIG = {
   embedded: false,
@@ -69,8 +74,17 @@ const REVEAL_CONFIG = {
 export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
   container.innerHTML = ''
 
+  // Click-to-reveal stepping is a persisted preference: teaching decks want
+  // bullets to appear one by one, business ones usually want the full page.
+  let stepping = false
+  try {
+    stepping = localStorage.getItem(STEP_PREF_KEY) === '1'
+  } catch {
+    /* default off */
+  }
+
   const root = document.createElement('div')
-  root.className = `player theme-${deck.theme}`
+  root.className = `player theme-${deck.theme}${stepping ? ' player--step' : ''}`
 
   const bg = document.createElement('div')
   bg.className = 'player__bg'
@@ -87,6 +101,7 @@ export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
 
   const reveal: RevealApi = new Reveal(revealEl, {
     ...REVEAL_CONFIG,
+    fragments: stepping,
     plugins: [],
   })
 
@@ -152,5 +167,17 @@ export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
       const credit = creditHtml(bg)
       if (credit) sec.insertAdjacentHTML('beforeend', credit)
     },
+    setStepMode: (on) => {
+      stepping = on
+      root.classList.toggle('player--step', on)
+      reveal.configure({ fragments: on })
+      reveal.sync()
+      try {
+        localStorage.setItem(STEP_PREF_KEY, on ? '1' : '0')
+      } catch {
+        /* preference is best-effort */
+      }
+    },
+    stepMode: () => stepping,
   }
 }

@@ -2,7 +2,7 @@ import { getDeck, saveDeck } from '../store/db'
 import { getSampleDeck } from '../sample'
 import { mountSlidePreview } from '../render/preview'
 import { regenerateSlide } from '../llm/edit'
-import { searchImage, queryForSlide } from '../images/search'
+import { searchImageCandidates, confirmCandidate, queryForSlide, type ImageCandidate } from '../images/search'
 import { abstractBg, resolveAbstractStyle } from '../images/abstract'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { navigate } from '../router'
@@ -123,6 +123,38 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
   }
 
   const refreshPreview = (card: HTMLElement) => mountPreview(card)
+
+  // Candidate picker: the six thumbnails for "change background" — pick one
+  // instead of blind-swapping to whatever came first.
+  const showBgPicker = (card: HTMLElement, i: number, candidates: ImageCandidate[]) => {
+    card.querySelector('.ed-pick')?.remove()
+    const pick = document.createElement('div')
+    pick.className = 'ed-pick'
+    pick.innerHTML =
+      `<span class="ed-pick__label">${t('ed.pickBg')}</span>` +
+      candidates
+        .map((c, k) => `<button type="button" class="ed-pick__thumb" data-pick="${k}" title="${escapeHtml(c.credit ?? '')}"><img src="${escapeHtml(c.url)}" alt="" loading="lazy"></button>`)
+        .join('') +
+      `<button type="button" class="btn btn--ghost btn--sm" data-pick-cancel>${t('common.cancel')}</button>`
+    card.querySelector('.ed-bg')?.after(pick)
+    pick.addEventListener('click', (e) => {
+      const cancel = (e.target as HTMLElement).closest('[data-pick-cancel]')
+      if (cancel) {
+        pick.remove()
+        return
+      }
+      const th = (e.target as HTMLElement).closest<HTMLElement>('[data-pick]')
+      if (!th) return
+      const chosen = candidates[Number(th.dataset.pick)]
+      if (!chosen) return
+      deck.slides[i].bg = confirmCandidate(chosen, loadSettings())
+      deck.slides[i].bgOff = undefined
+      card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
+      mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+      setStatus(t('ed.unsaved'))
+      toast(t('ed.bgChanged'))
+    })
+  }
 
   let dirty = false
   const setStatus = (text: string) => {
@@ -340,21 +372,16 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       }
 
       const used = new Set<string>()
-      for (const s of deck.slides) if (s.bg?.url) used.add(s.bg.url)
+      for (const s of deck.slides) if (s.bg?.url && s !== deck.slides[i]) used.add(s.bg.url)
       btn.setAttribute('disabled', '')
-      searchImage(queryForSlide(deck.slides[i], deck), settings, { exclude: used })
-        .then((bg) => {
-          if (!bg) {
+      searchImageCandidates(queryForSlide(deck.slides[i], deck), settings, { exclude: used })
+        .then((candidates) => {
+          btn.removeAttribute('disabled')
+          if (!candidates.length) {
             toast(t('ed.noImage'))
-            btn.removeAttribute('disabled')
             return
           }
-          deck.slides[i].bg = bg
-          deck.slides[i].bgOff = undefined
-          card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
-          mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
-          setStatus(t('ed.unsaved'))
-          toast(t('ed.bgChanged'))
+          showBgPicker(card, i, candidates.slice(0, 6))
         })
         .catch(() => {
           toast(t('ed.bgFailed'))

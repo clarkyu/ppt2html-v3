@@ -318,6 +318,9 @@ const DICT: Record<string, Entry> = {
   },
   'viewer.presenter': { zh: '演讲者视图 (S)', en: 'Presenter view (S)' },
   'viewer.more': { zh: '更多工具', en: 'More tools' },
+  'viewer.stepMode': { zh: '逐条播放(点击逐条浮现要点)', en: 'Step mode (reveal points one by one)' },
+  'viewer.stepOn': { zh: '逐条播放已开启:翻页键先逐条浮现要点', en: 'Step mode on: next reveals points one by one' },
+  'viewer.stepOff': { zh: '逐条播放已关闭:每页内容整页呈现', en: 'Step mode off: each page shows in full' },
   'viewer.presenterBlocked': {
     zh: '演讲者视图被浏览器拦截了 —— 请允许本站弹出窗口后重试。',
     en: 'The presenter window was blocked — allow pop-ups for this site and try again.',
@@ -550,6 +553,7 @@ const DICT: Record<string, Entry> = {
   'ed.f.value': { zh: '关键数字', en: 'Key number' },
   'ed.f.stats': { zh: '数据卡(每行:数值|说明)', en: 'Stat cards (per line: value|label)' },
   'ed.imgQuery': { zh: '配图关键词(英文)', en: 'Image keywords (English)' },
+  'ed.pickBg': { zh: '选一张背景:', en: 'Pick a background:' },
   'ed.undoRewrite': { zh: '撤销重写', en: 'Undo rewrite' },
   'ed.rewriteUndone': { zh: '已还原重写前的内容。', en: 'Restored the pre-rewrite content.' },
   'ed.leaveConfirm': {
