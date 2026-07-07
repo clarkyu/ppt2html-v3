@@ -5,6 +5,7 @@ import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
+import { liveTitles, renderLive } from '../lib/live'
 import { t } from '../i18n'
 import type { GenerateOptions, Section, Structure, ThemeName } from '../types'
 
@@ -51,6 +52,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
         <div class="gen__spinner"></div>
         <h2>${t('struct.loading')}</h2>
         <p>「${escapeHtml(trimmed)}」</p>
+        <ol class="gen-live" data-live><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
         <div class="gen__actions"><button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button></div>
       </div>`
     body.querySelector('[data-cancel]')!.addEventListener('click', () => {
@@ -84,8 +86,12 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
       onCancel: close,
       onRegen: () => {
         rich = body.querySelector<HTMLInputElement>('[data-rich]')?.checked ?? rich
+        // Re-plan on top of the user's current edits (not from scratch), with
+        // an optional adjustment instruction.
+        const instruction = body.querySelector<HTMLInputElement>('[data-adjust]')?.value.trim() || undefined
+        const base = collectStructure(body, trimmed)
         controller = new AbortController()
-        run()
+        run(base.sections.length ? base : undefined, instruction)
       },
       onNext: () => {
         const edited = collectStructure(body, trimmed)
@@ -100,9 +106,17 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
     })
   }
 
-  const run = () => {
+  const run = (base?: Structure, instruction?: string) => {
     showLoading()
-    generateStructure(trimmed, opts, loadSettings(), controller.signal)
+    const liveEl = body.querySelector<HTMLElement>('[data-live]')!
+    generateStructure(
+      trimmed,
+      opts,
+      loadSettings(),
+      { signal: controller.signal, onToken: (full) => renderLive(liveEl, liveTitles(full)) },
+      base,
+      instruction,
+    )
       .then((structure) => {
         if (!controller.signal.aborted) showEditor(structure)
       })
@@ -168,6 +182,7 @@ function renderEditor(structure: Structure, rich: boolean): string {
       ${structure.sections.map(renderSecRow).join('')}
     </ol>
     <button class="btn btn--ghost btn--sm outline__add" data-add>${icons.plus} ${t('struct.addPart')}</button>
+    <div class="adjust"><input class="input adjust__input" data-adjust placeholder="${escapeHtml(t('struct.adjustPlaceholder'))}"></div>
     <div class="outline__actions">
       <button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button>
       <button class="btn btn--ghost" data-regen>${icons.refresh} ${t('struct.regen')}</button>

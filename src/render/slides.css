@@ -217,6 +217,11 @@
   color: var(--muted);
   letter-spacing: 0.02em;
 }
+/* On the cover the content is left-aligned — the byline joins its column. */
+.reveal.deck .deck-slide[data-layout='cover'] .deck-slide__brand {
+  text-align: left;
+  padding-left: 92px;
+}
 /* On the cover/end the brand line sits centered; nudge cover content up a touch
    so they don't crowd. */
 .reveal.deck .deck-slide[data-layout='cover'] .s,
@@ -489,9 +494,21 @@
   gap: 16px;
   backdrop-filter: blur(6px);
 }
-.reveal.deck .s-cmp--positive { border-top: 5px solid var(--pos); }
-.reveal.deck .s-cmp--negative { border-top: 5px solid var(--neg); }
+.reveal.deck .s-cmp--positive {
+  border-top: 5px solid var(--pos);
+  border-color: color-mix(in srgb, var(--pos) 36%, var(--card-border)) ;
+  border-top-color: var(--pos);
+  background: color-mix(in srgb, var(--pos) 6%, var(--card));
+}
+.reveal.deck .s-cmp--negative {
+  border-top: 5px solid var(--neg);
+  border-color: color-mix(in srgb, var(--neg) 36%, var(--card-border));
+  border-top-color: var(--neg);
+  background: color-mix(in srgb, var(--neg) 6%, var(--card));
+}
 .reveal.deck .s-cmp--neutral { border-top: 5px solid var(--accent); }
+.reveal.deck .s-cmp--positive .s-cmp__points li::before { background: var(--pos); }
+.reveal.deck .s-cmp--negative .s-cmp__points li::before { background: var(--neg); }
 .reveal.deck .s-cmp__heading { font-family: var(--font-display); font-size: 30px; font-weight: 700; margin: 0; color: var(--fg-strong); }
 .reveal.deck .s-cmp__points { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
 .reveal.deck .s-cmp__points li {
@@ -524,6 +541,34 @@
   width: 2px;
   background: var(--rule);
 }
+/* Horizontal band for short flows (3-5 terse steps). */
+.reveal.deck .s-tl--h {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0;
+  margin-top: 40px;
+}
+.reveal.deck .s-tl--h .s-tl__item {
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  padding: 0 14px;
+}
+/* Connector runs horizontally between node centers. */
+.reveal.deck .s-tl--h .s-tl__item:not(:last-child)::before {
+  left: calc(50% + 34px);
+  right: calc(-50% + 34px);
+  top: 24px;
+  bottom: auto;
+  width: auto;
+  height: 2px;
+}
+.reveal.deck .s-tl--h .s-tl__body { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.reveal.deck .s-tl--h .s-tl__label { font-size: 27px; }
+.reveal.deck .s-tl--h .s-tl__text { font-size: 21px; }
+
 .reveal.deck .s-tl__node {
   flex: none;
   width: 50px;

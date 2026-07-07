@@ -34,7 +34,10 @@
 
 /* ---- Ink: light editorial paper ---- */
 .theme-ink {
-  --bg: linear-gradient(180deg, #fcfdff, #eef1f8);
+  --bg:
+    radial-gradient(920px 660px at 90% -10%, rgba(59, 91, 219, 0.09) 0%, transparent 60%),
+    radial-gradient(720px 540px at -8% 106%, rgba(112, 72, 232, 0.07) 0%, transparent 55%),
+    linear-gradient(180deg, #fcfdff, #eef1f8);
   --fg: #26304a;
   --fg-strong: #0b1220;
   --muted: #5a6478;

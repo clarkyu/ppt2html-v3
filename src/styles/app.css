@@ -731,6 +731,30 @@ body.playing .appbar { display: none; }
 .viewer__bar .btn:hover { background: rgba(255,255,255,0.2); }
 .viewer__mount { position: absolute; inset: 0; }
 
+/* Secondary viewer tools: inline on desktop, a "⋯" dropdown on phones. */
+.viewer__tools { display: contents; }
+.viewer__more { display: none; }
+@media (max-width: 720px) {
+  .viewer__more { display: inline-flex; }
+  .viewer__tools {
+    display: none;
+    position: absolute;
+    top: 54px;
+    right: 10px;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 14px;
+    background: rgba(10, 14, 26, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(10px);
+  }
+  .viewer__tools.open { display: flex; }
+  .viewer__tools .btn { justify-content: flex-start; }
+}
+
+.ed-bg__query { flex: 1; min-width: 120px; max-width: 320px; font-size: 13px; }
+
 /* Elapsed-time clock in the viewer bar */
 .viewer__timer {
   display: inline-flex; align-items: center; gap: 6px;
