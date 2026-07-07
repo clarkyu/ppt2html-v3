@@ -30,6 +30,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         <div class="viewer__tools" data-tools>
           <button class="btn btn--sm" data-step title="${t('viewer.stepMode')}">${icons.steps}</button>
           <button class="btn btn--sm" data-notes title="${t('viewer.notes')}">${icons.note}</button>
+          <button class="btn btn--sm" data-notes-gen title="${t('viewer.genNotes')}">${icons.mic}</button>
           <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}">${icons.presenter}</button>
           <button class="btn btn--sm" data-overview title="${t('viewer.overview')}">${icons.grid}</button>
           <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
@@ -247,7 +248,9 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
       // an accidental back no longer dumps the presenter to slide 1.
       const posKey = `ppt2html.pos.${id}`
       let posRestored = false
+      let curNum = 1
       player.onSlideChange((num) => {
+        curNum = num
         if (!posRestored) {
           posRestored = true
           const saved = Number(sessionStorage.getItem(posKey))
@@ -263,6 +266,45 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         }
         setNote(deck.slides[num - 1]?.note)
         presenter?.update(num)
+      })
+
+      // Full speaker script (逐字稿): a post-pass over the finished deck, batch
+      // by batch — each batch is saved as it lands, so failures keep progress.
+      const genBtn = view.querySelector<HTMLButtonElement>('[data-notes-gen]')!
+      genBtn.addEventListener('click', () => {
+        if (!loadedDeck || genBtn.disabled) return
+        const hasLong = loadedDeck.slides.some((s) => (s.note ?? '').trim().length > 80)
+        if (hasLong && !window.confirm(t('viewer.genNotesConfirm'))) return
+        genBtn.disabled = true
+        toast(t('viewer.genNotesStart'))
+        const total = loadedDeck.slides.length
+        genBtn.innerHTML = `${icons.mic} <b>0/${total}</b>`
+        import('../llm/notes')
+          .then(({ generateSpeakerNotes }) =>
+            generateSpeakerNotes(loadedDeck!, loadSettings(), {
+              signal: imgAbort.signal,
+              onProgress: (done) => {
+                genBtn.innerHTML = `${icons.mic} <b>${done}/${total}</b>`
+                if (id !== 'sample') void saveDeck(loadedDeck!)
+                setNote(loadedDeck!.slides[curNum - 1]?.note)
+                presenter?.update(curNum)
+              },
+            }),
+          )
+          .then(() => {
+            toast(t('viewer.genNotesDone'))
+            // Surface the result right away.
+            if (!notesOn) notesBtn.click()
+            setNote(loadedDeck!.slides[curNum - 1]?.note)
+          })
+          .catch((e) => {
+            if ((e as DOMException)?.name === 'AbortError') return
+            toast((e as Error)?.message || t('viewer.genNotesFailed'))
+          })
+          .finally(() => {
+            genBtn.disabled = false
+            genBtn.innerHTML = icons.mic
+          })
       })
 
       // Background images are fetched lazily, AFTER the deck is on screen, so a

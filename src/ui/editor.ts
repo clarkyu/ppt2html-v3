@@ -477,7 +477,13 @@ function lines(field: string, label: string, arr?: string[]): string {
   return area(field, label, (arr ?? []).join('\n'), Math.min(6, Math.max(2, (arr?.length ?? 2) + 1)))
 }
 
+// Every layout gets the speaker-note textarea: full AI-written scripts land on
+// all pages (cover/section/end included), and hand-tweaking them is expected.
 function renderFields(s: Slide): string {
+  return coreFields(s) + area('note', t('ed.f.note'), s.note, 2)
+}
+
+function coreFields(s: Slide): string {
   switch (s.layout) {
     case 'cover':
     case 'section':
@@ -485,7 +491,7 @@ function renderFields(s: Slide): string {
     case 'end':
       return text('title', t('ed.f.closing'), s.title) + text('subtitle', t('ed.f.closingSub'), s.subtitle)
     case 'bullets':
-      return text('title', t('ed.f.pageTitle'), s.title) + lines('bullets', t('ed.f.bullets'), s.bullets) + text('note', t('ed.f.note'), s.note)
+      return text('title', t('ed.f.pageTitle'), s.title) + lines('bullets', t('ed.f.bullets'), s.bullets)
     case 'big-number':
       return text('value', t('ed.f.value'), s.value) + text('caption', t('ed.f.caption'), s.caption) + text('title', t('ed.f.pageTitleOpt'), s.title)
     case 'stats':
@@ -581,7 +587,6 @@ function collectSlide(card: HTMLElement, layout: SlideLayout, prev?: Slide): Sli
       // Icons are model-assigned; keep them while the bullet count is unchanged.
       s.bulletIcons =
         prev?.bulletIcons && prev.bulletIcons.length === s.bullets.length ? prev.bulletIcons : undefined
-      s.note = und('note')
       break
     case 'big-number':
       s.value = und('value')
@@ -635,5 +640,7 @@ function collectSlide(card: HTMLElement, layout: SlideLayout, prev?: Slide): Sli
       }))
       break
   }
+  // The note textarea exists on every layout (see renderFields).
+  s.note = und('note')
   return s
 }
