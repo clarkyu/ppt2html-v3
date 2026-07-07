@@ -3,6 +3,7 @@ import { getSampleDeck } from '../sample'
 import { mountSlidePreview } from '../render/preview'
 import { regenerateSlide } from '../llm/edit'
 import { searchImageCandidates, confirmCandidate, queryForSlide, type ImageCandidate } from '../images/search'
+import { genImageConfigured } from '../images/genai'
 import { abstractBg, resolveAbstractStyle } from '../images/abstract'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { navigate } from '../router'
@@ -390,6 +391,39 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       return
     }
 
+    // Generative illustration (BYOK): one image for this page, stored as a
+    // data URL so replays and exports never re-bill the API.
+    if (btn.dataset.bgGen !== undefined) {
+      const settings = loadSettings()
+      if (!genImageConfigured(settings)) {
+        toast(t('ed.genImgNoKey'))
+        return
+      }
+      deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
+      const editedQuery = card.querySelector<HTMLInputElement>('[data-img-query]')?.value.trim()
+      deck.slides[i].imageQuery = editedQuery || undefined
+      btn.setAttribute('disabled', '')
+      toast(t('ed.genImgStart'))
+      import('../images/genai')
+        .then(({ generateSlideImage }) => generateSlideImage(deck.slides[i], deck, settings))
+        .then((bg) => {
+          deck.slides[i].bg = bg
+          deck.slides[i].bgOff = undefined
+          const cur = root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)
+          if (cur) {
+            cur.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
+            mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+          }
+          setStatus(t('ed.unsaved'))
+          toast(t('ed.genImgDone'))
+        })
+        .catch((e) => {
+          toast((e as Error)?.message || t('ed.genImgFailed'))
+          root.querySelector(`[data-card][data-i="${i}"] [data-bg-gen]`)?.removeAttribute('disabled')
+        })
+      return
+    }
+
     if (btn.dataset.up !== undefined && i > 0) {
       ;[deck.slides[i - 1], deck.slides[i]] = [deck.slides[i], deck.slides[i - 1]]
       render()
@@ -458,6 +492,7 @@ function renderCard(s: Slide, i: number, total: number): string {
         <span class="ed-bg__label">${s.bg ? t('ed.bgOn') : t('ed.bgOff')}</span>
         <input class="input ed-bg__query" data-img-query value="${escapeHtml(s.imageQuery ?? '')}" placeholder="${escapeHtml(t('ed.imgQuery'))}">
         <button class="btn btn--ghost btn--sm" data-bg-refresh>${icons.refresh} ${t('ed.bgRefresh')}</button>
+        <button class="btn btn--ghost btn--sm" data-bg-gen title="${escapeHtml(t('ed.genImgTitle'))}">${icons.sparkles} ${t('ed.genImg')}</button>
         ${s.bg ? `<button class="btn btn--ghost btn--sm" data-bg-remove>${t('ed.bgRemove')}</button>` : ''}
       </div>
       <div class="adjust">

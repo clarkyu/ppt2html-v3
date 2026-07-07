@@ -109,6 +109,14 @@ export function renderSettings(view: HTMLElement): () => void {
       </div>
 
       <div class="form-group">
+        <label>${t('settings.imageGen')}</label>
+        <div class="hint">${t('settings.imageGenHint')}</div>
+        <input class="form-input" data-gen-base placeholder="${escapeHtml(t('settings.imageGenBase'))}" autocomplete="off" style="margin-top:8px">
+        <input class="form-input" data-gen-key placeholder="${escapeHtml(t('settings.imageGenKey'))}" autocomplete="off" style="margin-top:8px">
+        <input class="form-input" data-gen-model placeholder="${escapeHtml(t('settings.imageGenModel'))}" autocomplete="off" style="margin-top:8px">
+      </div>
+
+      <div class="form-group">
         <label>${t('settings.branding')}</label>
         <div class="hint">${t('settings.brandingHint')}</div>
         <input class="form-input" data-brand-presenter placeholder="${escapeHtml(t('settings.presenter'))}" style="margin-top:8px">
@@ -145,6 +153,9 @@ export function renderSettings(view: HTMLElement): () => void {
   const imgPhotoKeysEl = view.querySelector<HTMLElement>('[data-img-photo-keys]')!
   const imgAbstractEl = view.querySelector<HTMLElement>('[data-img-abstract]')!
   const imgStyleEl = view.querySelector<HTMLSelectElement>('[data-img-style]')!
+  const genBaseEl = view.querySelector<HTMLInputElement>('[data-gen-base]')!
+  const genKeyEl = view.querySelector<HTMLInputElement>('[data-gen-key]')!
+  const genModelEl = view.querySelector<HTMLInputElement>('[data-gen-model]')!
   const brandPresenterEl = view.querySelector<HTMLInputElement>('[data-brand-presenter]')!
   const brandOrgEl = view.querySelector<HTMLInputElement>('[data-brand-org]')!
   const brandLogoEl = view.querySelector<HTMLInputElement>('[data-brand-logo]')!
@@ -190,6 +201,9 @@ export function renderSettings(view: HTMLElement): () => void {
     imgPexelsEl.value = state.images.pexelsKey
     imgPixabayEl.value = state.images.pixabayKey
     imgStyleEl.value = state.images.abstractStyle
+    genBaseEl.value = state.imageGen.baseUrl
+    genKeyEl.value = state.imageGen.apiKey
+    genModelEl.value = state.imageGen.model
     paintImgMode()
     brandPresenterEl.value = state.branding.presenter ?? ''
     brandOrgEl.value = state.branding.org ?? ''
@@ -284,6 +298,9 @@ export function renderSettings(view: HTMLElement): () => void {
   imgStyleEl.addEventListener('change', () => {
     state.images.abstractStyle = imgStyleEl.value as (typeof ABSTRACT_STYLES)[number]
   })
+  genBaseEl.addEventListener('input', () => (state.imageGen.baseUrl = genBaseEl.value))
+  genKeyEl.addEventListener('input', () => (state.imageGen.apiKey = genKeyEl.value))
+  genModelEl.addEventListener('input', () => (state.imageGen.model = genModelEl.value))
   brandPresenterEl.addEventListener('input', () => (state.branding.presenter = brandPresenterEl.value))
   brandOrgEl.addEventListener('input', () => (state.branding.org = brandOrgEl.value))
   brandLogoEl.addEventListener('input', () => {
