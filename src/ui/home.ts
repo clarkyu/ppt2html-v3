@@ -6,6 +6,7 @@ import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
 import { startGuidedGeneration } from './guided'
 import { startPageOutline } from './outline'
+import { quickGenerateAndPlay } from './generating'
 import { loadDraft, clearDraft } from '../lib/draft'
 import { durationOptions, slidesForMinutes } from '../lib/duration'
 import { getLang, t } from '../i18n'
@@ -116,7 +117,8 @@ export function renderHome(view: HTMLElement): () => void {
         </label>
         <div class="composer__actions">
           <button class="btn btn--ghost" data-sample>${icons.play} ${t('home.sample')}</button>
-          <button class="btn btn--primary" data-generate>${icons.sparkles} ${t('home.generate')}</button>
+          <button class="btn btn--ghost" data-generate title="${escapeHtml(t('home.customHint'))}">${icons.settings} ${t('home.custom')}</button>
+          <button class="btn btn--primary" data-quick title="${escapeHtml(t('home.quickHint'))}">${icons.sparkles} ${t('home.quick')}</button>
         </div>
       </div>
     </div>
@@ -175,11 +177,13 @@ export function renderHome(view: HTMLElement): () => void {
   }
 
   const submit = () => startGuidedGeneration(topicEl.value, collectOptions())
+  const quick = () => quickGenerateAndPlay(topicEl.value, collectOptions())
 
   view.querySelector('[data-generate]')!.addEventListener('click', submit)
+  view.querySelector('[data-quick]')!.addEventListener('click', quick)
   view.querySelector('[data-sample]')!.addEventListener('click', () => navigate('#/play/sample'))
   topicEl.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submit()
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') quick()
   })
   const examplesEl = view.querySelector<HTMLElement>('[data-examples]')!
   const renderChips = () => {

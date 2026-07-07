@@ -1,6 +1,8 @@
 import type { Slide, SlideBg, Column, CompareItem, TimelineStep } from '../types'
 import { mdInline, mdProse, escapeHtml } from '../lib/markdown'
 import { hasCjk } from '../lib/lang'
+import { highlightCode } from '../lib/highlight'
+import { semIcon } from './semanticIcons'
 
 // Each renderer returns the inner HTML for a slide's <section>.
 // Styling lives in slides.css; themes.css supplies the palette via CSS variables.
@@ -13,15 +15,20 @@ function title(text?: string, cls = 's-title'): string {
   return text ? `<h2 class="${cls}">${mdInline(text)}</h2>` : ''
 }
 
-function bulletList(items: string[] | undefined, fragment = true): string {
+function bulletList(items: string[] | undefined, fragment = true, iconKeys?: Array<string | undefined>): string {
   if (!items?.length) return ''
   const li = items
-    .map(
-      (b, i) =>
+    .map((b, i) => {
+      const icon = semIcon(iconKeys?.[i])
+      const mark = icon
+        ? `<span class="s-list__icon" aria-hidden="true">${icon}</span>`
+        : `<span class="s-list__mark" aria-hidden="true"></span>`
+      return (
         `<li class="s-list__item${fragment ? ' fragment fade-up' : ''}" style="--i:${i}">` +
-        `<span class="s-list__mark" aria-hidden="true"></span>` +
-        `<span class="s-list__text">${mdInline(b)}</span></li>`,
-    )
+        mark +
+        `<span class="s-list__text">${mdInline(b)}</span></li>`
+      )
+    })
     .join('')
   return `<ul class="s-list">${li}</ul>`
 }
@@ -56,7 +63,7 @@ function bullets(s: Slide): string {
   return `<div class="s s-bullets">
     ${eyebrow(s.eyebrow)}
     ${title(s.title)}
-    ${bulletList(s.bullets)}
+    ${bulletList(s.bullets, true, s.bulletIcons)}
   </div>`
 }
 
@@ -77,6 +84,22 @@ function bigNumber(s: Slide): string {
     ${eyebrow(s.eyebrow)}
     <div class="s-big__value">${mdInline(s.value ?? s.title)}</div>
     ${s.caption ? `<div class="s-big__caption">${mdInline(s.caption)}</div>` : ''}
+  </div>`
+}
+
+function stats(s: Slide): string {
+  const cards = (s.stats ?? [])
+    .map(
+      (st, i) => `<div class="s-stat fragment fade-up" style="--i:${i}">
+      <div class="s-stat__value">${mdInline(st.value)}</div>
+      <div class="s-stat__label">${mdInline(st.label)}</div>
+    </div>`,
+    )
+    .join('')
+  return `<div class="s s-stats">
+    ${eyebrow(s.eyebrow)}
+    ${title(s.title)}
+    <div class="s-stats__grid" style="--stat-count:${Math.max(1, s.stats?.length ?? 1)}">${cards}</div>
   </div>`
 }
 
@@ -132,7 +155,7 @@ function code(s: Slide): string {
     ${title(s.title)}
     <div class="s-code__frame">
       <div class="s-code__bar" aria-hidden="true"><i></i><i></i><i></i>${lang}</div>
-      <pre class="s-code__block"><code>${escapeHtml(s.code)}</code></pre>
+      <pre class="s-code__block"><code>${highlightCode(s.code ?? '')}</code></pre>
     </div>
   </div>`
 }
@@ -172,6 +195,7 @@ const RENDERERS: Record<Slide['layout'], (s: Slide) => string> = {
   bullets,
   'two-col': twoCol,
   'big-number': bigNumber,
+  stats,
   quote,
   comparison,
   timeline,

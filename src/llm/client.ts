@@ -343,5 +343,18 @@ async function httpError(res: Response): Promise<Error> {
   } catch {
     /* keep statusText */
   }
-  return new Error(t('err.httpPrefix').replace('{status}', String(res.status)) + detail.slice(0, 300))
+  // Lead with what the user can DO about it; the raw detail follows, shortened.
+  const s = res.status
+  const advice =
+    s === 401 || s === 403
+      ? t('err.http401')
+      : s === 404
+        ? t('err.http404')
+        : s === 429
+          ? t('err.http429')
+          : s >= 500
+            ? t('err.http5xx')
+            : ''
+  const raw = detail.trim() ? `（${detail.slice(0, 160)}）` : ''
+  return new Error(t('err.httpPrefix').replace('{status}', String(s)) + (advice ? advice + raw : detail.slice(0, 300)))
 }

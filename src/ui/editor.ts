@@ -27,6 +27,7 @@ const LAYOUT_KEYS: Record<SlideLayout, string> = {
   bullets: 'layout.bullets',
   'two-col': 'layout.twoCol',
   'big-number': 'layout.bigNumber',
+  stats: 'layout.stats',
   quote: 'layout.quote',
   comparison: 'layout.comparison',
   timeline: 'layout.timeline',
@@ -411,6 +412,11 @@ function renderFields(s: Slide): string {
       return text('title', t('ed.f.pageTitle'), s.title) + lines('bullets', t('ed.f.bullets'), s.bullets) + text('note', t('ed.f.note'), s.note)
     case 'big-number':
       return text('value', t('ed.f.value'), s.value) + text('caption', t('ed.f.caption'), s.caption) + text('title', t('ed.f.pageTitleOpt'), s.title)
+    case 'stats':
+      return (
+        text('title', t('ed.f.pageTitle'), s.title) +
+        lines('stats', t('ed.f.stats'), (s.stats ?? []).map((x) => `${x.value}|${x.label}`))
+      )
     case 'quote':
       return area('text', t('ed.f.quote'), s.text, 3) + text('author', t('ed.f.author'), s.author)
     case 'image-text':
@@ -496,12 +502,25 @@ function collectSlide(card: HTMLElement, layout: SlideLayout, prev?: Slide): Sli
     case 'bullets':
       s.title = und('title')
       s.bullets = list('bullets')
+      // Icons are model-assigned; keep them while the bullet count is unchanged.
+      s.bulletIcons =
+        prev?.bulletIcons && prev.bulletIcons.length === s.bullets.length ? prev.bulletIcons : undefined
       s.note = und('note')
       break
     case 'big-number':
       s.value = und('value')
       s.caption = und('caption')
       s.title = und('title')
+      break
+    case 'stats':
+      s.title = und('title')
+      s.stats = list('stats')
+        .map((line) => {
+          const [value, ...rest] = line.split('|')
+          return { value: value.trim(), label: rest.join('|').trim() }
+        })
+        .filter((x) => x.value)
+        .slice(0, 4)
       break
     case 'quote':
       s.text = und('text')

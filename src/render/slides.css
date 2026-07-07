@@ -181,6 +181,30 @@
   object-fit: contain;
   opacity: 0.92;
 }
+/* Closing-page recap: what we covered, as subtle pills above the brand line. */
+.reveal.deck .deck-slide__recap {
+  position: absolute;
+  left: 92px;
+  right: 92px;
+  bottom: 96px;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.reveal.deck .deck-slide__recap span {
+  font-size: 17px;
+  color: var(--muted);
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 7px 18px;
+  max-width: 30ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .reveal.deck .deck-slide__brand {
   position: absolute;
   bottom: 40px;
@@ -285,6 +309,15 @@
   line-height: 1.42;
   color: var(--fg);
 }
+/* Semantic per-bullet icon (LLM-picked); falls back to the diamond mark. */
+.reveal.deck .s-list__icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  margin-top: 0.22em;
+  color: var(--accent);
+}
+.reveal.deck .s-list__icon svg { width: 100%; height: 100%; display: block; }
 .reveal.deck .s-list__mark {
   flex: none;
   margin-top: 0.5em;
@@ -385,6 +418,37 @@
   color: transparent;
 }
 .reveal.deck .s-big__caption { font-size: 34px; color: var(--muted); max-width: 24ch; }
+
+/* ---- stats (multi-number dashboard) ---- */
+.reveal.deck .s-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--stat-count, 3), 1fr);
+  gap: 26px;
+  margin-top: 16px;
+}
+.reveal.deck .s-stat {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  padding: 34px 26px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.reveal.deck .s-stat__value {
+  font-family: var(--font-display);
+  font-weight: 850;
+  font-size: 76px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  word-break: keep-all;
+  background: var(--accent-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.reveal.deck .s-stat__label { font-size: 24px; line-height: 1.4; color: var(--muted); }
 
 /* ---- quote ---- */
 .reveal.deck .s-quote { justify-content: center; gap: 20px; position: relative; }
@@ -519,6 +583,12 @@
   width: auto;
 }
 .reveal.deck .s-code__block code { white-space: pre; }
+/* Syntax token colors (code panes are dark across all themes). */
+.reveal.deck .s-code__block .tok-kw { color: #c792ea; }
+.reveal.deck .s-code__block .tok-str { color: #a5d6a7; }
+.reveal.deck .s-code__block .tok-num { color: #f78c6c; }
+.reveal.deck .s-code__block .tok-fn { color: #82aaff; }
+.reveal.deck .s-code__block .tok-com { color: #697098; font-style: italic; }
 
 /* ---- image + text (CSS art visual) ---- */
 .reveal.deck .s-imgtext { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 56px; align-items: center; }

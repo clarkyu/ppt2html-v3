@@ -23,6 +23,8 @@ const TARGETS: FitTarget[] = [
   { sel: '.s-end__subtitle', maxLines: 2, minScale: 0.6 },
   { sel: '.s-big__value', maxLines: 2, minScale: 0.4 },
   { sel: '.s-big__caption', maxLines: 2, minScale: 0.6 },
+  { sel: '.s-stat__value', maxLines: 1, minScale: 0.45 },
+  { sel: '.s-stat__label', maxLines: 3, minScale: 0.65 },
   { sel: '.s-quote__text', maxLines: 5, minScale: 0.55 },
 ]
 
