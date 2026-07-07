@@ -32,6 +32,8 @@ export const icons = {
   keyboard: wrap('<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="6" y1="9" x2="6" y2="9"/><line x1="10" y1="9" x2="10" y2="9"/><line x1="14" y1="9" x2="14" y2="9"/><line x1="18" y1="9" x2="18" y2="9"/><line x1="7" y1="14" x2="17" y2="14"/>'),
   // "step reveal" — list lines appearing one by one.
   steps: wrap('<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="9" y2="18"/><polyline points="16 15 18 17 21 13.5"/>'),
+  // "pptx" — a slide box carrying a P.
+  pptx: wrap('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 16v-8h3.2a2.4 2.4 0 1 1 0 4.8H9"/>'),
   // "presenter view" — a screen split into current + next panes, on a stand.
   presenter: wrap('<rect x="2" y="4" width="20" height="13" rx="2"/><line x1="14" y1="4" x2="14" y2="17"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/>'),
 }
