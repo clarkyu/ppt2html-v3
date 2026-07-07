@@ -317,6 +317,13 @@ const DICT: Record<string, Entry> = {
     en: 'Standalone HTML exported — double-click to play offline (photo backgrounds need a connection; abstract ones work offline).',
   },
   'viewer.presenter': { zh: '演讲者视图 (S)', en: 'Presenter view (S)' },
+  'viewer.exportPptx': { zh: '导出 PPTX(可在 PowerPoint / WPS 中编辑)', en: 'Export PPTX (editable in PowerPoint)' },
+  'viewer.exportPptxStart': { zh: '正在生成 PPTX…(嵌入配图可能需要几秒)', en: 'Building the PPTX… (embedding images may take a few seconds)' },
+  'viewer.exportPptxDone': {
+    zh: '已导出 PPTX——文字与形状均可在 PowerPoint / WPS 中直接编辑。',
+    en: 'PPTX exported — text and shapes are fully editable in PowerPoint.',
+  },
+  'viewer.exportPptxFailed': { zh: 'PPTX 导出失败,请重试。', en: 'PPTX export failed — please retry.' },
   'viewer.more': { zh: '更多工具', en: 'More tools' },
   'viewer.stepMode': { zh: '逐条播放(点击逐条浮现要点)', en: 'Step mode (reveal points one by one)' },
   'viewer.stepOn': { zh: '逐条播放已开启:翻页键先逐条浮现要点', en: 'Step mode on: next reveals points one by one' },

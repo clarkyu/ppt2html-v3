@@ -35,6 +35,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
           <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
           <button class="btn btn--sm" data-print title="${t('viewer.print')}">${icons.print}</button>
           <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}">${icons.download}</button>
+          <button class="btn btn--sm" data-pptx title="${t('viewer.exportPptx')}">${icons.pptx}</button>
           <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}">${icons.expand}</button>
           <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}">${icons.keyboard}</button>
         </div>
@@ -124,6 +125,21 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
     if (!loadedDeck) return
     downloadStandalone(loadedDeck, Date.now())
     toast(t('viewer.exportHtmlDone'))
+  })
+
+  // Export an editable PowerPoint (pptxgenjs is loaded on demand).
+  const pptxBtn = view.querySelector<HTMLButtonElement>('[data-pptx]')!
+  pptxBtn.addEventListener('click', () => {
+    if (!loadedDeck) return
+    pptxBtn.disabled = true
+    toast(t('viewer.exportPptxStart'))
+    import('../export/pptx')
+      .then(({ exportPptx }) => exportPptx(loadedDeck!))
+      .then(() => toast(t('viewer.exportPptxDone')))
+      .catch(() => toast(t('viewer.exportPptxFailed')))
+      .finally(() => {
+        pptxBtn.disabled = false
+      })
   })
 
   // Presenter view: a second window with notes, timer and a next-slide preview.
