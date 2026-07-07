@@ -9,6 +9,7 @@ import { t } from '../i18n'
 import { toast } from '../lib/toast'
 import { downloadStandalone } from '../export/standalone'
 import { openPresenter, type PresenterHandle } from '../player/presenter'
+import { startNarration, type NarratorHandle } from '../player/narrate'
 import { fitSlide } from '../render/fit'
 import type { Deck } from '../types'
 
@@ -16,6 +17,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
   let player: PlayerHandle | null = null
   let loadedDeck: Deck | null = null
   let presenter: PresenterHandle | null = null
+  let narrator: NarratorHandle | null = null
   let hideTimer = 0
   let timerInt = 0
   const imgAbort = new AbortController()
@@ -29,6 +31,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         <button class="btn btn--sm viewer__more" data-more title="${t('viewer.more')}">⋯</button>
         <div class="viewer__tools" data-tools>
           <button class="btn btn--sm" data-step title="${t('viewer.stepMode')}">${icons.steps}</button>
+          <button class="btn btn--sm" data-narrate title="${t('viewer.narrate')}">${icons.speaker}</button>
           <button class="btn btn--sm" data-notes title="${t('viewer.notes')}">${icons.note}</button>
           <button class="btn btn--sm" data-notes-gen title="${t('viewer.genNotes')}">${icons.mic}</button>
           <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}">${icons.presenter}</button>
@@ -244,6 +247,31 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         stepBtn.classList.toggle('active', on)
         toast(on ? t('viewer.stepOn') : t('viewer.stepOff'))
       })
+
+      // Narrated auto-play: speech synthesis reads each page's script, then
+      // advances — the deck plays itself. Click again to stop.
+      const narrateBtn = view.querySelector<HTMLButtonElement>('[data-narrate]')!
+      const narrateStopped = (msg: string): void => {
+        narrator = null
+        narrateBtn.classList.remove('active')
+        toast(msg)
+      }
+      narrateBtn.addEventListener('click', () => {
+        if (narrator?.active()) {
+          narrator.stop()
+          narrateStopped(t('viewer.narrateOff'))
+          return
+        }
+        narrator = startNarration(deck, player!, {
+          onEnd: () => narrateStopped(t('viewer.narrateEnd')),
+        })
+        if (!narrator) {
+          toast(t('viewer.narrateNoTts'))
+          return
+        }
+        narrateBtn.classList.add('active')
+        toast(t('viewer.narrateOn'))
+      })
       // Remember the playback position per deck (session-scoped): a refresh or
       // an accidental back no longer dumps the presenter to slide 1.
       const posKey = `ppt2html.pos.${id}`
@@ -343,6 +371,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
     window.removeEventListener('keydown', onKey)
     window.removeEventListener('beforeprint', fitAllForPrint)
     imgAbort.abort()
+    narrator?.stop()
     presenter?.close()
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
     player?.destroy()
