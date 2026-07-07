@@ -123,6 +123,7 @@ async function bgData(slide: Slide): Promise<string | undefined> {
   const url = slide.bg?.url
   if (!url) return undefined
   if (/^data:image\/svg/i.test(url)) return svgToPng(url)
+  if (/^data:image\//i.test(url)) return url // AI-generated PNG/JPEG data URLs embed as-is
   if (/^https?:\/\//i.test(url)) return fetchDataUrl(url)
   return undefined
 }

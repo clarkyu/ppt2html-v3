@@ -36,6 +36,13 @@ export interface ImageSettings {
 
 export type ImageSource = 'unsplash' | 'pexels' | 'pixabay' | 'openverse'
 
+/** BYOK generative illustrations (any OpenAI-compatible images endpoint). */
+export interface ImageGenSettings {
+  baseUrl: string
+  apiKey: string
+  model: string
+}
+
 export interface LlmSettings {
   provider: Provider
   anthropic: ProviderConfig
@@ -44,6 +51,8 @@ export interface LlmSettings {
   thinking: boolean
   /** Auto background images per page. */
   images: ImageSettings
+  /** AI-generated slide illustrations (BYOK, editor-triggered). */
+  imageGen: ImageGenSettings
   /** Default presenter / org / logo (baked into new decks; editable per deck). */
   branding: Branding
 }
@@ -106,6 +115,11 @@ export const DEFAULT_SETTINGS: LlmSettings = {
     pexelsKey: '',
     pixabayKey: '',
   },
+  imageGen: {
+    baseUrl: 'https://api.openai.com/v1',
+    apiKey: '',
+    model: 'dall-e-3',
+  },
   branding: {},
 }
 
@@ -134,6 +148,7 @@ export function loadSettings(): LlmSettings {
       openai: { ...DEFAULT_SETTINGS.openai, ...parsed.openai },
       thinking: parsed.thinking === true,
       images,
+      imageGen: { ...DEFAULT_SETTINGS.imageGen, ...parsed.imageGen },
       branding: { ...DEFAULT_SETTINGS.branding, ...parsed.branding },
     }
   } catch {

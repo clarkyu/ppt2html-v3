@@ -10,10 +10,17 @@ import { toast } from '../lib/toast'
 import { downloadStandalone } from '../export/standalone'
 import { openPresenter, type PresenterHandle } from '../player/presenter'
 import { startNarration, type NarratorHandle } from '../player/narrate'
+import { openStylePicker } from './stylePicker'
+import { openSharePanel } from './sharePanel'
+import { abstractBg } from '../images/abstract'
 import { fitSlide } from '../render/fit'
 import type { Deck } from '../types'
 
-export function renderViewer(view: HTMLElement, id: string): () => void {
+/**
+ * Deck playback screen. `shareData` (route `#/s/<blob>`) plays a deck decoded
+ * from the URL itself — nothing is persisted unless the viewer saves a copy.
+ */
+export function renderViewer(view: HTMLElement, id: string, shareData?: string): () => void {
   let player: PlayerHandle | null = null
   let loadedDeck: Deck | null = null
   let presenter: PresenterHandle | null = null
@@ -21,6 +28,8 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
   let hideTimer = 0
   let timerInt = 0
   const imgAbort = new AbortController()
+  // Ephemeral decks (built-in sample, URL-shared) must never write to the library.
+  const persistable = id !== 'sample' && !shareData
 
   view.innerHTML = `
     <div class="viewer">
@@ -40,8 +49,11 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
           <button class="btn btn--sm" data-print title="${t('viewer.print')}">${icons.print}</button>
           <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}">${icons.download}</button>
           <button class="btn btn--sm" data-pptx title="${t('viewer.exportPptx')}">${icons.pptx}</button>
+          <button class="btn btn--sm" data-style title="${t('style.button')}">${icons.palette}</button>
+          <button class="btn btn--sm" data-share title="${t('share.button')}">${icons.share}</button>
           <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}">${icons.expand}</button>
           <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}">${icons.keyboard}</button>
+          <button class="btn btn--primary btn--sm" data-save-shared hidden>${icons.save} ${t('share.saveCopy')}</button>
         </div>
       </div>
       <div class="viewer__notes" data-notes-panel hidden></div>
@@ -224,7 +236,11 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
     if (e.target === helpPanel) toggleHelp(false)
   })
 
-  const load = id === 'sample' ? Promise.resolve(getSampleDeck()) : getDeck(id)
+  const load = shareData
+    ? import('../lib/share').then(({ decodeDeckFromHash }) => decodeDeckFromHash(shareData))
+    : id === 'sample'
+      ? Promise.resolve(getSampleDeck())
+      : getDeck(id)
   load
     .then((deck) => {
       if (!deck) {
@@ -234,9 +250,21 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
       loadedDeck = deck
       titleEl.textContent = deck.title
       const editBtn = view.querySelector<HTMLButtonElement>('[data-edit]')!
-      if (id !== 'sample') {
+      if (persistable) {
         editBtn.hidden = false
         editBtn.addEventListener('click', () => navigate(`#/edit/${id}`))
+      }
+      // A shared deck lives only in the URL — offer to keep a copy.
+      if (shareData) {
+        const keepBtn = view.querySelector<HTMLButtonElement>('[data-save-shared]')!
+        keepBtn.hidden = false
+        keepBtn.addEventListener('click', () => {
+          const copy: Deck = { ...deck, id: crypto.randomUUID(), createdAt: Date.now(), updatedAt: Date.now() }
+          void saveDeck(copy).then(() => {
+            toast(t('share.savedCopy'))
+            navigate(`#/play/${copy.id}`)
+          })
+        })
       }
       player = mountPlayer(mount, deck)
       const stepBtn = view.querySelector<HTMLButtonElement>('[data-step]')!
@@ -271,6 +299,29 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
         }
         narrateBtn.classList.add('active')
         toast(t('viewer.narrateOn'))
+      })
+
+      // One-click restyle: swap the theme class live and re-roll any abstract
+      // backgrounds so their colors follow the new palette. No regeneration.
+      view.querySelector('[data-style]')!.addEventListener('click', () => {
+        openStylePicker(viewerEl, deck.theme, (th) => {
+          if (th === deck.theme) return
+          player!.root.classList.remove(`theme-${deck.theme}`)
+          player!.root.classList.add(`theme-${th}`)
+          deck.theme = th
+          deck.slides.forEach((s, i) => {
+            if (s.bg?.source !== 'abstract') return
+            s.bg = abstractBg(`${deck.title}#${i}#${th}`, th, loadSettings().images.abstractStyle)
+            player!.setSlideBackground(i, s.bg)
+          })
+          if (persistable) void saveDeck(deck)
+          toast(t('style.applied').replace('{name}', t(`theme.${th}`)))
+        })
+      })
+
+      // Share: the deck packed into a copyable URL (+ QR when it fits one).
+      view.querySelector('[data-share]')!.addEventListener('click', () => {
+        openSharePanel(viewerEl, deck)
       })
       // Remember the playback position per deck (session-scoped): a refresh or
       // an accidental back no longer dumps the presenter to slide 1.
@@ -313,7 +364,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
               signal: imgAbort.signal,
               onProgress: (done) => {
                 genBtn.innerHTML = `${icons.mic} <b>${done}/${total}</b>`
-                if (id !== 'sample') void saveDeck(loadedDeck!)
+                if (persistable) void saveDeck(loadedDeck!)
                 setNote(loadedDeck!.slides[curNum - 1]?.note)
                 presenter?.update(curNum)
               },
@@ -343,6 +394,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
       if (id !== 'sample' && settings.images.enabled && deck.slides.some((s) => !s.bg && !s.bgOff)) {
         let saveTimer = 0
         const scheduleSave = () => {
+          if (!persistable) return
           window.clearTimeout(saveTimer)
           saveTimer = window.setTimeout(() => void saveDeck(deck), 800)
         }
@@ -354,7 +406,7 @@ export function renderViewer(view: HTMLElement, id: string): () => void {
           },
         })
           .then(() => {
-            if (!imgAbort.signal.aborted) void saveDeck(deck)
+            if (!imgAbort.signal.aborted && persistable) void saveDeck(deck)
           })
           .catch(() => {
             /* best-effort: a missing background just leaves the theme gradient */

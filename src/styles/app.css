@@ -16,6 +16,9 @@ body {
 #app { min-height: 100vh; display: flex; flex-direction: column; }
 a { color: inherit; }
 button { font-family: inherit; }
+/* The hidden attribute must always win — author display rules (.btn etc.)
+   otherwise override the UA's non-important [hidden] { display: none }. */
+[hidden] { display: none !important; }
 
 /* ---------- App bar ---------- */
 .appbar {
@@ -875,3 +878,48 @@ body.playing .appbar { display: none; }
   .composer__actions .btn { flex: 1; }
   .nav a { padding: 8px 12px; font-size: 14px; }
 }
+
+/* Style gallery (viewer one-click restyle) */
+.stylepick {
+  position: absolute; inset: 0; z-index: 85;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(2,4,12,0.6); backdrop-filter: blur(4px);
+}
+.stylepick__card {
+  background: var(--surface); border: 1px solid var(--card-border); border-radius: 16px;
+  padding: 22px 24px; max-width: 560px; width: 100%; box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+}
+.stylepick__card h3 { margin: 0 0 6px; font-size: 17px; }
+.stylepick__hint { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+.stylepick__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.stylepick__item {
+  position: relative; border: 2px solid transparent; border-radius: 12px; cursor: pointer;
+  padding: 12px 12px 10px; text-align: left; display: flex; flex-direction: column; gap: 6px;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.stylepick__item:hover { transform: translateY(-2px); }
+.stylepick__item.current { border-color: var(--accent); }
+.stylepick__aa { font-size: 26px; font-weight: 800; line-height: 1; }
+.stylepick__bar { display: block; width: 34px; height: 4px; border-radius: 2px; }
+.stylepick__dots { display: flex; gap: 5px; }
+.stylepick__dots i { width: 10px; height: 10px; border-radius: 50%; }
+.stylepick__name { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+
+/* Share panel (link + QR) */
+.sharepanel {
+  position: absolute; inset: 0; z-index: 85;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(2,4,12,0.6); backdrop-filter: blur(4px);
+}
+.sharepanel__card {
+  background: var(--surface); border: 1px solid var(--card-border); border-radius: 16px;
+  padding: 22px 24px; max-width: 480px; width: 100%; box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+  text-align: center;
+}
+.sharepanel__card h3 { margin: 0 0 6px; font-size: 17px; }
+.sharepanel__hint { margin: 0 0 14px; font-size: 13px; color: var(--muted); text-align: left; }
+.sharepanel__row { display: flex; gap: 8px; margin-bottom: 14px; }
+.sharepanel__row .form-input { flex: 1; min-width: 0; font-size: 12px; }
+.sharepanel__qr { display: flex; justify-content: center; margin-bottom: 14px; }
+.sharepanel__qr svg { width: 200px; height: 200px; border-radius: 8px; background: #fff; }
+.sharepanel__noqr { font-size: 12px; color: var(--muted); margin: 4px 0; }

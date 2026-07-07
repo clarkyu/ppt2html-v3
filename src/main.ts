@@ -47,7 +47,7 @@ function mount(route: Route): void {
   current = route
 
   renderAppbar(route)
-  document.body.classList.toggle('playing', route.name === 'play')
+  document.body.classList.toggle('playing', route.name === 'play' || route.name === 'share')
   window.scrollTo(0, 0)
 
   switch (route.name) {
@@ -65,6 +65,9 @@ function mount(route: Route): void {
       break
     case 'edit':
       cleanup = renderDeckEditor(view, route.id)
+      break
+    case 'share':
+      cleanup = renderViewer(view, 'shared', route.data)
       break
   }
 }
