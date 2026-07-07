@@ -11,6 +11,7 @@ export const LAYOUTS = [
   'bullets',
   'two-col',
   'big-number',
+  'stats',
   'quote',
   'comparison',
   'timeline',
@@ -35,6 +36,14 @@ export interface CompareItem {
 export interface TimelineStep {
   label: string
   text?: string
+}
+
+/** One card in a multi-number `stats` slide. */
+export interface StatItem {
+  /** Very short figure, e.g. "87%", "3×", "¥1.2亿". */
+  value: string
+  /** What the figure means (short). */
+  label: string
 }
 
 /** Presenter / org / date / logo shown on the cover and as a per-slide mark. */
@@ -67,6 +76,10 @@ export interface Slide {
   subtitle?: string
   eyebrow?: string
   bullets?: string[]
+  /** Optional per-bullet semantic icon keys (parallel to `bullets`). */
+  bulletIcons?: Array<string | undefined>
+  /** Cards for the `stats` layout (2~4 parallel key figures). */
+  stats?: StatItem[]
   left?: Column
   right?: Column
   value?: string

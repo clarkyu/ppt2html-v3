@@ -32,6 +32,18 @@ export function renderDeckSlides(deck: Deck): string {
   const logo = validLogo(deck.branding?.logo)
   const logoHtml = logo ? `<img class="deck-slide__logo" src="${escapeHtml(logo)}" alt="">` : ''
 
+  // Closing-page recap: the chapter titles as subtle pills — a deterministic
+  // "what we covered" so the last slide isn't just "谢谢观看".
+  const chapterTitles = deck.slides
+    .filter((s) => s.layout === 'section')
+    .map((s) => (s.title ?? '').trim())
+    .filter(Boolean)
+    .slice(0, 4)
+  const recapHtml =
+    chapterTitles.length >= 2
+      ? `<div class="deck-slide__recap" aria-hidden="true">${chapterTitles.map((x) => `<span>${escapeHtml(x)}</span>`).join('')}</div>`
+      : ''
+
   return deck.slides
     .map((slide, i) => {
       if (slide.layout === 'section') {
@@ -56,6 +68,7 @@ export function renderDeckSlides(deck: Deck): string {
           : ''
       // Presenter · org · date on the title & closing slides.
       const brandHtml = slide.layout === 'cover' || slide.layout === 'end' ? brandLineHtml(deck.branding) : ''
+      const endRecapHtml = slide.layout === 'end' ? recapHtml : ''
 
       return (
         `<section data-layout="${slide.layout}" class="deck-slide">` +
@@ -66,6 +79,7 @@ export function renderDeckSlides(deck: Deck): string {
         sectionHtml +
         pageHtml +
         brandHtml +
+        endRecapHtml +
         slideCreditHtml(slide) +
         note +
         `</section>`

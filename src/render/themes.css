@@ -146,3 +146,29 @@
   --code-fg: #f6deec;
   --code-inline-bg: rgba(255, 93, 162, 0.16);
 }
+
+/* ============================================================
+   Theme signatures. Palettes alone read as "one template, seven
+   colors" — give each personality family its own typographic voice.
+   System font stacks only (the CSP has no webfonts); the overflow
+   fitter absorbs the metric differences automatically.
+   ============================================================ */
+
+/* Humanist / editorial themes: serif display faces. */
+.theme-sand,
+.theme-ink,
+.theme-sunrise {
+  --font-display: Georgia, "Songti SC", "Noto Serif SC", "SimSun", "Times New Roman", serif;
+}
+
+/* Noir: cinematic caps with wide tracking on the big titles
+   (a no-op for CJK glyphs; the tracking still adds air). */
+.theme-noir .s-cover__title,
+.theme-noir .s-section__title {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.theme-noir .s-eyebrow { letter-spacing: 0.3em; }
+
+/* Rose: expressive slant on the accent rule under covers. */
+.theme-rose .s-cover__rule { transform: skewX(-18deg); }

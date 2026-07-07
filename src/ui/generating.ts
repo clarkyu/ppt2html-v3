@@ -1,4 +1,5 @@
 import { splitOutlineSegments, generateSegmentSlides, completeSlides } from '../llm/outline'
+import { generateDeckSpec } from '../llm/client'
 import { loadSettings, isConfigured, activeConfig, newDeckBranding } from '../llm/settings'
 import { normalizeDeck, normalizeSlide } from '../render/normalize'
 import { mountSlidePreview } from '../render/preview'
@@ -180,4 +181,107 @@ export function generateAndPlay(
 
   setProgress()
   void runFrom(0)
+}
+
+/**
+ * QUICK mode: one click from topic to playback — no clarify / structure /
+ * outline confirmations, a single streamed whole-deck call with sensible
+ * defaults. The thumbnail wall grows as pages arrive (total unknown upfront).
+ * The step-by-step wizard remains the path for fine control.
+ */
+export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void {
+  const trimmed = topic.trim()
+  if (!trimmed) {
+    toast(t('err.noTopic'))
+    return
+  }
+  const settings = loadSettings()
+  if (!isConfigured(settings)) {
+    toast(t('err.noKey'))
+    navigate('#/settings')
+    return
+  }
+  const model = activeConfig(settings).model
+  const theme = opts.theme ?? 'aurora'
+
+  const el = document.createElement('div')
+  el.className = 'overlay'
+  el.innerHTML = `
+    <div class="gen card gen--film" style="padding:28px">
+      <h2>${t('gen.title')}</h2>
+      <p data-progress>${t('gen.quickNote').replace('{topic}', escapeHtml(trimmed))}</p>
+      <div class="gen-film" data-film></div>
+      <div data-err hidden></div>
+      <div class="gen__actions" data-actions>
+        <button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button>
+      </div>
+    </div>`
+  document.body.appendChild(el)
+
+  const filmEl = el.querySelector<HTMLElement>('[data-film]')!
+  const progressEl = el.querySelector<HTMLElement>('[data-progress]')!
+  const errEl = el.querySelector<HTMLElement>('[data-err]')!
+  const actionsEl = el.querySelector<HTMLElement>('[data-actions]')!
+
+  let controller = new AbortController()
+  const dismiss = () => {
+    controller.abort()
+    el.remove()
+  }
+  el.querySelector('[data-cancel]')!.addEventListener('click', dismiss)
+
+  const reveal = (raw: unknown, index: number) => {
+    const norm = normalizeSlide(raw)
+    if (!norm) return
+    let cell = filmEl.querySelector<HTMLElement>(`[data-cell="${index}"]`)
+    if (!cell) {
+      filmEl.insertAdjacentHTML(
+        'beforeend',
+        `<div class="gen-film__cell is-on" data-cell="${index}"><div class="thumb gen-film__thumb" data-mount></div><span class="gen-film__num">${index + 1}</span></div>`,
+      )
+      cell = filmEl.querySelector<HTMLElement>(`[data-cell="${index}"]`)!
+    }
+    mountSlidePreview(cell.querySelector<HTMLElement>('[data-mount]')!, theme, norm)
+    progressEl.textContent = t('gen.pageCount').replace('{x}', String(index + 1))
+    cell.scrollIntoView({ block: 'nearest' })
+  }
+
+  const run = () => {
+    controller = new AbortController()
+    errEl.hidden = true
+    let seen = 0
+    generateDeckSpec(trimmed, opts, settings, {
+      signal: controller.signal,
+      onToken: (full) => {
+        const parsed = completeSlides(full)
+        for (; seen < parsed.length; seen++) reveal(parsed[seen], seen)
+      },
+    })
+      .then((spec) => {
+        const deck = normalizeDeck(spec, { prompt: trimmed, model, theme: opts.theme })
+        deck.branding = newDeckBranding(settings)
+        return saveDeck(deck).then(() => {
+          el.remove()
+          navigate(`#/play/${deck.id}`)
+        })
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return
+        errEl.hidden = false
+        errEl.innerHTML = `
+          <h2 class="gen__error">${t('gen.failed')}</h2>
+          <p style="color:var(--text-muted)">${escapeHtml(err instanceof Error ? err.message : String(err))}</p>`
+        actionsEl.innerHTML = `
+          <button class="btn btn--ghost" data-close>${t('common.close')}</button>
+          <button class="btn btn--primary" data-retry>${t('common.retry')}</button>`
+        actionsEl.querySelector('[data-close]')!.addEventListener('click', dismiss)
+        actionsEl.querySelector('[data-retry]')!.addEventListener('click', () => {
+          actionsEl.innerHTML = `<button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button>`
+          actionsEl.querySelector('[data-cancel]')!.addEventListener('click', dismiss)
+          run()
+        })
+      })
+  }
+
+  run()
 }

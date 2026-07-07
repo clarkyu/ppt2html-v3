@@ -13,6 +13,7 @@ import {
 } from '../types'
 import { genId } from '../lib/dom'
 import { deckIsCjk } from '../lib/lang'
+import { semIconKey } from './semanticIcons'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
 const THEME_SET = new Set<string>(THEMES)
@@ -26,6 +27,46 @@ function asString(v: unknown): string | undefined {
 function asStringArray(v: unknown): string[] | undefined {
   if (!Array.isArray(v)) return undefined
   const out = v.map((x) => asString(x)).filter((x): x is string => !!x)
+  return out.length ? out : undefined
+}
+
+/** Bullets accept plain strings or {text, icon} objects (semantic bullet icons). */
+function asBullets(v: unknown): { texts?: string[]; icons?: Array<string | undefined> } {
+  if (!Array.isArray(v)) return {}
+  const texts: string[] = []
+  const icons: Array<string | undefined> = []
+  let anyIcon = false
+  for (const item of v) {
+    if (typeof item === 'string' || typeof item === 'number') {
+      const s = asString(item)
+      if (!s) continue
+      texts.push(s)
+      icons.push(undefined)
+    } else if (item && typeof item === 'object') {
+      const o = item as Record<string, unknown>
+      const s = asString(o.text) ?? asString(o.content)
+      if (!s) continue
+      const icon = semIconKey(o.icon)
+      texts.push(s)
+      icons.push(icon)
+      if (icon) anyIcon = true
+    }
+  }
+  if (!texts.length) return {}
+  return { texts, icons: anyIcon ? icons : undefined }
+}
+
+function asStats(v: unknown): Array<{ value: string; label: string }> | undefined {
+  if (!Array.isArray(v)) return undefined
+  const out: Array<{ value: string; label: string }> = []
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object') continue
+    const o = raw as Record<string, unknown>
+    const value = asString(o.value)
+    if (!value) continue
+    out.push({ value, label: asString(o.label) ?? '' })
+    if (out.length >= 4) break
+  }
   return out.length ? out : undefined
 }
 
@@ -89,6 +130,7 @@ function coerceLayout(v: unknown, slide: Record<string, unknown>): SlideLayout {
   if (LAYOUT_SET.has(raw)) return raw as SlideLayout
   // Best-effort inference when the model gives an unknown / missing layout.
   if (slide.code) return 'code'
+  if (Array.isArray(slide.stats)) return 'stats'
   if (slide.value) return 'big-number'
   if (slide.text && slide.author) return 'quote'
   if (Array.isArray(slide.items)) return 'comparison'
@@ -103,12 +145,15 @@ export function normalizeSlide(raw: unknown): Slide | null {
   const o = raw as Record<string, unknown>
   const layout = coerceLayout(o.layout, o)
 
+  const b = asBullets(o.bullets)
   const slide: Slide = {
     layout,
     title: asString(o.title),
     subtitle: asString(o.subtitle),
     eyebrow: asString(o.eyebrow),
-    bullets: asStringArray(o.bullets),
+    bullets: b.texts,
+    bulletIcons: b.icons,
+    stats: asStats(o.stats),
     left: asColumn(o.left),
     right: asColumn(o.right),
     value: asString(o.value),
@@ -131,6 +176,7 @@ export function normalizeSlide(raw: unknown): Slide | null {
     slide.title ||
     slide.subtitle ||
     slide.bullets ||
+    slide.stats ||
     slide.left ||
     slide.right ||
     slide.value ||

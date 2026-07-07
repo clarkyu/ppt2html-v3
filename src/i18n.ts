@@ -115,6 +115,22 @@ const DICT: Record<string, Entry> = {
   'err.invalidDeck': { zh: '模型返回的内容不是有效的课件结构，请重试。', en: 'The model’s response wasn’t a valid deck. Please retry.' },
   'err.modelError': { zh: '模型返回错误', en: 'The model returned an error' },
   'err.httpPrefix': { zh: '请求失败（HTTP {status}）：', en: 'Request failed (HTTP {status}): ' },
+  'err.http401': {
+    zh: 'API Key 无效或没有权限——请到「设置」检查密钥。',
+    en: 'Invalid or unauthorized API key — check it in Settings.',
+  },
+  'err.http404': {
+    zh: '接口地址或模型名不存在——请检查设置里的 Base URL 与模型。',
+    en: 'Endpoint or model not found — check the base URL and model in Settings.',
+  },
+  'err.http429': {
+    zh: '请求太频繁或额度不足——稍等片刻再试。',
+    en: 'Rate-limited or out of quota — wait a moment and retry.',
+  },
+  'err.http5xx': {
+    zh: '模型服务端出错——稍后重试即可。',
+    en: 'The model service errored — try again shortly.',
+  },
   'err.noJson': { zh: '模型没有返回有效的 JSON', en: 'The model did not return valid JSON' },
   'err.network': {
     zh: '请求未能完成(浏览器只报了网络 / CORS 错误)。常见两种原因:① API Key 无效或账户无额度——密钥被拒时,若对方的错误响应缺少 CORS 头,浏览器会把真正的 401 藏起来、只显示网络/CORS 错误,请到「设置」核对 Key、确认账户已绑支付/有余额;② 你的网络无法直连该服务(如 api.openai.com 在中国大陆常需代理/VPN,或被浏览器插件/防火墙拦截)。可先用免 Key、可直连的 DeepSeek,或核对 Key 后重试。',
@@ -127,12 +143,18 @@ const DICT: Record<string, Entry> = {
   'gen.connecting': { zh: '正在连接模型…', en: 'Connecting to the model…' },
   'gen.failed': { zh: '生成失败', en: 'Generation failed' },
   'gen.pageProgress': { zh: '已生成 {x} / {n} 页', en: 'Generated {x} / {n} slides' },
+  'gen.pageCount': { zh: '已生成 {x} 页…', en: 'Generated {x} slides…' },
+  'gen.quickNote': { zh: '「{topic}」 · 快速模式,页面实时揭幕 ↓', en: '“{topic}” · quick mode, pages appear live ↓' },
   'gen.segmentFailed': { zh: '第 {i} 段生成失败', en: 'Segment {i} failed' },
   'gen.retrySegment': { zh: '重试这一段（已生成的不重来）', en: 'Retry this segment (keeps finished pages)' },
   'gen.backToOutline': { zh: '返回大纲', en: 'Back to outline' },
 
   // Home
   'home.kicker': { zh: 'AI 课件生成器', en: 'AI Deck Maker' },
+  'home.quick': { zh: '快速生成', en: 'Quick generate' },
+  'home.quickHint': { zh: '一键直达成片:跳过所有确认步骤,全用智能默认', en: 'Straight to the deck — skips all confirmations, smart defaults' },
+  'home.custom': { zh: '逐步定制', en: 'Step-by-step' },
+  'home.customHint': { zh: '引导问题 → 结构确认 → 逐环节大纲 → 成片', en: 'Guided questions → structure → per-part outline → deck' },
   'home.draftTitle': { zh: '有未完成的课件草稿', en: 'Unfinished deck draft' },
   'home.draftResume': { zh: '继续制作', en: 'Resume' },
   'home.draftDiscard': { zh: '丢弃', en: 'Discard' },
@@ -318,6 +340,7 @@ const DICT: Record<string, Entry> = {
   'layout.bullets': { zh: '要点', en: 'Bullets' },
   'layout.twoCol': { zh: '两栏对照', en: 'Two columns' },
   'layout.bigNumber': { zh: '大数字', en: 'Big number' },
+  'layout.stats': { zh: '数据卡组', en: 'Stat cards' },
   'layout.quote': { zh: '金句', en: 'Quote' },
   'layout.comparison': { zh: '对比卡片', en: 'Comparison' },
   'layout.timeline': { zh: '时间线', en: 'Timeline' },
@@ -520,6 +543,7 @@ const DICT: Record<string, Entry> = {
   'ed.f.bullets': { zh: '要点（每行一条）', en: 'Bullets (one per line)' },
   'ed.f.note': { zh: '讲者备注', en: 'Speaker note' },
   'ed.f.value': { zh: '关键数字', en: 'Key number' },
+  'ed.f.stats': { zh: '数据卡(每行:数值|说明)', en: 'Stat cards (per line: value|label)' },
   'ed.f.caption': { zh: '说明', en: 'Caption' },
   'ed.f.quote': { zh: '金句', en: 'Quote' },
   'ed.f.author': { zh: '出处', en: 'Attribution' },
