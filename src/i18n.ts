@@ -117,6 +117,7 @@ const DICT: Record<string, Entry> = {
   'err.noTopic': { zh: '请先输入一句话主题', en: 'Type a one-line topic first' },
   'err.notConfigured': { zh: '尚未配置 API Key，请先在「设置」中填写。', en: 'No API key configured yet — add one in Settings.' },
   'err.invalidDeck': { zh: '模型返回的内容不是有效的课件结构，请重试。', en: 'The model’s response wasn’t a valid deck. Please retry.' },
+  'err.invalidNotes': { zh: '模型返回的讲稿无法解析，请重试。', en: 'The model’s script response couldn’t be parsed. Please retry.' },
   'err.modelError': { zh: '模型返回错误', en: 'The model returned an error' },
   'err.httpPrefix': { zh: '请求失败（HTTP {status}）：', en: 'Request failed (HTTP {status}): ' },
   'err.http401': {
@@ -324,6 +325,26 @@ const DICT: Record<string, Entry> = {
     en: 'PPTX exported — text and shapes are fully editable in PowerPoint.',
   },
   'viewer.exportPptxFailed': { zh: 'PPTX 导出失败,请重试。', en: 'PPTX export failed — please retry.' },
+  'viewer.genNotes': {
+    zh: '生成演讲稿（AI 为每页写可直接照读的逐字稿）',
+    en: 'Write speaker script (AI writes read-aloud notes for every page)',
+  },
+  'viewer.genNotesStart': {
+    zh: '正在撰写演讲稿…每页都会有一段可直接照读的讲稿',
+    en: 'Writing the speaker script — every page gets read-aloud-ready notes…',
+  },
+  'viewer.genNotesConfirm': {
+    zh: '部分页面已有较长的备注，重新生成会覆盖它们。继续？',
+    en: 'Some pages already have long notes; regenerating will overwrite them. Continue?',
+  },
+  'viewer.genNotesDone': {
+    zh: '演讲稿已写好并保存——备注面板、演讲者视图和 PPTX 导出里都能看到。',
+    en: 'Speaker script ready and saved — see it in the notes panel, presenter view and PPTX export.',
+  },
+  'viewer.genNotesFailed': {
+    zh: '演讲稿生成失败，已写好的页面已保存，请重试。',
+    en: 'Script generation failed — pages already written were saved. Please retry.',
+  },
   'viewer.more': { zh: '更多工具', en: 'More tools' },
   'viewer.stepMode': { zh: '逐条播放(点击逐条浮现要点)', en: 'Step mode (reveal points one by one)' },
   'viewer.stepOn': { zh: '逐条播放已开启:翻页键先逐条浮现要点', en: 'Step mode on: next reveals points one by one' },
@@ -556,7 +577,7 @@ const DICT: Record<string, Entry> = {
   'ed.f.pageTitle': { zh: '页标题', en: 'Slide title' },
   'ed.f.pageTitleOpt': { zh: '页标题（可选）', en: 'Slide title (optional)' },
   'ed.f.bullets': { zh: '要点（每行一条）', en: 'Bullets (one per line)' },
-  'ed.f.note': { zh: '讲者备注', en: 'Speaker note' },
+  'ed.f.note': { zh: '讲者备注 / 讲稿', en: 'Speaker note / script' },
   'ed.f.value': { zh: '关键数字', en: 'Key number' },
   'ed.f.stats': { zh: '数据卡(每行:数值|说明)', en: 'Stat cards (per line: value|label)' },
   'ed.imgQuery': { zh: '配图关键词(英文)', en: 'Image keywords (English)' },
