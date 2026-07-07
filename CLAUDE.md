@@ -1,0 +1,105 @@
+# ppt2html-v3 — 项目记忆(供 Claude Code 会话恢复上下文)
+
+一句话主题 → AI 生成 HTML 课件,像 PPT 一样播放。**纯静态 PWA,零后端**:
+Vite 8 + TypeScript(vanilla,无框架)+ reveal.js 6 + IndexedDB,BYOK 调用
+LLM。部署在 GitHub Pages:https://clarkyu.github.io/ppt2html-v3/
+(push 到 main 自动部署,`.github/workflows/`)。
+
+详细开发历史(每个 PR 做了什么、为什么)见 `docs/DEVLOG.md`。
+
+## 开发约定(必守)
+
+- **分支**:只在 `claude/pwa-slide-generator-0s4imt` 上开发;每次 PR 被合并后
+  `git fetch origin main && git checkout -B claude/pwa-slide-generator-0s4imt origin/main`
+  重置,并推送同步远端(纯已合并历史,直接 push 即可)。绝不推其他分支。
+- **提交身份**:提交前先 `git config user.email noreply@anthropic.com && git config user.name Claude`,
+  否则 stop-hook 会拦。合并产生的 `noreply@github.com` 提交是 GitHub 的,不要 amend,推送同步分支指针即可。
+- **PR**:一律开草稿 PR,用户自己合并;合并信号来自 webhook("#NN 已合并")。
+  用户指示过:**不要主动查部署状态**,听指令往前干。
+- **节奏**:实现 → `npm run build`(含 tsc)→ 无头 Playwright 验证(全过才算)→
+  提交 → 推送 → 草稿 PR → 汇报 → 等合并 → 重置分支 → 下一个。
+
+## 无头验证方法(已验证可用的固定配方)
+
+```js
+import pw from '/opt/node22/lib/node_modules/playwright/index.js'   // CJS default import
+const { chromium } = pw
+// 删除代理环境变量,否则连不上本地 dev server
+for (const k of ['HTTP_PROXY','HTTPS_PROXY','http_proxy','https_proxy','ALL_PROXY','all_proxy','NO_PROXY','no_proxy']) delete process.env[k]
+chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-proxy-server'] })
+```
+
+- dev server:`npx vite --port 5199 --strictPort`;测系统密钥行为时再起一个
+  `VITE_DEEPSEEK_API_KEY=testkey npx vite --port 5198`。
+- mock LLM:settings 里把 openai.baseUrl 指到 `location.origin+'/fake-llm'`,
+  `page.route('**/fake-llm/**')` 返回 SSE:
+  `data: {"choices":[{"delta":{"content":"..."}}]}\n\ndata: [DONE]\n\n`。
+- 种数据:直接 `indexedDB.open('ppt2html')` 往 `decks` store put;settings 走
+  `localStorage['ppt2html.settings.v1']`。
+- PDF 页数:`page.pdf()` 后数 `/\/Type[\s]*\/Page[^s]/g`。
+- PPTX 检查:python zipfile 解包看 slide XML;LibreOffice(需 `apt-get install libreoffice-impress`)
+  转 PDF + `pdftoppm`(poppler-utils)逐页目检;python-pptx 可做严格解析。
+- TTS 测试:`Object.defineProperty(window,'speechSynthesis',{value:stub})`
+  (直接赋值无效,speechSynthesis 是只读访问器)。
+- 无头 Chromium 的坑:纯 CJK 的 blob 下载文件名会报成 "download"(环境 locale 问题,
+  非产品 bug);新起浏览器实例 = 全新 IndexedDB。
+
+## 架构地图(按功能找文件)
+
+- **类型契约**:`src/types.ts`(Deck/Slide/12 种 layout/StatItem/Branding/Outline/Structure)
+- **LLM**:`src/llm/client.ts`(streamText/tokenLimit:DeepSeek≤8192、o*/gpt-5 用
+  max_completion_tokens;httpError 本地化)、`prompt.ts`(DECK_SCHEMA_GUIDE,三条生成路径共用)、
+  `outline.ts`(结构→分部→分段生成,completeSlides 增量 JSON 解析)、`clarify.ts`、
+  `edit.ts`(单页改写)、`notes.ts`(演讲稿逐字稿,批量 6 页/次)、`settings.ts`
+  (BYOK + 系统密钥 VITE_DEEPSEEK_API_KEY;imageGen 配置)
+- **渲染**:`src/render/renderDeck.ts`、`layouts.ts`、`normalize.ts`、`fit.ts`、
+  `semanticIcons.ts`(33 个语义图标)、`slides.css`、`themes.css`(7 主题)
+- **播放**:`src/player/player.ts`(mountPlayer/PlayerHandle/步进模式)、`presenter.ts`
+  (演讲者视图)、`narrate.ts`(TTS 语音讲解自动放映)、`player.css`
+- **UI**:`src/ui/home.ts`(快速/逐步双入口)、`guided.ts`+`outline.ts`(向导,
+  prefetch/草稿续作)、`generating.ts`(分段成稿+胶片墙)、`viewer.ts`(播放页全部工具)、
+  `editor.ts`(逐页编辑/AI 改写/候选图/AI 配图)、`settings.ts`、`stylePicker.ts`
+  (一键换风格)、`sharePanel.ts`(分享+二维码)
+- **图片**:`src/images/search.ts`(Unsplash/Pexels/Pixabay/Openverse 混合+候选)、
+  `abstract.ts`(7 族抽象 SVG 背景)、`genai.ts`(OpenAI 兼容图像生成,BYOK)
+- **导出**:`src/export/standalone.ts`(单文件 HTML)、`pptx.ts`(可编辑 PPTX,
+  pptxgenjs 动态 import)
+- **分享**:`src/lib/share.ts`(deflate→base64url→`#/s/` 路由,data: 背景剥离)
+- **其他**:`src/lib/lang.ts`(CJK 检测,课件语言跟随)、`highlight.ts`(零依赖代码高亮)、
+  `draft.ts`(向导草稿 24h)、`i18n.ts`(全部文案 zh/en)
+
+## 已知坑(踩过、修过,别再踩)
+
+- **pptxgenjs**:多 run 段落 + 原生 bullet 表达不了(外层 bullet 只落第一个 run,
+  后续 run 输出非法段中 buNone 或拆段)→ 圆点用强调色文本 run 手绘(`bulletRuns`);
+  `addImage rounding:true` 是**椭圆裁剪**不是圆角,别用。
+- **CSS `[hidden]`**:已全局加 `[hidden]{display:none!important}`,因为 `.btn` 等的
+  display 会压过 UA 规则(示例课件的编辑按钮曾因此常年可见)。
+- **bgCssUrl**:data URI 必须单引号包裹(`url('...')`,内部 `'`→`%27`),双引号会把
+  style 属性截断。
+- **DeepSeek**:thinking 模式不支持 response_format:json_object(会返回空);
+  max_tokens 上限 8192,长课件必须分段生成。
+- **编辑器 collectSlide**:carry-over 模式——没有表单控件的字段必须显式从 prev 带过来,
+  否则保存即丢(note 字段曾因此在非 bullets 版式上静默丢失)。
+- **分享链接**:二维码容量 ~2.9K 字符;data: URI 背景必须剥离(QR_MAX_CHARS 在 share.ts)。
+- 系统密钥经 GitHub Actions secrets 注入(VITE_DEEPSEEK_API_KEY / VITE_UNSPLASH_KEY /
+  VITE_PEXELS_KEY / VITE_PIXABAY_KEY),打进静态包=公开可读,是已接受的取舍。
+
+## 功能全景(截至 PR #47,全部已上线)
+
+生成:引导问答(1~2 问)→ 结构确认 → 分部大纲 → 分段成稿(胶片墙揭幕/断段重试/
+草稿续作/预取);快速一次成稿模式;单页 AI 改写(可撤销)。
+内容:12 版式、语义图标、stats 数据卡、代码高亮、**加粗**强调、CJK/英文自适应、
+演讲稿逐字稿(批量后置生成)。
+播放:reveal.js、逐条步进、语音讲解自动放映(TTS)、演讲者视图、位置记忆、打印适配。
+视觉:7 主题(可一键换装)、抽象 SVG 背景 7 族、照片背景(4 源+候选挑选)、AI 配图(BYOK)。
+导出/分享:独立 HTML、PDF 打印、可编辑 PPTX(备注/主题色/背景全带)、
+无后端链接分享+二维码+保存副本。
+
+## 候选方向(未做,按讨论价值排序)
+
+1. 自定义主题(用户自选色板/字体,存为「我的风格」)
+2. 课件模板库(常见场景骨架:培训/汇报/发布会/课堂)
+3. 导入 PPTX 反向转换(pptx → 本工具课件)
+4. 多语言课件一键翻译(整套 deck 翻译为另一语言)
+5. 练习模式(按讲稿估时逐页排练、超时提示)
