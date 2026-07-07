@@ -7,8 +7,9 @@
 // pptxgenjs (~large) is loaded on demand via dynamic import so it never
 // weighs down the main bundle.
 
-import type { Deck, Slide, ThemeName } from '../types'
+import type { CustomTheme, Deck, Slide, ThemeName } from '../types'
 import { deckIsCjk } from '../lib/lang'
+import { isLightBg, normalizeHex } from '../render/customTheme'
 
 interface Pal {
   bg: string
@@ -43,6 +44,27 @@ function blend(a: string, b: string, t: number): string {
   const pa = [0, 2, 4].map((i) => parseInt(a.slice(i, i + 2), 16))
   const pb = [0, 2, 4].map((i) => parseInt(b.slice(i, i + 2), 16))
   return pa.map((v, i) => Math.round(v * t + pb[i] * (1 - t)).toString(16).padStart(2, '0')).join('').toUpperCase()
+}
+
+/** Build a flat-hex Pal from a custom "我的风格" — mirrors themes.css derivation. */
+function paletteFromCustom(ct: CustomTheme): Pal {
+  // Normalize (expand #abc, validate) then strip '#' + uppercase: blend() and
+  // pptxgenjs want bare 6-digit hex. Bad input falls back to aurora colors, and
+  // light/dark uses the same WCAG-contrast decision as the on-screen palette.
+  const bare = (hex: string, fallback: string) => (normalizeHex(hex) ?? fallback).slice(1).toUpperCase()
+  const bg = bare(ct.bg, '#0b1020')
+  const light = isLightBg(`#${bg}`)
+  return {
+    bg,
+    accent: bare(ct.accent, '#8b7cff'),
+    accent2: bare(ct.accent2, '#22d3ee'),
+    light,
+    fg: light ? blend('000000', bg, 0.82) : blend('FFFFFF', bg, 0.9),
+    strong: light ? '111111' : 'FFFFFF',
+    muted: light ? blend('000000', bg, 0.5) : blend('FFFFFF', bg, 0.56),
+    // near-white card on light, bg lifted 8% toward white on dark (like aurora 181F3A).
+    card: light ? blend('FFFFFF', bg, 0.55) : blend('FFFFFF', bg, 0.08),
+  }
 }
 
 /** Strip inline markdown to plain text. */
@@ -136,10 +158,11 @@ export async function exportPptx(deck: Deck): Promise<void> {
   pptx.layout = 'DECK169'
   pptx.title = deck.title
 
-  const C = THEME_PPT[deck.theme] ?? THEME_PPT.aurora
+  const C = deck.customTheme ? paletteFromCustom(deck.customTheme) : (THEME_PPT[deck.theme] ?? THEME_PPT.aurora)
   const cjk = deckIsCjk(deck)
   const partWord = cjk ? '环节' : 'Part'
-  const font = cjk ? 'Microsoft YaHei' : 'Calibri'
+  const serif = deck.customTheme?.serif ?? false
+  const font = cjk ? (serif ? 'SimSun' : 'Microsoft YaHei') : serif ? 'Georgia' : 'Calibri'
   const base = { fontFace: font }
   const chapterTitles = deck.slides
     .filter((s) => s.layout === 'section')

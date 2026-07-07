@@ -14,7 +14,7 @@ export type AbstractStyle = (typeof ABSTRACT_STYLES)[number]
 type Concrete = Exclude<AbstractStyle, 'auto'>
 const CONCRETE: Concrete[] = ['blobs', 'mesh', 'grid', 'dots', 'waves', 'rays']
 
-interface Pal {
+export interface Pal {
   base: string
   a1: string
   a2: string
@@ -210,9 +210,16 @@ export function resolveAbstractStyle(style: AbstractStyle, seed: string): Concre
  * `source: 'abstract'` (no attribution needed).
  */
 export function abstractBg(seed: string, theme: ThemeName, style: AbstractStyle = 'auto'): SlideBg {
-  const p = PALETTE[theme] ?? PALETTE.aurora
-  const concrete = resolveAbstractStyle(style, seed || theme)
-  const r = rng(hash(seed || theme))
+  return abstractBgWith(seed, PALETTE[theme] ?? PALETTE.aurora, style)
+}
+
+/**
+ * Like {@link abstractBg} but with an explicit palette — lets custom themes tint
+ * generated backgrounds to their own base + accent colors instead of a named theme.
+ */
+export function abstractBgWith(seed: string, p: Pal, style: AbstractStyle = 'auto'): SlideBg {
+  const concrete = resolveAbstractStyle(style, seed || p.base)
+  const r = rng(hash(seed || p.base))
   const gen = GENS[concrete] ?? blobs
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice">` +

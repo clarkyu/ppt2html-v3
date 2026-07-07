@@ -7,6 +7,7 @@
 
 import type { Deck } from '../types'
 import { renderDeckSlides } from '../render/renderDeck'
+import { customThemeStyleAttr } from '../render/customTheme'
 import { escapeHtml } from '../lib/markdown'
 import { downloadText } from '../lib/backup'
 import themesCss from '../render/themes.css?raw'
@@ -113,6 +114,10 @@ var start=(parseInt((location.hash||'').slice(1),10)||1)-1;show(isFinite(start)&
 /** Build the full self-contained HTML document for a deck. */
 export function standaloneHtml(deck: Deck): string {
   const slides = renderDeckSlides(deck)
+  // `.player` carries the shared typography + --pos/--neg vars (themes.css only
+  // scopes those to `.player`, not `.theme-*`), so the export renders with the
+  // app's fonts. A custom theme adds its derived palette as inline vars.
+  const customStyle = deck.customTheme ? ` style="${escapeHtml(customThemeStyleAttr(deck.customTheme))}"` : ''
   return `<!doctype html>
 <html lang="zh">
 <head>
@@ -125,7 +130,7 @@ ${slidesCss}
 ${EXPORT_CSS}
 </style>
 </head>
-<body class="theme-${escapeHtml(deck.theme)}">
+<body class="player theme-${escapeHtml(deck.theme)}"${customStyle}>
 <div class="reveal deck"><div class="slides">
 ${slides}
 </div></div>

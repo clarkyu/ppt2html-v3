@@ -11,6 +11,7 @@
 import type { Deck } from '../types'
 import type { PlayerHandle } from './player'
 import { renderDeckSlides } from '../render/renderDeck'
+import { customThemeStyleAttr } from '../render/customTheme'
 import { fitSlide } from '../render/fit'
 import { escapeHtml } from '../lib/markdown'
 import { t } from '../i18n'
@@ -95,9 +96,12 @@ export function openPresenter(deck: Deck, player: PlayerHandle): PresenterHandle
   if (!win) return null
 
   const title = escapeHtml(`${t('presenter.title')} · ${deck.title}`)
+  // `.player` supplies the shared fonts + --pos/--neg; a custom theme adds its
+  // derived palette inline so both preview panes match the deck.
+  const customStyle = deck.customTheme ? ` style="${escapeHtml(customThemeStyleAttr(deck.customTheme))}"` : ''
   win.document.open()
   win.document.write(
-    `<!doctype html><html lang="zh" class="theme-${escapeHtml(deck.theme)}"><head>` +
+    `<!doctype html><html lang="zh" class="player theme-${escapeHtml(deck.theme)}"${customStyle}><head>` +
       `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
       `<title>${title}</title><style>${themesCss}\n${slidesCss}\n${PRES_CSS}</style></head>` +
       `<body>` +
