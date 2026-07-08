@@ -115,3 +115,23 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 4. 练习模式(按讲稿估时逐页排练、超时提示)
 
 已完成(曾在候选里):自定义主题「我的风格」= PR #49。
+
+## 下一步(用户已选定,依次做,各开独立 PR)
+
+用户选了候选 ①②④(跳过③翻译),计划分三个独立 PR 依次落地:
+
+- **PR14 课件模板库**:新建 `src/templates.ts`——一组 `DeckSpec` 场景骨架
+  (培训/工作汇报/产品发布/课堂教学,占位标题+brief,用户再填)。新增
+  `#/templates` 路由 + `src/ui/templates.ts` 画廊(用 `mountThumb` 预览首页),
+  选中→`normalizeDeck(spec,{prompt,id:crypto.randomUUID()})`→`saveDeck`→
+  `navigate('#/edit/<id>')`。首页 composer 加「从模板开始」入口。
+  参考:`src/sample.ts`(DeckSpec→normalizeDeck 范式)、`home.ts`、`db.ts`。
+- **PR15 导入 PPTX**:JSZip 解包 .pptx(是 zip),`DOMParser` 解析
+  `ppt/slides/slideN.xml`,启发式抽标题/正文/要点(`<a:t>` 文本、占位符类型)
+  映射到 12 版式,`normalizeDeck`→存库→进编辑器。无头验证可用 python-pptx
+  或手拼最小 pptx 构造样本。风险最高、最需迭代,故独立成 PR。
+- **PR16 练习模式**:播放页练习模式——按讲稿(note)字数估每页时长
+  (中文~4 字/秒、英文~2.5 词/秒),逐页计时、超时变色提示、总时长汇总。
+  复用已生成逐字稿;参考 `viewer.ts` 计时器与 `narrate.ts` 的 note 取用。
+
+节奏照旧:实现→build→无头验证→草稿 PR→等合并→重置分支→下一个。
