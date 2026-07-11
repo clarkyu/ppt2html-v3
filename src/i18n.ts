@@ -288,6 +288,15 @@ const DICT: Record<string, Entry> = {
   'guided.qCustom': { zh: '补充说明（可选）', en: 'Add a note (optional)' },
 
   // Viewer / player
+  'reh.button': { zh: '练习模式（按讲稿估时逐页排练）', en: 'Rehearse (per-page timing from the script)' },
+  'reh.on': {
+    zh: '练习模式已开启——按讲稿估算全篇约 {t}。每页超时会变色提醒，再点一次结束并查看小结。',
+    en: 'Rehearsal on — the script suggests about {t} total. Pages turn red when over budget; click again for the recap.',
+  },
+  'reh.total': { zh: '累计', en: 'Total' },
+  'reh.summaryTitle': { zh: '排练小结', en: 'Rehearsal recap' },
+  'reh.summaryTotal': { zh: '总用时 {a}（预计 {b}）', en: 'Total {a} (estimated {b})' },
+  'reh.over': { zh: '超时', en: 'over' },
   'imp.button': { zh: '导入 PPTX', en: 'Import PPTX' },
   'imp.hint': {
     zh: '把已有的 PowerPoint 转成本工具课件(文字/要点/备注),转完可继续编辑',

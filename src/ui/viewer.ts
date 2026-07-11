@@ -10,6 +10,7 @@ import { toast } from '../lib/toast'
 import { downloadStandalone } from '../export/standalone'
 import { openPresenter, type PresenterHandle } from '../player/presenter'
 import { startNarration, type NarratorHandle } from '../player/narrate'
+import { deckBudget, fmtClock } from '../player/rehearse'
 import { openStylePicker } from './stylePicker'
 import { openSharePanel } from './sharePanel'
 import { abstractBg, abstractBgWith } from '../images/abstract'
@@ -28,6 +29,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   let narrator: NarratorHandle | null = null
   let hideTimer = 0
   let timerInt = 0
+  let rehInterval = 0
   const imgAbort = new AbortController()
   // Ephemeral decks (built-in sample, URL-shared) must never write to the library.
   const persistable = id !== 'sample' && !shareData
@@ -42,6 +44,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         <div class="viewer__tools" data-tools>
           <button class="btn btn--sm" data-step title="${t('viewer.stepMode')}">${icons.steps}</button>
           <button class="btn btn--sm" data-narrate title="${t('viewer.narrate')}">${icons.speaker}</button>
+          <button class="btn btn--sm" data-rehearse title="${t('reh.button')}">${icons.stopwatch}</button>
           <button class="btn btn--sm" data-notes title="${t('viewer.notes')}">${icons.note}</button>
           <button class="btn btn--sm" data-notes-gen title="${t('viewer.genNotes')}">${icons.mic}</button>
           <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}">${icons.presenter}</button>
@@ -58,6 +61,10 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         </div>
       </div>
       <div class="viewer__notes" data-notes-panel hidden></div>
+      <div class="rehearse-hud" data-rehearse-hud hidden>
+        <span class="rehearse-hud__page"><b data-reh-cur>0:00</b> / <span data-reh-budget>0:00</span></span>
+        <span class="rehearse-hud__total" data-reh-total></span>
+      </div>
       <div class="viewer__help" data-help-panel hidden>
         <div class="viewer__help-card">
           <h3>${t('viewer.help.title')}</h3>
@@ -302,6 +309,104 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         toast(t('viewer.narrateOn'))
       })
 
+      // Rehearsal mode: per-page speaking budgets estimated from the script
+      // (~4 CJK chars/sec, ~2.5 EN words/sec). The HUD turns amber at 80% of
+      // the page budget and red past it; toggling off shows a per-page recap.
+      const rehBtn = view.querySelector<HTMLButtonElement>('[data-rehearse]')!
+      const rehHud = view.querySelector<HTMLElement>('[data-rehearse-hud]')!
+      const rehCur = rehHud.querySelector<HTMLElement>('[data-reh-cur]')!
+      const rehBudgetEl = rehHud.querySelector<HTMLElement>('[data-reh-budget]')!
+      const rehTotalEl = rehHud.querySelector<HTMLElement>('[data-reh-total]')!
+      let rehearsing = false
+      let rehPages: number[] = []
+      let rehTotal = 0
+      let rehActual: number[] = []
+      let rehPage = 1
+      let rehStart = 0
+
+      const rehSpentHere = () => (rehActual[rehPage - 1] ?? 0) + (Date.now() - rehStart) / 1000
+      const rehPaint = () => {
+        const spent = rehSpentHere()
+        const budget = rehPages[rehPage - 1] ?? 8
+        rehCur.textContent = fmtClock(spent)
+        rehBudgetEl.textContent = fmtClock(budget)
+        rehHud.classList.toggle('warn', spent >= budget * 0.8 && spent < budget)
+        rehHud.classList.toggle('over', spent >= budget)
+        const totalSpent = rehActual.reduce((a, b) => a + (b ?? 0), 0) + (Date.now() - rehStart) / 1000
+        rehTotalEl.textContent = `${t('reh.total')} ${fmtClock(totalSpent)} / ${fmtClock(rehTotal)}`
+      }
+      const rehCommit = () => {
+        rehActual[rehPage - 1] = rehSpentHere()
+        rehStart = Date.now()
+      }
+      player.onSlideChange((num) => {
+        if (!rehearsing || num === rehPage) return
+        rehCommit()
+        rehPage = num
+        rehPaint()
+      })
+
+      const rehSummary = () => {
+        const rows = rehActual
+          .map((sec, i) => ({ i, sec: sec ?? 0, budget: rehPages[i] }))
+          .filter((r) => r.sec >= 1)
+        const totalSpent = rows.reduce((a, r) => a + r.sec, 0)
+        const wrap = document.createElement('div')
+        wrap.className = 'rehearse-summary'
+        wrap.innerHTML = `
+          <div class="rehearse-summary__card">
+            <h3>${t('reh.summaryTitle')}</h3>
+            <p class="rehearse-summary__total">${t('reh.summaryTotal')
+              .replace('{a}', fmtClock(totalSpent))
+              .replace('{b}', fmtClock(rehTotal))}</p>
+            <div class="rehearse-summary__rows">
+              ${rows
+                .map((r) => {
+                  const pct = Math.min(100, (r.sec / Math.max(1, r.budget)) * 100)
+                  const over = r.sec > r.budget
+                  const label = loadedDeck!.slides[r.i]?.title || `${r.i + 1}`
+                  return `<div class="rehearse-summary__row${over ? ' over' : ''}">
+                    <span class="rehearse-summary__name">${r.i + 1}. ${label.replace(/\*\*/g, '').slice(0, 18)}</span>
+                    <span class="rehearse-summary__time">${fmtClock(r.sec)} / ${fmtClock(r.budget)}${over ? ` · ${t('reh.over')}` : ''}</span>
+                    <i style="width:${pct.toFixed(0)}%"></i>
+                  </div>`
+                })
+                .join('')}
+            </div>
+            <button class="btn btn--sm" data-reh-close>${t('common.gotIt')}</button>
+          </div>`
+        viewerEl.appendChild(wrap)
+        wrap.addEventListener('click', (e) => {
+          if (e.target === wrap || (e.target as HTMLElement).closest('[data-reh-close]')) wrap.remove()
+        })
+      }
+
+      rehBtn.addEventListener('click', () => {
+        if (rehearsing) {
+          rehCommit()
+          rehearsing = false
+          window.clearInterval(rehInterval)
+          rehHud.hidden = true
+          rehBtn.classList.remove('active')
+          rehSummary()
+          return
+        }
+        const budget = deckBudget(deck)
+        rehPages = budget.pages
+        rehTotal = budget.total
+        rehActual = []
+        rehPage = curNum
+        rehStart = Date.now()
+        rehearsing = true
+        rehHud.hidden = false
+        rehBtn.classList.add('active')
+        // Rehearsing means reading the script — surface it.
+        if (!notesOn) notesBtn.click()
+        rehPaint()
+        rehInterval = window.setInterval(rehPaint, 500)
+        toast(t('reh.on').replace('{t}', fmtClock(rehTotal)))
+      })
+
       // One-click restyle: swap the theme (built-in class OR a custom inline
       // palette) live and re-roll any abstract backgrounds to follow the new
       // colors. No regeneration.
@@ -445,6 +550,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   return () => {
     window.clearTimeout(hideTimer)
     window.clearInterval(timerInt)
+    window.clearInterval(rehInterval)
     window.removeEventListener('keydown', onKey)
     window.removeEventListener('beforeprint', fitAllForPrint)
     imgAbort.abort()
