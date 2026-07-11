@@ -7,6 +7,7 @@ import { renderLibrary } from './ui/library'
 import { renderSettings } from './ui/settings'
 import { renderViewer } from './ui/viewer'
 import { renderDeckEditor } from './ui/editor'
+import { renderTemplates } from './ui/templates'
 import { t, getLang, toggleLang } from './i18n'
 
 registerSW({ immediate: true })
@@ -68,6 +69,9 @@ function mount(route: Route): void {
       break
     case 'share':
       cleanup = renderViewer(view, 'shared', route.data)
+      break
+    case 'templates':
+      cleanup = renderTemplates(view)
       break
   }
 }
