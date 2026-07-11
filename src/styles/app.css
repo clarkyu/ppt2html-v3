@@ -879,6 +879,12 @@ body.playing .appbar { display: none; }
   .nav a { padding: 8px 12px; font-size: 14px; }
 }
 
+/* Template gallery */
+.tpl-sub { margin: -6px 0 18px; color: var(--muted); font-size: 14px; max-width: 720px; }
+.tpl-card { cursor: default; }
+.tpl-card__desc { font-size: 13px; color: var(--muted); margin: 6px 0 10px; line-height: 1.5; }
+.tpl-card .deck-card__meta { display: flex; align-items: center; justify-content: space-between; }
+
 /* Style gallery (viewer one-click restyle) */
 .stylepick {
   position: absolute; inset: 0; z-index: 85;

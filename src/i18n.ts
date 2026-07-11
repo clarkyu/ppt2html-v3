@@ -288,6 +288,18 @@ const DICT: Record<string, Entry> = {
   'guided.qCustom': { zh: '补充说明（可选）', en: 'Add a note (optional)' },
 
   // Viewer / player
+  'home.templates': { zh: '从模板开始', en: 'Start from a template' },
+  'home.templatesHint': {
+    zh: '培训 / 汇报 / 发布 / 课堂等场景骨架，选一个直接改',
+    en: 'Scenario skeletons (training / report / launch / lesson) — pick one and edit',
+  },
+  'tpl.title': { zh: '课件模板库', en: 'Deck templates' },
+  'tpl.subtitle': {
+    zh: '每个模板都是一套经过打磨的场景结构：页面编排、写作提示、讲法备注都备好了——选一个，把占位提示换成你的内容。',
+    en: 'Each template is a polished scenario structure — page flow, writing prompts and speaking notes included. Pick one and replace the placeholders with your content.',
+  },
+  'tpl.use': { zh: '用这个模板', en: 'Use template' },
+  'tpl.created': { zh: '已从「{name}」创建课件，开始编辑吧。', en: 'Deck created from “{name}” — start editing.' },
   'viewer.timerTitle': { zh: '已用时间（点击归零）', en: 'Elapsed time (click to reset)' },
   'viewer.notes': { zh: '演讲者备注', en: 'Speaker notes' },
   'viewer.overview': { zh: '总览 (O)', en: 'Overview (O)' },

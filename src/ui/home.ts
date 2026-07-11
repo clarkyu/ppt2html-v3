@@ -117,6 +117,7 @@ export function renderHome(view: HTMLElement): () => void {
         </label>
         <div class="composer__actions">
           <button class="btn btn--ghost" data-sample>${icons.play} ${t('home.sample')}</button>
+          <button class="btn btn--ghost" data-templates title="${escapeHtml(t('home.templatesHint'))}">${icons.library} ${t('home.templates')}</button>
           <button class="btn btn--ghost" data-generate title="${escapeHtml(t('home.customHint'))}">${icons.settings} ${t('home.custom')}</button>
           <button class="btn btn--primary" data-quick title="${escapeHtml(t('home.quickHint'))}">${icons.sparkles} ${t('home.quick')}</button>
         </div>
@@ -182,6 +183,7 @@ export function renderHome(view: HTMLElement): () => void {
   view.querySelector('[data-generate]')!.addEventListener('click', submit)
   view.querySelector('[data-quick]')!.addEventListener('click', quick)
   view.querySelector('[data-sample]')!.addEventListener('click', () => navigate('#/play/sample'))
+  view.querySelector('[data-templates]')!.addEventListener('click', () => navigate('#/templates'))
   topicEl.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') quick()
   })
