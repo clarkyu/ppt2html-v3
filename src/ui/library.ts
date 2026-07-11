@@ -44,9 +44,11 @@ export function renderLibrary(view: HTMLElement): () => void {
           </select>
         </div>
         <div class="library-io">
+          <button class="btn btn--ghost btn--sm" data-import-pptx title="${escapeHtml(t('imp.hint'))}">${icons.pptx} ${t('imp.button')}</button>
           <button class="btn btn--ghost btn--sm" data-backup title="${escapeHtml(t('lib.backupHint'))}">${icons.download} ${t('lib.backup')}</button>
           <button class="btn btn--ghost btn--sm" data-restore title="${escapeHtml(t('lib.restoreHint'))}">${icons.upload} ${t('lib.restore')}</button>
           <input type="file" accept="application/json,.json" hidden data-restore-file>
+          <input type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden data-pptx-file>
         </div>
       </div>
     </div>
@@ -68,6 +70,31 @@ export function renderLibrary(view: HTMLElement): () => void {
     toast(t('lib.backupDone').replace('{n}', String(backup.decks.length)))
   })
   view.querySelector('[data-restore]')!.addEventListener('click', () => restoreFileEl.click())
+
+  // Import a .pptx as an editable deck (parser is a lazy chunk).
+  const pptxFileEl = view.querySelector<HTMLInputElement>('[data-pptx-file]')!
+  const pptxBtn = view.querySelector<HTMLButtonElement>('[data-import-pptx]')!
+  pptxBtn.addEventListener('click', () => pptxFileEl.click())
+  pptxFileEl.addEventListener('change', async () => {
+    const file = pptxFileEl.files?.[0]
+    pptxFileEl.value = ''
+    if (!file) return
+    pptxBtn.disabled = true
+    toast(t('imp.start'))
+    try {
+      const { importPptx } = await import('../import/pptx')
+      const spec = await importPptx(await file.arrayBuffer(), file.name)
+      const { normalizeDeck } = await import('../render/normalize')
+      const deck = normalizeDeck(spec, { prompt: file.name, id: crypto.randomUUID() })
+      await saveDeck(deck)
+      toast(t('imp.done').replace('{n}', String(deck.slides.length)))
+      navigate(`#/edit/${deck.id}`)
+    } catch (e) {
+      toast((e as Error)?.message || t('imp.failed'))
+    } finally {
+      pptxBtn.disabled = false
+    }
+  })
   restoreFileEl.addEventListener('change', async () => {
     const file = restoreFileEl.files?.[0]
     restoreFileEl.value = ''
