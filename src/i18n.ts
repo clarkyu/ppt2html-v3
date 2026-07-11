@@ -288,6 +288,17 @@ const DICT: Record<string, Entry> = {
   'guided.qCustom': { zh: '补充说明（可选）', en: 'Add a note (optional)' },
 
   // Viewer / player
+  'imp.button': { zh: '导入 PPTX', en: 'Import PPTX' },
+  'imp.hint': {
+    zh: '把已有的 PowerPoint 转成本工具课件(文字/要点/备注),转完可继续编辑',
+    en: 'Convert an existing PowerPoint into an editable deck (text, bullets, notes)',
+  },
+  'imp.start': { zh: '正在解析 PPTX…', en: 'Parsing the PPTX…' },
+  'imp.done': { zh: '已导入 {n} 页,版式为自动识别——可在编辑器里调整。', en: 'Imported {n} pages (layouts auto-detected) — adjust in the editor.' },
+  'imp.failed': { zh: 'PPTX 导入失败,请确认文件完好。', en: 'PPTX import failed — please check the file.' },
+  'imp.notPptx': { zh: '这不是有效的 .pptx 文件。', en: 'Not a valid .pptx file.' },
+  'imp.noSlides': { zh: '文件里没有可导入的页面。', en: 'No importable slides in this file.' },
+  'imp.untitledPage': { zh: '未命名页', en: 'Untitled page' },
   'home.templates': { zh: '从模板开始', en: 'Start from a template' },
   'home.templatesHint': {
     zh: '培训 / 汇报 / 发布 / 课堂等场景骨架，选一个直接改',
