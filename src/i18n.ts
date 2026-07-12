@@ -395,6 +395,14 @@ const DICT: Record<string, Entry> = {
   'share.failed': { zh: '生成分享链接失败，请重试。', en: 'Failed to build the share link — please retry.' },
   'share.saveCopy': { zh: '保存到我的课件库', en: 'Save to my library' },
   'share.savedCopy': { zh: '已保存副本到课件库。', en: 'A copy was saved to your library.' },
+  'share.makeOwn': { zh: '我也要做一份', en: 'Make my own' },
+  'share.systemShare': { zh: '分享到…', en: 'Share…' },
+  'share.saveImage': { zh: '保存图片', en: 'Save image' },
+  'share.cardAlt': { zh: '课件分享卡片（含二维码）', en: 'Deck share card (with QR code)' },
+  'share.cardHint': {
+    zh: '也可以把这张卡片图发给朋友——长按识别二维码即可观看。',
+    en: 'Or send this card image — long-press the QR code to open the deck.',
+  },
   'viewer.narrate': {
     zh: '语音讲解（朗读每页讲稿，读完自动翻页）',
     en: 'Narrated auto-play (reads each page’s script, then advances)',

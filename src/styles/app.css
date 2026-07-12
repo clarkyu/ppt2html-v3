@@ -994,11 +994,19 @@ body.playing .appbar { display: none; }
   background: var(--surface); border: 1px solid var(--card-border); border-radius: 16px;
   padding: 22px 24px; max-width: 480px; width: 100%; box-shadow: 0 24px 80px rgba(0,0,0,0.45);
   text-align: center;
+  /* The card image makes the panel tall — keep it scrollable on small phones. */
+  max-height: calc(100dvh - 48px); overflow-y: auto;
 }
 .sharepanel__card h3 { margin: 0 0 6px; font-size: 17px; }
 .sharepanel__hint { margin: 0 0 14px; font-size: 13px; color: var(--muted); text-align: left; }
 .sharepanel__row { display: flex; gap: 8px; margin-bottom: 14px; }
 .sharepanel__row .form-input { flex: 1; min-width: 0; font-size: 12px; }
-.sharepanel__qr { display: flex; justify-content: center; margin-bottom: 14px; }
+.sharepanel__qr { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 14px; }
 .sharepanel__qr svg { width: 200px; height: 200px; border-radius: 8px; background: #fff; }
 .sharepanel__noqr { font-size: 12px; color: var(--muted); margin: 4px 0; }
+.sharepanel__cardwrap { display: flex; justify-content: center; }
+.sharepanel__cardimg {
+  width: min(232px, 62%); display: block; border-radius: 12px;
+  border: 1px solid var(--border); box-shadow: 0 12px 44px rgba(0,0,0,0.5);
+}
+.sharepanel__actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
