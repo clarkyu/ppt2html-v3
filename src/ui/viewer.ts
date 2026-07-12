@@ -58,6 +58,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}">${icons.expand}</button>
           <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}">${icons.keyboard}</button>
           <button class="btn btn--primary btn--sm" data-save-shared hidden>${icons.save} ${t('share.saveCopy')}</button>
+          <button class="btn btn--primary btn--sm" data-make-own hidden>${icons.sparkles} ${t('share.makeOwn')}</button>
         </div>
       </div>
       <div class="viewer__notes" data-notes-panel hidden></div>
@@ -262,7 +263,8 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         editBtn.hidden = false
         editBtn.addEventListener('click', () => navigate(`#/edit/${id}`))
       }
-      // A shared deck lives only in the URL — offer to keep a copy.
+      // A shared deck lives only in the URL — offer to keep a copy, and invite
+      // the receiver to make their own (they're the likeliest next creator).
       if (shareData) {
         const keepBtn = view.querySelector<HTMLButtonElement>('[data-save-shared]')!
         keepBtn.hidden = false
@@ -273,6 +275,9 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             navigate(`#/play/${copy.id}`)
           })
         })
+        const makeBtn = view.querySelector<HTMLButtonElement>('[data-make-own]')!
+        makeBtn.hidden = false
+        makeBtn.addEventListener('click', () => navigate('#/'))
       }
       player = mountPlayer(mount, deck)
       const stepBtn = view.querySelector<HTMLButtonElement>('[data-step]')!

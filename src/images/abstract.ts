@@ -32,6 +32,11 @@ const PALETTE: Record<ThemeName, Pal> = {
   rose: { base: '#1a0a1c', a1: '#ff5da2', a2: '#b06bff', light: false },
 }
 
+/** Flat palette of a named theme (falls back to aurora) — canvas drawing (share card) needs raw colors, not CSS vars. */
+export function themePalette(theme: string): Pal {
+  return PALETTE[theme as ThemeName] ?? PALETTE.aurora
+}
+
 const W = 1280
 const H = 720
 
