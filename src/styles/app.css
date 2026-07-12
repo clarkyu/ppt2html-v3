@@ -1027,3 +1027,7 @@ body.playing .appbar { display: none; }
   border: 1px solid var(--border); box-shadow: 0 12px 44px rgba(0,0,0,0.5);
 }
 .sharepanel__actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
+
+/* In-player AI rewrite panel (reuses the share panel overlay/card shell) */
+.rewritepanel__input { width: 100%; resize: vertical; min-height: 72px; margin-bottom: 12px; font-size: 13px; }
+.rewritepanel__status { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
