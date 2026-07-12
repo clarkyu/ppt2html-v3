@@ -6,3 +6,6 @@ dist-ssr
 .DS_Store
 dev.log
 .vite
+
+# eval runs (commit baselines deliberately)
+scripts/eval/results/
