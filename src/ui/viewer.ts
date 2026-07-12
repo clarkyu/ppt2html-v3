@@ -34,6 +34,24 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   // Ephemeral decks (built-in sample, URL-shared) must never write to the library.
   const persistable = id !== 'sample' && !shareData
 
+  // Keep the screen awake while presenting — phones otherwise dim mid-slide.
+  // Best-effort (API missing / permission denied → silently skipped). The lock
+  // is auto-released whenever the tab is hidden, so re-acquire on return.
+  let wakeLock: WakeLockSentinel | null = null
+  const acquireWakeLock = (): void => {
+    navigator.wakeLock
+      ?.request('screen')
+      .then((s) => {
+        wakeLock = s
+      })
+      .catch(() => {})
+  }
+  const onVisibility = (): void => {
+    if (document.visibilityState === 'visible') acquireWakeLock()
+  }
+  acquireWakeLock()
+  document.addEventListener('visibilitychange', onVisibility)
+
   view.innerHTML = `
     <div class="viewer">
       <div class="viewer__bar show">
@@ -558,6 +576,8 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
     window.clearInterval(rehInterval)
     window.removeEventListener('keydown', onKey)
     window.removeEventListener('beforeprint', fitAllForPrint)
+    document.removeEventListener('visibilitychange', onVisibility)
+    wakeLock?.release().catch(() => {})
     imgAbort.abort()
     narrator?.stop()
     presenter?.close()

@@ -160,6 +160,23 @@ button { font-family: inherit; }
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .composer__input::placeholder { color: var(--text-dim); }
+.composer__inputwrap { position: relative; }
+/* Right padding keeps typed text clear of the corner tool buttons. */
+.composer__inputwrap .composer__input { padding-right: 96px; }
+.composer__inputtools { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
+.composer__inputtools .btn { padding: 6px 9px; }
+.composer__inputtools .btn svg { width: 16px; height: 16px; display: block; }
+@keyframes voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(240, 85, 107, 0.45); }
+  50% { box-shadow: 0 0 0 7px rgba(240, 85, 107, 0); }
+}
+.composer__inputtools [data-voice].listening {
+  color: var(--danger); border-color: var(--danger);
+  animation: voice-pulse 1.4s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer__inputtools [data-voice].listening { animation: none; }
+}
 .composer__input:focus {
   border-color: color-mix(in srgb, var(--brand) 60%, transparent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 16%, transparent);

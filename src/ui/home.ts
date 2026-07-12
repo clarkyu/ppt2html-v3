@@ -10,7 +10,20 @@ import { quickGenerateAndPlay } from './generating'
 import { loadDraft, clearDraft } from '../lib/draft'
 import { durationOptions, slidesForMinutes } from '../lib/duration'
 import { getLang, t } from '../i18n'
+import { toast } from '../lib/toast'
 import type { GenerateOptions, ThemeName } from '../types'
+
+/** Minimal Web Speech API surface (not in lib.dom; prefixed on Chrome/Safari). */
+interface SpeechRecLike {
+  lang: string
+  interimResults: boolean
+  maxAlternatives: number
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+  onend: (() => void) | null
+  onerror: ((e: { error?: string }) => void) | null
+  start(): void
+  stop(): void
+}
 
 const EXAMPLE_POOL_ZH = [
   '用一节课讲清楚什么是机器学习',
@@ -97,8 +110,14 @@ export function renderHome(view: HTMLElement): () => void {
     </div>
 
     <div class="composer card">
-      <textarea class="composer__input" data-topic
-        placeholder="${escapeHtml(t('home.placeholder'))}"></textarea>
+      <div class="composer__inputwrap">
+        <textarea class="composer__input" data-topic
+          placeholder="${escapeHtml(t('home.placeholder'))}"></textarea>
+        <div class="composer__inputtools">
+          <button class="btn btn--ghost btn--sm" data-voice hidden title="${escapeHtml(t('home.voice'))}">${icons.mic}</button>
+          <button class="btn btn--ghost btn--sm" data-paste hidden title="${escapeHtml(t('home.paste'))}">${icons.clipboard}</button>
+        </div>
+      </div>
       <div class="composer__row">
         <label class="field"><span>${t('home.field.theme')}</span>
           <select class="select" data-theme>
@@ -202,6 +221,71 @@ export function renderHome(view: HTMLElement): () => void {
   })
   view.querySelector('[data-shuffle]')!.addEventListener('click', renderChips)
 
+  // Voice input — typing is the biggest friction on phones; speaking the topic
+  // beats it. Hidden when the (prefixed) Web Speech API is absent.
+  const w = window as unknown as Record<string, unknown>
+  const SR = (w.SpeechRecognition ?? w.webkitSpeechRecognition) as (new () => SpeechRecLike) | undefined
+  const voiceBtn = view.querySelector<HTMLButtonElement>('[data-voice]')!
+  let rec: SpeechRecLike | null = null
+  if (SR) {
+    voiceBtn.hidden = false
+    voiceBtn.addEventListener('click', () => {
+      if (rec) {
+        rec.stop() // second tap ends the take; onend clears state
+        return
+      }
+      const r = new SR()
+      r.lang = getLang() === 'zh' ? 'zh-CN' : 'en-US'
+      r.interimResults = false
+      r.maxAlternatives = 1
+      r.onresult = (e) => {
+        let heard = ''
+        for (let i = 0; i < e.results.length; i++) heard += e.results[i][0]?.transcript ?? ''
+        heard = heard.trim()
+        if (!heard) return
+        const cur = topicEl.value.trim()
+        topicEl.value = cur ? `${cur} ${heard}` : heard
+      }
+      r.onend = () => {
+        rec = null
+        voiceBtn.classList.remove('listening')
+        topicEl.focus()
+      }
+      r.onerror = (e) => {
+        // 'aborted' = user stopped it; 'no-speech' = silence — neither is worth a toast.
+        if (e.error !== 'aborted' && e.error !== 'no-speech') toast(t('home.voiceFailed'))
+      }
+      try {
+        r.start()
+        rec = r
+        voiceBtn.classList.add('listening')
+      } catch {
+        toast(t('home.voiceFailed'))
+      }
+    })
+  }
+
+  // One-tap paste — the mobile path is “copy from a chat → drop it here”.
+  const pasteBtn = view.querySelector<HTMLButtonElement>('[data-paste]')!
+  if (typeof navigator.clipboard?.readText === 'function') {
+    pasteBtn.hidden = false
+    pasteBtn.addEventListener('click', () => {
+      navigator.clipboard
+        .readText()
+        .then((text) => {
+          const got = text.trim()
+          if (!got) {
+            toast(t('home.pasteEmpty'))
+            return
+          }
+          const cur = topicEl.value.trim()
+          topicEl.value = cur ? `${cur} ${got}` : got
+          topicEl.focus()
+        })
+        .catch(() => toast(t('home.pasteFailed'))) // permission denied / insecure context
+    })
+  }
+
   // Recent decks strip.
   const recentEl = view.querySelector<HTMLElement>('[data-recent]')!
   listDecks()
@@ -233,5 +317,8 @@ export function renderHome(view: HTMLElement): () => void {
       /* ignore — recent strip is non-critical */
     })
 
-  return () => thumbCleanups.forEach((fn) => fn())
+  return () => {
+    rec?.stop()
+    thumbCleanups.forEach((fn) => fn())
+  }
 }

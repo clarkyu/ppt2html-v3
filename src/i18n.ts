@@ -180,6 +180,17 @@ const DICT: Record<string, Entry> = {
   'home.generate': { zh: '生成课件', en: 'Generate' },
   'home.examplesLabel': { zh: '试试这些主题：', en: 'Try a topic:' },
   'home.shuffle': { zh: '换一批', en: 'Shuffle' },
+  'home.voice': { zh: '语音输入主题（再点一次结束）', en: 'Speak your topic (tap again to stop)' },
+  'home.voiceFailed': {
+    zh: '语音识别不可用或出错了，请改用键盘输入。',
+    en: 'Speech recognition failed — please type instead.',
+  },
+  'home.paste': { zh: '粘贴剪贴板内容', en: 'Paste from clipboard' },
+  'home.pasteEmpty': { zh: '剪贴板是空的。', en: 'The clipboard is empty.' },
+  'home.pasteFailed': {
+    zh: '无法读取剪贴板——请长按输入框手动粘贴。',
+    en: 'Couldn’t read the clipboard — long-press the box to paste manually.',
+  },
   'home.recent': { zh: '最近的课件', en: 'Recent decks' },
   'home.viewAll': { zh: '查看全部 →', en: 'View all →' },
 
