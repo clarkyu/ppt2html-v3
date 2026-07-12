@@ -9,9 +9,10 @@ LLM。部署在 GitHub Pages:https://clarkyu.github.io/ppt2html-v3/
 
 ## 开发约定(必守)
 
-- **分支**:只在 `claude/pwa-slide-generator-0s4imt` 上开发;每次 PR 被合并后
-  `git fetch origin main && git checkout -B claude/pwa-slide-generator-0s4imt origin/main`
-  重置,并推送同步远端(纯已合并历史,直接 push 即可)。绝不推其他分支。
+- **分支**:只在**当前会话被指定的 `claude/*` 分支**上开发(会话三及以前是
+  `claude/pwa-slide-generator-0s4imt`,会话四起是 `claude/project-review-jt4jb5`);
+  每次 PR 被合并后 `git fetch origin main && git checkout -B <该分支> origin/main`
+  重置,并推送同步远端(纯已合并历史,`--force-with-lease` 即可)。绝不推其他分支。
 - **提交身份**:提交前先 `git config user.email noreply@anthropic.com && git config user.name Claude`,
   否则 stop-hook 会拦。合并产生的 `noreply@github.com` 提交是 GitHub 的,不要 amend,推送同步分支指针即可。
 - **PR**:一律开草稿 PR,用户自己合并;合并信号来自 webhook("#NN 已合并")。
@@ -41,15 +42,26 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
   转 PDF + `pdftoppm`(poppler-utils)逐页目检;python-pptx 可做严格解析。
 - TTS 测试:`Object.defineProperty(window,'speechSynthesis',{value:stub})`
   (直接赋值无效,speechSynthesis 是只读访问器)。
+- mock 非流式调用(requestText,如澄清/单页改写):`page.route` 返回 JSON
+  `{"choices":[{"message":{"content":"..."}}]}`(不是 SSE)。
 - 无头 Chromium 的坑:纯 CJK 的 blob 下载文件名会报成 "download"(环境 locale 问题,
   非产品 bug);新起浏览器实例 = 全新 IndexedDB。
+- Playwright `browser.newPage()` 每次新建**隔离 context**(IndexedDB 不共享)——
+  多页共用种子数据必须 `browser.newContext()` 后 `context.newPage()`。
+- 新版 Chrome **原生同时暴露无前缀 `SpeechRecognition` 与 `webkitSpeechRecognition`**——
+  语音测试桩必须两个名字都 defineProperty 覆盖,否则应用拿到原生实现静默失败。
+- 无头 locale 是 en-US:UI 语言检测会正确返回 'en',断言"语言跟随"需先
+  `localStorage.setItem('ui-lang','zh')` 再 reload。
+- Bash 里 `pkill -f 'vite --port …'` 会匹配到自己的命令行把 shell 杀掉(exit 144),
+  用 `pkill -f '[v]ite --port …'` 防自匹配。
 
 ## 架构地图(按功能找文件)
 
 - **类型契约**:`src/types.ts`(Deck/Slide/12 种 layout/StatItem/Branding/Outline/Structure)
 - **LLM**:`src/llm/client.ts`(streamText/tokenLimit:DeepSeek≤8192、o*/gpt-5 用
-  max_completion_tokens;httpError 本地化)、`prompt.ts`(DECK_SCHEMA_GUIDE,三条生成路径共用)、
-  `outline.ts`(结构→分部→分段生成,completeSlides 增量 JSON 解析)、`clarify.ts`、
+  max_completion_tokens;httpError 本地化)、`prompt.ts`(DECK_SCHEMA_GUIDE,三条生成路径共用;
+  contextBlock 含**素材注入**块——保真引用+提纲沿用两规则,MATERIAL_MAX_CHARS=8000)、
+  `outline.ts`(结构→分部→分段生成,completeSlides 增量 JSON 解析)、`clarify.ts`(有素材时改问缺口)、
   `edit.ts`(单页改写)、`notes.ts`(演讲稿逐字稿,批量 6 页/次)、`settings.ts`
   (BYOK + 系统密钥 VITE_DEEPSEEK_API_KEY;imageGen 配置)
 - **渲染**:`src/render/renderDeck.ts`、`layouts.ts`、`normalize.ts`、`fit.ts`、
@@ -58,16 +70,18 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
   `preview.ts`(缩略图/单页预览,感知 customTheme)
 - **播放**:`src/player/player.ts`(mountPlayer/PlayerHandle/步进模式)、`presenter.ts`
   (演讲者视图)、`narrate.ts`(TTS 语音讲解自动放映)、`player.css`
-- **UI**:`src/ui/home.ts`(快速/逐步双入口)、`guided.ts`+`outline.ts`(向导,
-  prefetch/草稿续作)、`generating.ts`(分段成稿+胶片墙)、`viewer.ts`(播放页全部工具)、
+- **UI**:`src/ui/home.ts`(快速/逐步双入口 + 素材框/语音输入/剪贴板粘贴)、`guided.ts`+`outline.ts`
+  (向导,prefetch/草稿续作)、`generating.ts`(分段成稿+胶片墙)、`viewer.ts`(播放页全部工具,
+  Wake Lock 防熄屏)、`rewritePanel.ts`(播放页单页 AI 改写浮层,原地换 .s 块不重挂播放器)、
   `editor.ts`(逐页编辑/AI 改写/候选图/AI 配图)、`settings.ts`、`stylePicker.ts`
-  (换风格画廊:7 内置 + 我的风格)、`sharePanel.ts`(分享+二维码)
+  (换风格画廊:7 内置 + 我的风格)、`sharePanel.ts`(分享+二维码+卡片图+系统分享)
 - **图片**:`src/images/search.ts`(Unsplash/Pexels/Pixabay/Openverse 混合+候选)、
   `abstract.ts`(7 族抽象 SVG 背景)、`genai.ts`(OpenAI 兼容图像生成,BYOK)
 - **导出**:`src/export/standalone.ts`(单文件 HTML)、`pptx.ts`(可编辑 PPTX,
   pptxgenjs 动态 import)
 - **分享**:`src/lib/share.ts`(deflate→base64url→`#/s/` 路由,data: 背景剥离,
-  customTheme 入口 sanitize)
+  customTheme 入口 sanitize)、`src/lib/shareCard.ts`(canvas 自绘 1080×1440 竖版
+  分享卡片:色板封面+二维码,文案跟随课件语言;`themePalette` 从 abstract.ts 取平面色板)
 - **其他**:`src/lib/lang.ts`(CJK 检测,课件语言跟随)、`highlight.ts`(零依赖代码高亮)、
   `draft.ts`(向导草稿 24h)、`styles.ts`(我的风格 localStorage 库)、`i18n.ts`(全部文案 zh/en)
 
@@ -94,8 +108,14 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
   (只在 `.player` 里定义)不解析——曾导致导出件字体退化。
 - 系统密钥经 GitHub Actions secrets 注入(VITE_DEEPSEEK_API_KEY / VITE_UNSPLASH_KEY /
   VITE_PEXELS_KEY / VITE_PIXABAY_KEY),打进静态包=公开可读,是已接受的取舍。
+- **abstract.ts 的 SVG 无 width/height 属性**(只有 viewBox)——canvas drawImage
+  栅格化跨浏览器不可靠,分享卡片因此在 canvas 上自绘背景而非贴 SVG。
+- **播放页原地改单页**:只换 section 里的 `.s` 块 + `aside.notes`,别重挂播放器
+  (会丢所有 onSlideChange 回调);换完 `reveal.sync()`(步进 fragments)+ `fitSlide`。
+- **hash-fragment 分享链接无法做 OG 富预览**(内容不经服务器)——分享卡片图就是
+  预览的替代方案,别再尝试动态 OG。
 
-## 功能全景(截至 PR #54,全部已上线)
+## 功能全景(截至 PR #59,全部已上线)
 
 生成:引导问答(1~2 问)→ 结构确认 → 分部大纲 → 分段成稿(胶片墙揭幕/断段重试/
 草稿续作/预取);快速一次成稿模式;单页 AI 改写(可撤销);**课件模板库**
@@ -108,7 +128,12 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 视觉:7 内置主题 + 自定义主题「我的风格」(自选底色/双强调色/衬线,按亮度推导全套色,
 可一键换装、跨课件复用,全链路生效)、抽象 SVG 背景 7 族、照片背景(4 源+候选挑选)、AI 配图(BYOK)。
 导出/分享:独立 HTML、PDF 打印、可编辑 PPTX(备注/主题色/背景全带)、
-无后端链接分享+二维码+保存副本。
+无后端链接分享+二维码+保存副本、**分享卡片图**(canvas 竖版 PNG 含二维码,
+微信可长按)+ 系统分享(navigator.share 带文件)+ 接收端「我也要做一份」CTA。
+移动(会话四新增):Wake Lock 播放防熄屏、主题语音输入(Web Speech,双前缀)、
+剪贴板一键粘贴(素材框展开时定向素材框)、播放页单页 AI 改写(原地生效可撤销)。
+素材注入:统一素材框(≤8000 字)——数字/事实保真优先引用,含提纲则结构沿用,
+流经全部生成路径;有素材时澄清问题改问缺口;草稿自动携带。
 
 ## 补充坑(PR14–16 踩到的)
 
@@ -122,8 +147,14 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 ## 候选方向(未做)
 
 1. 多语言课件一键翻译(整套 deck 翻译为另一语言)——用户曾明确跳过,勿擅自开工
+2. 质量回归评测集(golden set 固定主题批量生成 + 机械评分,让 prompt 迭代可度量)
+3. 精修 pass(成稿后按 DECK_SCHEMA_GUIDE 硬指标逐页自评,不达标页走 regenerateSlide 重写)
+4. 全局对话式修改(「每页补个例子」级整册指令 → 逐页改写计划 → 批量 regenerateSlide)
+5. 素材 v2:pdf/docx 文件解析(pdf.js/mammoth)、长素材按环节切片下发、讲稿生成引用素材
+6. 导入 PPTX 后「AI 重构这份课件」(= 方向 4 作用在导入件上)
 
 已完成(曾在候选里):自定义主题=PR #49;课件模板库=PR #52;导入 PPTX=PR #53;
-练习模式=PR #54。
+练习模式=PR #54;分享卡片/系统分享/接收端 CTA=PR #56;移动三件套=PR #57;
+播放页 AI 改写=PR #58;素材注入 v1=PR #59。
 
 节奏照旧:实现→build→无头验证→草稿 PR→等合并→重置分支→下一个。
