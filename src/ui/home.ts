@@ -118,6 +118,12 @@ export function renderHome(view: HTMLElement): () => void {
           <button class="btn btn--ghost btn--sm" data-paste hidden title="${escapeHtml(t('home.paste'))}">${icons.clipboard}</button>
         </div>
       </div>
+      <details class="composer__material" data-material-box>
+        <summary>${icons.note} ${t('home.materialSummary')}</summary>
+        <textarea class="composer__input composer__material-input" data-material rows="5" maxlength="8000"
+          placeholder="${escapeHtml(t('home.materialPlaceholder'))}"></textarea>
+        <p class="composer__material-hint">${t('home.materialHint')}</p>
+      </details>
       <div class="composer__row">
         <label class="field"><span>${t('home.field.theme')}</span>
           <select class="select" data-theme>
@@ -155,6 +161,8 @@ export function renderHome(view: HTMLElement): () => void {
   `
 
   const topicEl = view.querySelector<HTMLTextAreaElement>('[data-topic]')!
+  const materialEl = view.querySelector<HTMLTextAreaElement>('[data-material]')!
+  const materialBox = view.querySelector<HTMLDetailsElement>('[data-material-box]')!
   const themeEl = view.querySelector<HTMLSelectElement>('[data-theme]')!
   const durationEl = view.querySelector<HTMLSelectElement>('[data-duration]')!
   const toneEl = view.querySelector<HTMLSelectElement>('[data-tone]')!
@@ -193,6 +201,7 @@ export function renderHome(view: HTMLElement): () => void {
       durationMinutes: minutes,
       slideCount: minutes ? slidesForMinutes(minutes) : undefined,
       tone: toneEl.value || undefined,
+      material: materialEl.value.trim() || undefined,
     }
   }
 
@@ -266,6 +275,7 @@ export function renderHome(view: HTMLElement): () => void {
   }
 
   // One-tap paste — the mobile path is “copy from a chat → drop it here”.
+  // With the material box open, that's where pasted content belongs.
   const pasteBtn = view.querySelector<HTMLButtonElement>('[data-paste]')!
   if (typeof navigator.clipboard?.readText === 'function') {
     pasteBtn.hidden = false
@@ -278,9 +288,10 @@ export function renderHome(view: HTMLElement): () => void {
             toast(t('home.pasteEmpty'))
             return
           }
-          const cur = topicEl.value.trim()
-          topicEl.value = cur ? `${cur} ${got}` : got
-          topicEl.focus()
+          const target = materialBox.open ? materialEl : topicEl
+          const cur = target.value.trim()
+          target.value = cur ? `${cur}${target === materialEl ? '\n' : ' '}${got}` : got
+          target.focus()
         })
         .catch(() => toast(t('home.pasteFailed'))) // permission denied / insecure context
     })

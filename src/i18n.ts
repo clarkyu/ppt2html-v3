@@ -186,6 +186,15 @@ const DICT: Record<string, Entry> = {
     en: 'Speech recognition failed — please type instead.',
   },
   'home.paste': { zh: '粘贴剪贴板内容', en: 'Paste from clipboard' },
+  'home.materialSummary': { zh: '带上你的素材 / 提纲（可选）', en: 'Add your material / outline (optional)' },
+  'home.materialPlaceholder': {
+    zh: '粘贴工作总结、数据、会议记录或课件提纲——素材中的数字与事实会被优先引用且保真；若含提纲，课件结构将沿用它。',
+    en: 'Paste notes, data, meeting minutes or an outline — its facts are quoted faithfully, and an embedded outline defines the deck structure.',
+  },
+  'home.materialHint': {
+    zh: '最多 8000 字。素材只随本次生成发送给你配置的模型，不会上传到任何服务器。',
+    en: 'Up to 8000 characters. Sent only to your configured model for this generation — never uploaded to a server.',
+  },
   'home.pasteEmpty': { zh: '剪贴板是空的。', en: 'The clipboard is empty.' },
   'home.pasteFailed': {
     zh: '无法读取剪贴板——请长按输入框手动粘贴。',

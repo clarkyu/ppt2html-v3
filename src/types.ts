@@ -160,6 +160,12 @@ export interface GenerateOptions {
   theme?: ThemeName
   /** User answers to the AI-generated clarifying questions. */
   clarifications?: Clarification[]
+  /**
+   * Pasted source material (notes, data, meeting minutes, or an outline).
+   * Facts in it are quoted faithfully; an embedded outline drives the deck's
+   * structure. Generation-time input only — never persisted on the deck.
+   */
+  material?: string
   /** One-line restatement of the user's intent, confirmed at the structure step. */
   understanding?: string
   /** Whether to generate rich, detailed page content (vs. a concise framework). */
