@@ -13,10 +13,12 @@ import { startNarration, type NarratorHandle } from '../player/narrate'
 import { deckBudget, fmtClock } from '../player/rehearse'
 import { openStylePicker } from './stylePicker'
 import { openSharePanel } from './sharePanel'
+import { openRewritePanel } from './rewritePanel'
 import { abstractBg, abstractBgWith } from '../images/abstract'
 import { applyCustomTheme, customAbstractPalette, isLightCustom } from '../render/customTheme'
 import { fitSlide } from '../render/fit'
-import type { Deck, ThemeName } from '../types'
+import { renderSlideInner } from '../render/layouts'
+import type { Deck, Slide, ThemeName } from '../types'
 
 /**
  * Deck playback screen. `shareData` (route `#/s/<blob>`) plays a deck decoded
@@ -67,6 +69,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           <button class="btn btn--sm" data-notes-gen title="${t('viewer.genNotes')}">${icons.mic}</button>
           <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}">${icons.presenter}</button>
           <button class="btn btn--sm" data-overview title="${t('viewer.overview')}">${icons.grid}</button>
+          <button class="btn btn--sm" data-rewrite title="${t('rw.button')}" hidden>${icons.sparkles}</button>
           <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
           <button class="btn btn--sm" data-print title="${t('viewer.print')}">${icons.print}</button>
           <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}">${icons.download}</button>
@@ -499,6 +502,42 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         setNote(deck.slides[num - 1]?.note)
         presenter?.update(num)
       })
+
+      // In-player AI rewrite of the CURRENT page — the phone-sized editor.
+      // The swap is in place (only the `.s` content block + notes aside), so
+      // reveal keeps its section element and every registered callback,
+      // background and decoration stays live.
+      const applyRewrite = (i: number, next: Slide): void => {
+        deck.slides[i] = next
+        const sec = mount.querySelectorAll<HTMLElement>('.reveal .slides > section')[i]
+        const sEl = sec?.querySelector('.s')
+        if (sec && sEl) {
+          sEl.outerHTML = renderSlideInner(next)
+          sec.querySelector('aside.notes')?.remove()
+          if (next.note) {
+            const aside = document.createElement('aside')
+            aside.className = 'notes'
+            aside.textContent = next.note
+            sec.appendChild(aside)
+          }
+          try {
+            player?.reveal.sync() // re-register fragments for step mode
+          } catch {
+            /* reveal may be mid-teardown */
+          }
+          fitSlide(sec)
+        }
+        setNote(deck.slides[curNum - 1]?.note)
+        presenter?.update(curNum)
+        if (persistable) void saveDeck(deck)
+      }
+      const rewriteBtn = view.querySelector<HTMLButtonElement>('[data-rewrite]')!
+      if (persistable) {
+        rewriteBtn.hidden = false
+        rewriteBtn.addEventListener('click', () => {
+          openRewritePanel(viewerEl, deck, curNum - 1, { apply: applyRewrite })
+        })
+      }
 
       // Full speaker script (逐字稿): a post-pass over the finished deck, batch
       // by batch — each batch is saved as it lands, so failures keep progress.
