@@ -14,6 +14,7 @@ import { deckBudget, fmtClock } from '../player/rehearse'
 import { openStylePicker } from './stylePicker'
 import { openSharePanel } from './sharePanel'
 import { openRewritePanel } from './rewritePanel'
+import { openRefinePanel } from './refinePanel'
 import { abstractBg, abstractBgWith } from '../images/abstract'
 import { applyCustomTheme, customAbstractPalette, isLightCustom } from '../render/customTheme'
 import { fitSlide } from '../render/fit'
@@ -70,6 +71,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}">${icons.presenter}</button>
           <button class="btn btn--sm" data-overview title="${t('viewer.overview')}">${icons.grid}</button>
           <button class="btn btn--sm" data-rewrite title="${t('rw.button')}" hidden>${icons.sparkles}</button>
+          <button class="btn btn--sm" data-refine title="${t('refine.button')}" hidden>${icons.wand}</button>
           <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
           <button class="btn btn--sm" data-print title="${t('viewer.print')}">${icons.print}</button>
           <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}">${icons.download}</button>
@@ -532,10 +534,17 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         if (persistable) void saveDeck(deck)
       }
       const rewriteBtn = view.querySelector<HTMLButtonElement>('[data-rewrite]')!
+      const refineBtn = view.querySelector<HTMLButtonElement>('[data-refine]')!
       if (persistable) {
         rewriteBtn.hidden = false
         rewriteBtn.addEventListener('click', () => {
           openRewritePanel(viewerEl, deck, curNum - 1, { apply: applyRewrite })
+        })
+        // Whole-deck refine pass: mechanical checks pick the pages, the model
+        // fixes only those — same in-place apply as the single-page rewrite.
+        refineBtn.hidden = false
+        refineBtn.addEventListener('click', () => {
+          openRefinePanel(viewerEl, deck, { apply: applyRewrite })
         })
       }
 
