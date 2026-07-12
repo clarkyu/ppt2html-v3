@@ -95,43 +95,35 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 - 系统密钥经 GitHub Actions secrets 注入(VITE_DEEPSEEK_API_KEY / VITE_UNSPLASH_KEY /
   VITE_PEXELS_KEY / VITE_PIXABAY_KEY),打进静态包=公开可读,是已接受的取舍。
 
-## 功能全景(截至 PR #49,全部已上线)
+## 功能全景(截至 PR #54,全部已上线)
 
 生成:引导问答(1~2 问)→ 结构确认 → 分部大纲 → 分段成稿(胶片墙揭幕/断段重试/
-草稿续作/预取);快速一次成稿模式;单页 AI 改写(可撤销)。
+草稿续作/预取);快速一次成稿模式;单页 AI 改写(可撤销);**课件模板库**
+(`#/templates`,6 场景骨架:培训/汇报/发布/课堂/复盘/提案,占位即写作指导);
+**导入 PPTX**(课件库入口,JSZip+DOMParser 启发式映射版式,备注全带)。
 内容:12 版式、语义图标、stats 数据卡、代码高亮、**加粗**强调、CJK/英文自适应、
 演讲稿逐字稿(批量后置生成)。
-播放:reveal.js、逐条步进、语音讲解自动放映(TTS)、演讲者视图、位置记忆、打印适配。
+播放:reveal.js、逐条步进、语音讲解自动放映(TTS)、演讲者视图、位置记忆、打印适配、
+**练习模式**(按讲稿估时逐页排练:4 字/秒·2.5 词/秒,80% 预警/超时变红,小结报告)。
 视觉:7 内置主题 + 自定义主题「我的风格」(自选底色/双强调色/衬线,按亮度推导全套色,
 可一键换装、跨课件复用,全链路生效)、抽象 SVG 背景 7 族、照片背景(4 源+候选挑选)、AI 配图(BYOK)。
 导出/分享:独立 HTML、PDF 打印、可编辑 PPTX(备注/主题色/背景全带)、
 无后端链接分享+二维码+保存副本。
 
-## 候选方向(未做,按讨论价值排序)
+## 补充坑(PR14–16 踩到的)
 
-1. 课件模板库(常见场景骨架:培训/汇报/发布会/课堂)
-2. 导入 PPTX 反向转换(pptx → 本工具课件)
-3. 多语言课件一键翻译(整套 deck 翻译为另一语言)
-4. 练习模式(按讲稿估时逐页排练、超时提示)
+- **marked/CommonMark emphasis 边界**:`**` 紧邻标点(尤其方括号)会解析失败、
+  星号原样漏出——写入渲染文案前可用 `mdInline` 自检(输出仍含 `**` 即失败)。
+- **PPTX 占位符几何**:占位符的 a:off/a:ext 常只存在 slideLayout 里,slide XML
+  没坐标——导入判断双栏不能只靠位置,要用「双 body 占位符」语义。
+- **Vite 新依赖首次动态 import** 会触发 optimize+整页 reload(纯 dev 现象,
+  prod 无);无头测试首跑会因此中断,重跑即可。
 
-已完成(曾在候选里):自定义主题「我的风格」= PR #49。
+## 候选方向(未做)
 
-## 下一步(用户已选定,依次做,各开独立 PR)
+1. 多语言课件一键翻译(整套 deck 翻译为另一语言)——用户曾明确跳过,勿擅自开工
 
-用户选了候选 ①②④(跳过③翻译),计划分三个独立 PR 依次落地:
-
-- **PR14 课件模板库**:新建 `src/templates.ts`——一组 `DeckSpec` 场景骨架
-  (培训/工作汇报/产品发布/课堂教学,占位标题+brief,用户再填)。新增
-  `#/templates` 路由 + `src/ui/templates.ts` 画廊(用 `mountThumb` 预览首页),
-  选中→`normalizeDeck(spec,{prompt,id:crypto.randomUUID()})`→`saveDeck`→
-  `navigate('#/edit/<id>')`。首页 composer 加「从模板开始」入口。
-  参考:`src/sample.ts`(DeckSpec→normalizeDeck 范式)、`home.ts`、`db.ts`。
-- **PR15 导入 PPTX**:JSZip 解包 .pptx(是 zip),`DOMParser` 解析
-  `ppt/slides/slideN.xml`,启发式抽标题/正文/要点(`<a:t>` 文本、占位符类型)
-  映射到 12 版式,`normalizeDeck`→存库→进编辑器。无头验证可用 python-pptx
-  或手拼最小 pptx 构造样本。风险最高、最需迭代,故独立成 PR。
-- **PR16 练习模式**:播放页练习模式——按讲稿(note)字数估每页时长
-  (中文~4 字/秒、英文~2.5 词/秒),逐页计时、超时变色提示、总时长汇总。
-  复用已生成逐字稿;参考 `viewer.ts` 计时器与 `narrate.ts` 的 note 取用。
+已完成(曾在候选里):自定义主题=PR #49;课件模板库=PR #52;导入 PPTX=PR #53;
+练习模式=PR #54。
 
 节奏照旧:实现→build→无头验证→草稿 PR→等合并→重置分支→下一个。
