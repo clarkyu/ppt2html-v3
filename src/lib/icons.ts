@@ -36,6 +36,8 @@ export const icons = {
   pptx: wrap('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 16v-8h3.2a2.4 2.4 0 1 1 0 4.8H9"/>'),
   // "presenter view" — a screen split into current + next panes, on a stand.
   presenter: wrap('<rect x="2" y="4" width="20" height="13" rx="2"/><line x1="14" y1="4" x2="14" y2="17"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/>'),
+  // "paste from clipboard" — a clipboard with text lines.
+  clipboard: wrap('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4a3 3 0 0 1 6 0"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="15" y2="15"/>'),
   // "speaker script" — a microphone.
   mic: wrap('<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/>'),
   // "narrated auto-play" — a speaker with sound waves.
