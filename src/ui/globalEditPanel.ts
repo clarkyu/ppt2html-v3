@@ -1,11 +1,12 @@
 // Whole-deck conversational edit, step 2 of 2: the panel. One instruction →
 // planner (llm/globalEdit) → visible per-page plan the user confirms BEFORE
-// tokens are spent on rewrites → sequential batch through regenerateSlide
-// (per-page apply, cancel keeps finished pages) → done report + undo-all.
-// Overlay shell reuses the share/refine panel styles.
+// tokens are spent → two-phase execution: rewrites go one by one through
+// regenerateSlide (per-page apply, cancel keeps finished pages), then drops
+// and moves land in ONE local recompose (no LLM cost) that remounts the
+// player. Undo restores the full pre-execution snapshot.
 
 import type { Deck, Slide } from '../types'
-import { planGlobalEdit, type GlobalEditOp } from '../llm/globalEdit'
+import { planGlobalEdit, recomposeSlides, type GlobalEditOp } from '../llm/globalEdit'
 import { regenerateSlide } from '../llm/edit'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { t } from '../i18n'
@@ -14,8 +15,21 @@ import { navigate } from '../router'
 import { escapeHtml } from '../lib/markdown'
 
 export interface GlobalEditHooks {
-  /** Swap a slide into the deck + live player; called per page and for undo. */
+  /** Swap ONE slide in place (content rewrite — no page-number changes). */
   apply: (index: number, slide: Slide) => void
+  /** Replace the whole slide array (drops/reorders) — persists and remounts. */
+  applyStructure: (slides: Slide[]) => void
+}
+
+function opLine(deck: Deck, op: GlobalEditOp): string {
+  const title = escapeHtml(String(deck.slides[op.page - 1]?.title ?? '').replace(/\*\*/g, '').slice(0, 20))
+  const detail =
+    op.action === 'rewrite'
+      ? escapeHtml(op.instruction ?? '')
+      : op.action === 'drop'
+        ? `${t('ge.actDrop')}${op.instruction ? `：${escapeHtml(op.instruction)}` : ''}`
+        : t('ge.actMove').replace('{to}', String(op.to))
+  return `<li><b>P${op.page} · ${title}</b><ul><li>${detail}</li></ul></li>`
 }
 
 export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: GlobalEditHooks): () => void {
@@ -86,12 +100,7 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
         return
       }
       planEl.hidden = false
-      planEl.innerHTML = plan
-        .map(
-          (op) => `<li><b>P${op.page} · ${escapeHtml(String(deck.slides[op.page - 1]?.title ?? '').replace(/\*\*/g, '').slice(0, 20))}</b>
-            <ul><li>${escapeHtml(op.instruction)}</li></ul></li>`,
-        )
-        .join('')
+      planEl.innerHTML = plan.map((op) => opLine(deck, op)).join('')
       status.textContent = t('ge.planReady')
       runBtn.hidden = false
       runBtn.textContent = t('ge.run').replace('{n}', String(plan.length))
@@ -110,14 +119,17 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
     runBtn.disabled = true
     planBtn.hidden = true
     input.disabled = true
-    snapshot = plan.map((op) => structuredClone(deck.slides[op.page - 1]))
+    snapshot = structuredClone(deck.slides)
+    const rewrites = plan.filter((op) => op.action === 'rewrite')
+    const structural = plan.filter((op) => op.action !== 'rewrite')
     let done = 0
     let skipped = 0
-    for (const op of plan) {
+    // Phase 1: content rewrites — page indices are still the original ones.
+    for (const op of rewrites) {
       if (controller.signal.aborted || !wrap.isConnected) return
-      status.textContent = t('refine.busy').replace('{i}', String(done + skipped + 1)).replace('{n}', String(plan.length))
+      status.textContent = t('refine.busy').replace('{i}', String(done + skipped + 1)).replace('{n}', String(rewrites.length))
       try {
-        const next = await regenerateSlide(deck, op.page - 1, op.instruction, settings, controller.signal)
+        const next = await regenerateSlide(deck, op.page - 1, op.instruction ?? '', settings, controller.signal)
         if (!wrap.isConnected) return
         hooks.apply(op.page - 1, next)
         done++
@@ -126,7 +138,15 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
         skipped++ // one stubborn page must not sink the batch
       }
     }
-    status.textContent = t('refine.done').replace('{x}', String(done)).replace('{y}', String(skipped))
+    // Phase 2: drops + moves in one local recompose (free), then remount.
+    if (structural.length && wrap.isConnected && !controller.signal.aborted) {
+      hooks.applyStructure(recomposeSlides(deck.slides, structural))
+    }
+    status.textContent = t('ge.doneV2')
+      .replace('{x}', String(done))
+      .replace('{d}', String(structural.filter((o) => o.action === 'drop').length))
+      .replace('{m}', String(structural.filter((o) => o.action === 'move').length))
+      .replace('{y}', String(skipped))
     runBtn.hidden = true
     undoBtn.hidden = false
     closeBtn.textContent = t('common.gotIt')
@@ -137,10 +157,10 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
   input.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void makePlan()
   })
+  // Undo restores the full pre-execution snapshot (covers rewrites AND
+  // structure; goes through applyStructure so the player rebuilds cleanly).
   undoBtn.addEventListener('click', () => {
-    plan.forEach((op, k) => {
-      if (snapshot[k]) hooks.apply(op.page - 1, structuredClone(snapshot[k]))
-    })
+    hooks.applyStructure(structuredClone(snapshot))
     toast(t('rw.undone'))
     close()
   })
