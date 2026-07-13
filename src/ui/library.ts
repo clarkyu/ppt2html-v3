@@ -25,6 +25,45 @@ function sortDecks(decks: Deck[], key: SortKey): Deck[] {
   return out
 }
 
+/**
+ * Post-import choice: edit the imported deck as-is, or hand it to AI as
+ * material for a full regeneration ("AI 重构"). The rebuild rides the material
+ * channel — deckToMaterial serializes the deck as an outline, so the fidelity
+ * rule keeps its facts and the outline-following rule keeps its structure,
+ * while generation freely picks better layouts. Output is a NEW deck; the
+ * imported one stays untouched in the library.
+ */
+function offerRestyle(host: HTMLElement, deck: Deck): void {
+  host.querySelector('.sharepanel')?.remove()
+  const wrap = document.createElement('div')
+  wrap.className = 'sharepanel sharepanel--fixed'
+  wrap.innerHTML = `
+    <div class="sharepanel__card">
+      <h3>${t('imp.doneTitle').replace('{n}', String(deck.slides.length))}</h3>
+      <p class="sharepanel__hint">${t('imp.choiceHint')}</p>
+      <div class="sharepanel__actions">
+        <button class="btn btn--primary btn--sm" data-imp-rebuild>${icons.deckMagic} ${t('imp.rebuild')}</button>
+        <button class="btn btn--sm" data-imp-edit>${icons.edit} ${t('imp.editAsIs')}</button>
+      </div>
+    </div>`
+  host.appendChild(wrap)
+  wrap.addEventListener('click', (e) => {
+    const el = e.target as HTMLElement
+    if (e.target === wrap) wrap.remove() // dismiss = stay in the library
+    else if (el.closest('[data-imp-edit]')) {
+      wrap.remove()
+      navigate(`#/edit/${deck.id}`)
+    } else if (el.closest('[data-imp-rebuild]')) {
+      wrap.remove()
+      void Promise.all([import('../lib/deckMaterial'), import('./guided')]).then(
+        ([{ deckToMaterial }, { startGuidedGeneration }]) => {
+          startGuidedGeneration(deck.title, { material: deckToMaterial(deck) })
+        },
+      )
+    }
+  })
+}
+
 export function renderLibrary(view: HTMLElement): () => void {
   const thumbCleanups: Array<() => void> = []
   let all: Deck[] = []
@@ -88,7 +127,7 @@ export function renderLibrary(view: HTMLElement): () => void {
       const deck = normalizeDeck(spec, { prompt: file.name, id: crypto.randomUUID() })
       await saveDeck(deck)
       toast(t('imp.done').replace('{n}', String(deck.slides.length)))
-      navigate(`#/edit/${deck.id}`)
+      offerRestyle(view, deck)
     } catch (e) {
       toast((e as Error)?.message || t('imp.failed'))
     } finally {

@@ -331,6 +331,13 @@ const DICT: Record<string, Entry> = {
   },
   'imp.start': { zh: '正在解析 PPTX…', en: 'Parsing the PPTX…' },
   'imp.done': { zh: '已导入 {n} 页,版式为自动识别——可在编辑器里调整。', en: 'Imported {n} pages (layouts auto-detected) — adjust in the editor.' },
+  'imp.doneTitle': { zh: '已导入 {n} 页', en: '{n} slides imported' },
+  'imp.choiceHint': {
+    zh: '直接编辑保持原样；「AI 重构」会把这份课件的内容与结构作为素材，重新生成一份更精炼、版式更合理的新课件（原导入件保留在课件库，不受影响）。',
+    en: 'Edit keeps it as-is. “AI rebuild” feeds its content & structure to the generator as material and produces a NEW, tighter deck — the imported one stays in your library untouched.',
+  },
+  'imp.rebuild': { zh: 'AI 重构（推荐）', en: 'AI rebuild (recommended)' },
+  'imp.editAsIs': { zh: '直接编辑', en: 'Edit as-is' },
   'imp.failed': { zh: 'PPTX 导入失败,请确认文件完好。', en: 'PPTX import failed — please check the file.' },
   'imp.notPptx': { zh: '这不是有效的 .pptx 文件。', en: 'Not a valid .pptx file.' },
   'imp.noSlides': { zh: '文件里没有可导入的页面。', en: 'No importable slides in this file.' },
