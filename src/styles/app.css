@@ -1016,6 +1016,11 @@ body.playing .appbar { display: none; }
 /* Share panel (link + QR) */
 .sharepanel {
   position: absolute; inset: 0; z-index: 85;
+}
+/* Outside the fixed viewer (e.g. library import choice) the overlay must pin
+   to the viewport, not to a tall scrolling container. */
+.sharepanel--fixed { position: fixed; }
+.sharepanel {
   display: flex; align-items: center; justify-content: center; padding: 24px;
   background: rgba(2,4,12,0.6); backdrop-filter: blur(4px);
 }
