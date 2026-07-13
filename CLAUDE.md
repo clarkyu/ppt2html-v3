@@ -73,8 +73,13 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 - **UI**:`src/ui/home.ts`(快速/逐步双入口 + 素材框/语音输入/剪贴板粘贴)、`guided.ts`+`outline.ts`
   (向导,prefetch/草稿续作)、`generating.ts`(分段成稿+胶片墙)、`viewer.ts`(播放页全部工具,
   Wake Lock 防熄屏)、`rewritePanel.ts`(播放页单页 AI 改写浮层,原地换 .s 块不重挂播放器)、
+  `refinePanel.ts`(一键精修:lib/quality 机械定位→只重写不达标页)、`globalEditPanel.ts`
+  +`llm/globalEdit.ts`(整册指令:先出逐页计划再执行,v1 仅页内改写)、
   `editor.ts`(逐页编辑/AI 改写/候选图/AI 配图)、`settings.ts`、`stylePicker.ts`
   (换风格画廊:7 内置 + 我的风格)、`sharePanel.ts`(分享+二维码+卡片图+系统分享)
+- **质量**:`src/lib/quality.ts`(机械质量检查:容量/锚点/观点句/备注,与 prompt §8、
+  `scripts/eval/score.mjs` 三方同一契约,改一处同步三处);`scripts/eval/`(评测器,
+  `npm run eval`,--mock/--local/golden 三模式,--baseline 出 Δ,详见其 README)
 - **图片**:`src/images/search.ts`(Unsplash/Pexels/Pixabay/Openverse 混合+候选)、
   `abstract.ts`(7 族抽象 SVG 背景)、`genai.ts`(OpenAI 兼容图像生成,BYOK)
 - **导出**:`src/export/standalone.ts`(单文件 HTML)、`pptx.ts`(可编辑 PPTX,
@@ -115,7 +120,7 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 - **hash-fragment 分享链接无法做 OG 富预览**(内容不经服务器)——分享卡片图就是
   预览的替代方案,别再尝试动态 OG。
 
-## 功能全景(截至 PR #59,全部已上线)
+## 功能全景(截至 PR #63,全部已上线)
 
 生成:引导问答(1~2 问)→ 结构确认 → 分部大纲 → 分段成稿(胶片墙揭幕/断段重试/
 草稿续作/预取);快速一次成稿模式;单页 AI 改写(可撤销);**课件模板库**
@@ -134,6 +139,9 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 剪贴板一键粘贴(素材框展开时定向素材框)、播放页单页 AI 改写(原地生效可撤销)。
 素材注入:统一素材框(≤8000 字)——数字/事实保真优先引用,含提纲则结构沿用,
 流经全部生成路径;有素材时澄清问题改问缺口;草稿自动携带。
+AI 修改三层(播放页,persistable 门禁):单页改写(#58)→ 一键精修(#62,机械
+定位只修不达标页)→ 整册指令(#63,先出逐页计划确认后执行);均原地生效可撤销。
+质量度量:`npm run eval` 评测器(golden 16 主题/本地模板/评分器自测,--baseline 出 Δ)。
 
 ## 补充坑(PR14–16 踩到的)
 
@@ -147,14 +155,14 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 ## 候选方向(未做)
 
 1. 多语言课件一键翻译(整套 deck 翻译为另一语言)——用户曾明确跳过,勿擅自开工
-2. 质量回归评测集(golden set 固定主题批量生成 + 机械评分,让 prompt 迭代可度量)
-3. 精修 pass(成稿后按 DECK_SCHEMA_GUIDE 硬指标逐页自评,不达标页走 regenerateSlide 重写)
-4. 全局对话式修改(「每页补个例子」级整册指令 → 逐页改写计划 → 批量 regenerateSlide)
-5. 素材 v2:pdf/docx 文件解析(pdf.js/mammoth)、长素材按环节切片下发、讲稿生成引用素材
-6. 导入 PPTX 后「AI 重构这份课件」(= 方向 4 作用在导入件上)
+2. 素材 v2:pdf/docx 文件解析(pdf.js/mammoth)、长素材按环节切片下发、讲稿生成引用素材
+3. 导入 PPTX 后「AI 重构这份课件」(= 整册修改作用在导入件上,入口级工作)
+4. 整册修改 v2:结构性操作(增删页/调序/换版式)——需播放器重挂 + 烙入页码重排
+5. golden set 真实基线:用户本机 EVAL_LLM_KEY 跑第一份,之后 prompt 迭代对 Δ
 
 已完成(曾在候选里):自定义主题=PR #49;课件模板库=PR #52;导入 PPTX=PR #53;
 练习模式=PR #54;分享卡片/系统分享/接收端 CTA=PR #56;移动三件套=PR #57;
-播放页 AI 改写=PR #58;素材注入 v1=PR #59。
+播放页 AI 改写=PR #58;素材注入 v1=PR #59;质量评测器=PR #61;一键精修=PR #62;
+整册 AI 修改=PR #63。
 
 节奏照旧:实现→build→无头验证→草稿 PR→等合并→重置分支→下一个。
