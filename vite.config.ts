@@ -9,6 +9,17 @@ export default defineConfig(({ command }) => ({
   base: command === 'build' ? REPO_BASE : '/',
   build: {
     target: 'es2022',
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          // Heavy, rarely-used parsers get stable chunk names so the PWA
+          // precache can exclude them (they lazy-load online when needed).
+          if (id.includes('pdfjs-dist')) return 'pdfjs'
+          if (id.includes('mammoth')) return 'mammoth'
+          return undefined
+        },
+      },
+    },
     sourcemap: false,
   },
   plugins: [
@@ -41,6 +52,9 @@ export default defineConfig(({ command }) => ({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // pdf.js/mammoth are megabyte-class and only needed for file import —
+        // keep them out of the offline shell (they fetch on demand online).
+        globIgnores: ['**/pdfjs-*.js', '**/mammoth-*.js', '**/pdf.worker*'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
       },
