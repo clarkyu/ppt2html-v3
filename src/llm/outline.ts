@@ -15,9 +15,21 @@ import { extractJson } from './extractJson'
 import { DECK_SCHEMA_GUIDE, contextBlock } from './prompt'
 import { slidesForMinutes } from '../lib/duration'
 import { deckIsCjk } from '../lib/lang'
+import { sliceMaterial, SLICE_THRESHOLD } from '../lib/materialSlice'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
 const THEME_SET = new Set<string>(THEMES)
+
+/**
+ * Long pasted material gets sliced down to the blocks relevant to the part /
+ * segment being generated (lexical overlap with `query`). Structure planning
+ * keeps the full text — it must see an embedded outline's overall shape.
+ */
+function sliceOptsFor(opts: GenerateOptions, query: string): GenerateOptions {
+  const mat = opts.material?.trim()
+  if (!mat || mat.length <= SLICE_THRESHOLD) return opts
+  return { ...opts, material: sliceMaterial(mat, query) }
+}
 
 function asStr(v: unknown): string {
   return typeof v === 'string' ? v.trim() : ''
@@ -191,7 +203,7 @@ export async function generatePartPages(
   }
   const prior = (confirmed ?? []).map((s) => ({ layout: s.layout, title: s.title, brief: s.brief }))
   const user =
-    `${contextBlock(topic, opts)}\n\n` +
+    `${contextBlock(topic, sliceOptsFor(opts, `${sec?.title ?? ''} ${sec?.brief ?? ''} ${topic}`))}\n\n` +
     `整份课件结构（供参考，保持连贯）：${JSON.stringify(overview)}\n\n` +
     (prior.length
       ? `前面部分已确认的页面（不要重复其内容，延续其术语与风格）：${JSON.stringify(prior)}\n\n`
@@ -371,8 +383,9 @@ export async function generateSegmentSlides(
   handlers: GenerateHandlers = {},
 ): Promise<Array<Record<string, unknown>>> {
   const seg = segments[segIndex]
+  const segQuery = seg.map((s) => `${s.title} ${s.brief ?? ''}`).join(' ')
   const user =
-    `${contextBlock(topic, opts)}\n\n` +
+    `${contextBlock(topic, sliceOptsFor(opts, `${segQuery} ${topic}`))}\n\n` +
     `课件标题：《${outline.title}》${outline.subtitle ? `（${outline.subtitle}）` : ''}，theme=${outline.theme}\n` +
     `整份大纲（供连贯参考）：${JSON.stringify(outline.slides.map((s, n) => ({ n: n + 1, layout: s.layout, title: s.title })))}\n\n` +
     (priorTitles.length ? `前文已生成页面的标题：${JSON.stringify(priorTitles)}\n\n` : '') +

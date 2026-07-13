@@ -191,9 +191,16 @@ const DICT: Record<string, Entry> = {
     zh: '粘贴工作总结、数据、会议记录或课件提纲——素材中的数字与事实会被优先引用且保真；若含提纲，课件结构将沿用它。',
     en: 'Paste notes, data, meeting minutes or an outline — its facts are quoted faithfully, and an embedded outline defines the deck structure.',
   },
+  'home.materialUpload': { zh: '从文件导入', en: 'Import a file' },
+  'home.materialParsing': { zh: '解析中…', en: 'Parsing…' },
+  'home.materialParsed': { zh: '已提取 {n} 字。', en: 'Extracted {n} characters.' },
+  'home.materialTruncated': { zh: '内容较长，已截取前 8000 字。', en: 'Long content — kept the first 8000 characters.' },
+  'home.materialUnsupported': { zh: '暂只支持 txt / md / pdf / docx 文件。', en: 'Only txt / md / pdf / docx files are supported.' },
+  'home.materialEmptyFile': { zh: '这个文件里没有提取到文字。', en: 'No text could be extracted from this file.' },
+  'home.materialParseFailed': { zh: '文件解析失败——可以打开文件复制文字后粘贴过来。', en: 'Parsing failed — open the file and paste the text instead.' },
   'home.materialHint': {
-    zh: '最多 8000 字。素材只随本次生成发送给你配置的模型，不会上传到任何服务器。',
-    en: 'Up to 8000 characters. Sent only to your configured model for this generation — never uploaded to a server.',
+    zh: '最多 8000 字。文件在本机解析，素材只随本次生成发送给你配置的模型，不会上传到任何服务器。',
+    en: 'Up to 8000 characters. Files are parsed on-device; material goes only to your configured model — never uploaded to a server.',
   },
   'home.pasteEmpty': { zh: '剪贴板是空的。', en: 'The clipboard is empty.' },
   'home.pasteFailed': {

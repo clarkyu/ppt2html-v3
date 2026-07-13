@@ -122,7 +122,11 @@ export function renderHome(view: HTMLElement): () => void {
         <summary>${icons.note} ${t('home.materialSummary')}</summary>
         <textarea class="composer__input composer__material-input" data-material rows="5" maxlength="8000"
           placeholder="${escapeHtml(t('home.materialPlaceholder'))}"></textarea>
-        <p class="composer__material-hint">${t('home.materialHint')}</p>
+        <div class="composer__material-row">
+          <button class="btn btn--ghost btn--sm" data-material-file>${icons.upload} ${t('home.materialUpload')}</button>
+          <input type="file" data-material-input accept=".txt,.md,.markdown,.pdf,.docx" hidden>
+          <p class="composer__material-hint">${t('home.materialHint')}</p>
+        </div>
       </details>
       <div class="composer__row">
         <label class="field"><span>${t('home.field.theme')}</span>
@@ -273,6 +277,36 @@ export function renderHome(view: HTMLElement): () => void {
       }
     })
   }
+
+  // File → material: .txt/.md read directly, .pdf/.docx parsed on-device
+  // (lazy-loaded parsers, see lib/extractText). Appends into the box; the
+  // 8000-char cap is enforced by the textarea's maxlength.
+  const fileBtn = view.querySelector<HTMLButtonElement>('[data-material-file]')!
+  const fileInput = view.querySelector<HTMLInputElement>('[data-material-input]')!
+  fileBtn.addEventListener('click', () => fileInput.click())
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0]
+    fileInput.value = '' // same file re-selectable
+    if (!file) return
+    fileBtn.disabled = true
+    const label = fileBtn.innerHTML
+    fileBtn.textContent = t('home.materialParsing')
+    void import('../lib/extractText')
+      .then(({ extractFileText }) => extractFileText(file))
+      .then((text) => {
+        const cur = materialEl.value.trim()
+        const merged = cur ? `${cur}\n\n${text}` : text
+        materialEl.value = merged.slice(0, 8000)
+        if (merged.length > 8000) toast(t('home.materialTruncated'))
+        else toast(t('home.materialParsed').replace('{n}', String(text.length)))
+        materialEl.focus()
+      })
+      .catch((err: Error) => toast(err.message || t('home.materialParseFailed')))
+      .finally(() => {
+        fileBtn.disabled = false
+        fileBtn.innerHTML = label
+      })
+  })
 
   // One-tap paste — the mobile path is “copy from a chat → drop it here”.
   // With the material box open, that's where pasted content belongs.
