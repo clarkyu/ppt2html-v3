@@ -15,6 +15,7 @@ import { openStylePicker } from './stylePicker'
 import { openSharePanel } from './sharePanel'
 import { openRewritePanel } from './rewritePanel'
 import { openRefinePanel } from './refinePanel'
+import { openGlobalEditPanel } from './globalEditPanel'
 import { abstractBg, abstractBgWith } from '../images/abstract'
 import { applyCustomTheme, customAbstractPalette, isLightCustom } from '../render/customTheme'
 import { fitSlide } from '../render/fit'
@@ -72,6 +73,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           <button class="btn btn--sm" data-overview title="${t('viewer.overview')}">${icons.grid}</button>
           <button class="btn btn--sm" data-rewrite title="${t('rw.button')}" hidden>${icons.sparkles}</button>
           <button class="btn btn--sm" data-refine title="${t('refine.button')}" hidden>${icons.wand}</button>
+          <button class="btn btn--sm" data-gedit title="${t('ge.button')}" hidden>${icons.deckMagic}</button>
           <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
           <button class="btn btn--sm" data-print title="${t('viewer.print')}">${icons.print}</button>
           <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}">${icons.download}</button>
@@ -545,6 +547,13 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         refineBtn.hidden = false
         refineBtn.addEventListener('click', () => {
           openRefinePanel(viewerEl, deck, { apply: applyRewrite })
+        })
+        // Whole-deck conversational edit: one instruction → visible per-page
+        // plan → confirmed batch rewrite. Same in-place apply.
+        const geditBtn = view.querySelector<HTMLButtonElement>('[data-gedit]')!
+        geditBtn.hidden = false
+        geditBtn.addEventListener('click', () => {
+          openGlobalEditPanel(viewerEl, deck, { apply: applyRewrite })
         })
       }
 

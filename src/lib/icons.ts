@@ -36,6 +36,8 @@ export const icons = {
   pptx: wrap('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 16v-8h3.2a2.4 2.4 0 1 1 0 4.8H9"/>'),
   // "presenter view" — a screen split into current + next panes, on a stand.
   presenter: wrap('<rect x="2" y="4" width="20" height="13" rx="2"/><line x1="14" y1="4" x2="14" y2="17"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/>'),
+  // "whole-deck edit" — stacked deck layers with a spark.
+  deckMagic: wrap('<path d="M12 3l8 4.5-8 4.5-8-4.5L12 3z"/><path d="M4 12.5l8 4.5 5-2.8"/><path d="M19 16l.6 1.4L21 18l-1.4.6L19 20l-.6-1.4L17 18l1.4-.6L19 16z"/>'),
   // "refine pass" — a magic wand with a spark.
   wand: wrap('<path d="M15 4l5 5L7 22l-5-5L15 4z"/><line x1="12.5" y1="6.5" x2="17.5" y2="11.5"/><path d="M19 2l.6 1.4L21 4l-1.4.6L19 6l-.6-1.4L17 4l1.4-.6L19 2z"/>'),
   // "paste from clipboard" — a clipboard with text lines.
