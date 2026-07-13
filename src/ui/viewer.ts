@@ -305,6 +305,30 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         makeBtn.addEventListener('click', () => navigate('#/'))
       }
       player = mountPlayer(mount, deck)
+      // Slide-change callbacks go through this registry so a REMOUNT (needed
+      // by structural whole-deck edits: dropped/reordered pages invalidate the
+      // baked page numbers and reveal's section list) can re-register them on
+      // the fresh player instead of silently losing position memory, the
+      // rehearse HUD and the notes panel.
+      const slideChangeCbs: Array<(num: number, total: number) => void> = []
+      const onSlide = (cb: (num: number, total: number) => void): void => {
+        slideChangeCbs.push(cb)
+        player!.onSlideChange(cb)
+      }
+      const remountPlayer = (): void => {
+        const pos = Math.min(curNum, deck.slides.length)
+        player?.destroy()
+        player = mountPlayer(mount, deck)
+        for (const cb of slideChangeCbs) player.onSlideChange(cb)
+        if (pos > 1) {
+          try {
+            player.reveal.slide(pos - 1)
+          } catch {
+            /* best-effort */
+          }
+        }
+        setNote(deck.slides[Math.min(pos, deck.slides.length) - 1]?.note)
+      }
       const stepBtn = view.querySelector<HTMLButtonElement>('[data-step]')!
       stepBtn.classList.toggle('active', player.stepMode())
       stepBtn.addEventListener('click', () => {
@@ -369,7 +393,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         rehActual[rehPage - 1] = rehSpentHere()
         rehStart = Date.now()
       }
-      player.onSlideChange((num) => {
+      onSlide((num) => {
         if (!rehearsing || num === rehPage) return
         rehCommit()
         rehPage = num
@@ -488,7 +512,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
       const posKey = `ppt2html.pos.${id}`
       let posRestored = false
       let curNum = 1
-      player.onSlideChange((num) => {
+      onSlide((num) => {
         curNum = num
         if (!posRestored) {
           posRestored = true
@@ -549,11 +573,18 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           openRefinePanel(viewerEl, deck, { apply: applyRewrite })
         })
         // Whole-deck conversational edit: one instruction → visible per-page
-        // plan → confirmed batch rewrite. Same in-place apply.
+        // plan → confirmed batch rewrite. In-place apply for rewrites; drops
+        // and reorders replace the slide array and remount the player (baked
+        // page numbers and reveal's section list must be rebuilt).
+        const applyStructure = (slides: Slide[]): void => {
+          deck.slides = slides
+          if (persistable) void saveDeck(deck)
+          remountPlayer()
+        }
         const geditBtn = view.querySelector<HTMLButtonElement>('[data-gedit]')!
         geditBtn.hidden = false
         geditBtn.addEventListener('click', () => {
-          openGlobalEditPanel(viewerEl, deck, { apply: applyRewrite })
+          openGlobalEditPanel(viewerEl, deck, { apply: applyRewrite, applyStructure })
         })
       }
 

@@ -1,12 +1,13 @@
 // Whole-deck conversational edit, step 1 of 2: the PLANNER. One cheap call
 // sees the full deck digest + the user's global instruction ("整体更口语化"
-// "每页补一个真实例子") and decides WHICH pages change and HOW — with
-// cross-page awareness (varied examples, consistent terms) that per-page
-// rewrites alone can't have. Step 2 executes each op through the existing
-// regenerateSlide pipeline (layout/background stay pinned there).
+// "每页补一个真实例子" "砍到 8 页") and decides WHICH pages change and HOW —
+// with cross-page awareness (varied examples, consistent terms) that per-page
+// rewrites alone can't have. Step 2 executes rewrites through the existing
+// regenerateSlide pipeline; drops and moves are applied locally in one
+// recompose (no LLM cost) and the player is remounted.
 //
-// v1 is content-rewrite only: no page add/drop/reorder, no layout changes —
-// structural ops need player remount + baked page-number reflow (v2).
+// v2 supports rewrite + drop + move. Still unsupported: adding pages and
+// changing layouts (both need content synthesis beyond a single-page rewrite).
 
 import type { Deck, Slide } from '../types'
 import type { LlmSettings } from './settings'
@@ -14,24 +15,33 @@ import { requestText } from './client'
 import { extractJson } from './extractJson'
 import { t } from '../i18n'
 
+export type GlobalEditAction = 'rewrite' | 'drop' | 'move'
+
 export interface GlobalEditOp {
-  /** 1-based page number. */
+  /** 1-based page number in the CURRENT deck. */
   page: number
-  /** Self-contained, page-specific rewrite instruction (the executor sees only this page). */
-  instruction: string
+  action: GlobalEditAction
+  /** rewrite: self-contained instruction; drop: optional reason (display only). */
+  instruction?: string
+  /** move: 1-based target position (kept inside the cover…end content zone). */
+  to?: number
 }
 
-const PLAN_SYSTEM = `你是课件整册修改的规划师。给定一份课件的逐页摘要和用户的全局修改要求，输出一个修改计划：哪些页需要改、每页具体怎么改。
+const PLAN_SYSTEM = `你是课件整册修改的规划师。给定一份课件的逐页摘要和用户的全局修改要求，输出一个修改计划。
 
 严格只输出一个 JSON 对象，不要解释或代码块标记：
-{ "ops": [ { "page": 3, "instruction": "这一页具体怎么改（自包含）" } ] }
+{ "ops": [
+  { "page": 3, "action": "rewrite", "instruction": "这一页具体怎么改（自包含）" },
+  { "page": 5, "action": "drop", "instruction": "删除原因（一句话）" },
+  { "page": 4, "action": "move", "to": 2 }
+] }
 
 规则：
-1. 只列**真正需要修改**的页——与要求无关的页绝不列入；如果全篇都不需要改，输出 {"ops":[]}。
-2. 每页的 instruction 必须**自包含且具体**：执行者只能看到这一页和这条指令，看不到全篇，也看不到用户的原始要求。把"怎么改"落到这一页的内容上。
-3. **跨页协调**是你的职责：补例子时各页例子不能雷同；统一术语时在每条指令里写明目标术语；语气调整要全篇一致。
-4. 封面(cover)与结束页(end)仅在要求明确涉及时才修改。
-5. 当前版本**只支持页内改写**：不许增删页、不许调整顺序、不许更换版式——这类要求请忽略并只做能做的部分。
+1. 只列**真正需要修改**的页——与要求无关的页绝不列入；全篇都不需要改就输出 {"ops":[]}。
+2. rewrite 的 instruction 必须**自包含且具体**：执行者只能看到这一页和这条指令。补例子时各页例子不能雷同；统一术语时写明目标术语。
+3. drop 用于删除信息量低、重复或与要求不符的页（如“砍到 N 页”“删掉重复内容”）；instruction 写一句删除原因。**绝不删除封面(cover)与结束页(end)**。
+4. move 用于调整页面顺序，to 为目标页号；**绝不移动封面与结束页**，也不要把内容页移到它们之外。
+5. 每页最多一个操作。当前版本**不支持新增页、不支持更换版式**——这类要求忽略并只做能做的部分。
 6. instruction 与课件同语言。`
 
 function digest(deck: Deck): string {
@@ -64,18 +74,54 @@ export async function planGlobalEdit(
   const parsed = extractJson(text) as { ops?: unknown }
   if (!Array.isArray(parsed.ops)) throw new Error(t('err.noJson'))
 
-  // Distrust the plan: page range, non-empty instruction, one op per page, cap.
+  // Distrust the plan: page in range, valid action, cover/end untouchable by
+  // structural ops, rewrite needs an instruction, move needs a sane target,
+  // one op per page, hard cap.
+  const n = deck.slides.length
   const seen = new Set<number>()
   const ops: GlobalEditOp[] = []
   for (const item of parsed.ops) {
     if (!item || typeof item !== 'object') continue
     const o = item as Record<string, unknown>
     const page = typeof o.page === 'number' ? Math.round(o.page) : NaN
+    if (!Number.isInteger(page) || page < 1 || page > n || seen.has(page)) continue
+    const action = (typeof o.action === 'string' ? o.action : 'rewrite') as GlobalEditAction
+    if (!['rewrite', 'drop', 'move'].includes(action)) continue
     const instr = typeof o.instruction === 'string' ? o.instruction.trim() : ''
-    if (!Number.isInteger(page) || page < 1 || page > deck.slides.length || !instr || seen.has(page)) continue
+    const isEdge = page === 1 || page === n
+    if (action === 'rewrite') {
+      if (!instr) continue
+      ops.push({ page, action, instruction: instr })
+    } else if (isEdge) {
+      continue // cover/end are structural anchors
+    } else if (action === 'drop') {
+      ops.push({ page, action, instruction: instr || undefined })
+    } else {
+      const to = typeof o.to === 'number' ? Math.round(o.to) : NaN
+      if (!Number.isInteger(to) || to < 2 || to > n - 1 || to === page) continue
+      ops.push({ page, action, to })
+    }
     seen.add(page)
-    ops.push({ page, instruction: instr })
     if (ops.length >= 20) break
   }
   return ops.sort((a, b) => a.page - b.page)
+}
+
+/**
+ * Apply the plan's structural ops (drops, then moves in plan order) to a
+ * slide array in ONE recompose. Move targets are clamped inside the
+ * cover…end zone of the current (post-drop) array. Pure — returns a new array.
+ */
+export function recomposeSlides(slides: Slide[], ops: GlobalEditOp[]): Slide[] {
+  const dropSet = new Set(ops.filter((o) => o.action === 'drop').map((o) => o.page))
+  let arr = slides.map((s, i) => ({ s, orig: i + 1 })).filter((x) => !dropSet.has(x.orig))
+  for (const op of ops) {
+    if (op.action !== 'move') continue
+    const from = arr.findIndex((x) => x.orig === op.page)
+    if (from < 0) continue
+    const [item] = arr.splice(from, 1)
+    const at = Math.max(1, Math.min(arr.length - 1, (op.to ?? 2) - 1))
+    arr.splice(at, 0, item)
+  }
+  return arr.map((x) => x.s)
 }
