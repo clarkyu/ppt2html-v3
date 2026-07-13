@@ -87,6 +87,9 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 - **分享**:`src/lib/share.ts`(deflate→base64url→`#/s/` 路由,data: 背景剥离,
   customTheme 入口 sanitize)、`src/lib/shareCard.ts`(canvas 自绘 1080×1440 竖版
   分享卡片:色板封面+二维码,文案跟随课件语言;`themePalette` 从 abstract.ts 取平面色板)
+- **素材**:`src/lib/extractText.ts`(txt/md/docx/pdf 本机解析,mammoth/pdfjs 懒加载
+  且被 workbox globIgnores 排除出离线包)、`materialSlice.ts`(长素材>3000 字按环节
+  词面切片,结构规划保全量)、`deckMaterial.ts`(deck→提纲式素材,导入件 AI 重构用)
 - **其他**:`src/lib/lang.ts`(CJK 检测,课件语言跟随)、`highlight.ts`(零依赖代码高亮)、
   `draft.ts`(向导草稿 24h)、`styles.ts`(我的风格 localStorage 库)、`i18n.ts`(全部文案 zh/en)
 
@@ -138,7 +141,9 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 移动(会话四新增):Wake Lock 播放防熄屏、主题语音输入(Web Speech,双前缀)、
 剪贴板一键粘贴(素材框展开时定向素材框)、播放页单页 AI 改写(原地生效可撤销)。
 素材注入:统一素材框(≤8000 字)——数字/事实保真优先引用,含提纲则结构沿用,
-流经全部生成路径;有素材时澄清问题改问缺口;草稿自动携带。
+流经全部生成路径;有素材时澄清问题改问缺口;草稿自动携带;**文件导入**
+(txt/md/docx/pdf 本机解析);长素材按环节切片下发(结构规划保全量);
+**导入件 AI 重构**(导入 PPTX 后可把旧课件当素材重新生成,原件保留)。
 AI 修改三层(播放页,persistable 门禁):单页改写(#58)→ 一键精修(#62,机械
 定位只修不达标页)→ 整册指令(#63,先出逐页计划确认后执行);均原地生效可撤销。
 质量度量:`npm run eval` 评测器(golden 16 主题/本地模板/评分器自测,--baseline 出 Δ)。
@@ -155,14 +160,13 @@ AI 修改三层(播放页,persistable 门禁):单页改写(#58)→ 一键精修(
 ## 候选方向(未做)
 
 1. 多语言课件一键翻译(整套 deck 翻译为另一语言)——用户曾明确跳过,勿擅自开工
-2. 素材 v2:pdf/docx 文件解析(pdf.js/mammoth)、长素材按环节切片下发、讲稿生成引用素材
-3. 导入 PPTX 后「AI 重构这份课件」(= 整册修改作用在导入件上,入口级工作)
-4. 整册修改 v2:结构性操作(增删页/调序/换版式)——需播放器重挂 + 烙入页码重排
-5. golden set 真实基线:用户本机 EVAL_LLM_KEY 跑第一份,之后 prompt 迭代对 Δ
+2. 整册修改 v2:结构性操作(增删页/调序/换版式)——需播放器重挂 + 烙入页码重排
+3. 讲稿引用素材:需先与用户商量 material 是否长期存在 deck 上(牵扯分享/导出契约)
+4. golden set 真实基线:用户本机 EVAL_LLM_KEY 跑第一份,之后 prompt 迭代对 Δ
 
 已完成(曾在候选里):自定义主题=PR #49;课件模板库=PR #52;导入 PPTX=PR #53;
 练习模式=PR #54;分享卡片/系统分享/接收端 CTA=PR #56;移动三件套=PR #57;
 播放页 AI 改写=PR #58;素材注入 v1=PR #59;质量评测器=PR #61;一键精修=PR #62;
-整册 AI 修改=PR #63。
+整册 AI 修改=PR #63;素材 v2 文件导入+切片=PR #65;导入件 AI 重构=PR #66。
 
 节奏照旧:实现→build→无头验证→草稿 PR→等合并→重置分支→下一个。
