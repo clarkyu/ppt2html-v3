@@ -135,6 +135,13 @@ export interface Deck {
   model?: string
   /** Presenter / org / date / logo (defaults from settings, editable per deck). */
   branding?: Branding
+  /**
+   * The pasted source material this deck was generated from, kept so later
+   * AI passes (speaker script) can quote its real facts. Local-only: the
+   * share-link allowlist (lib/share.ts portable) deliberately excludes it,
+   * and exports never embed it.
+   */
+  material?: string
 }
 
 /** The loose shape we accept from the model before normalization. */

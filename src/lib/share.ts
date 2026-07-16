@@ -36,7 +36,9 @@ export function shareSupported(): boolean {
   return typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined'
 }
 
-/** The deck, minus what must not travel (ids, timestamps, bulky data URLs). */
+/** The deck, minus what must not travel (ids, timestamps, bulky data URLs).
+ * NOTE: this is an ALLOWLIST — `deck.material` (the user's pasted source
+ * material) is deliberately absent and must never be added here. */
 function portable(deck: Deck): Record<string, unknown> {
   return {
     title: deck.title,
