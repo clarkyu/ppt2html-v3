@@ -122,6 +122,8 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
   (会丢所有 onSlideChange 回调);换完 `reveal.sync()`(步进 fragments)+ `fitSlide`。
 - **hash-fragment 分享链接无法做 OG 富预览**(内容不经服务器)——分享卡片图就是
   预览的替代方案,别再尝试动态 OG。
+- **deck.material 是 local-only 契约**(PR #70 用户已认可):share.ts 的 portable()
+  是显式字段白名单,material 绝不能加入;导出同样不得携带。
 
 ## 功能全景(截至 PR #63,全部已上线)
 
@@ -143,7 +145,8 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 素材注入:统一素材框(≤8000 字)——数字/事实保真优先引用,含提纲则结构沿用,
 流经全部生成路径;有素材时澄清问题改问缺口;草稿自动携带;**文件导入**
 (txt/md/docx/pdf 本机解析);长素材按环节切片下发(结构规划保全量);
-**导入件 AI 重构**(导入 PPTX 后可把旧课件当素材重新生成,原件保留)。
+**导入件 AI 重构**(导入 PPTX 后可把旧课件当素材重新生成,原件保留);
+**讲稿引用素材**(deck.material 本地持久化,逐字稿优先引用素材事实)。
 AI 修改三层(播放页,persistable 门禁):单页改写(#58)→ 一键精修(#62,机械
 定位只修不达标页)→ 整册指令(#63 页内改写;#68 v2 加删除页/调整顺序——
 两阶段执行,结构变动走 remountPlayer 重挂+onSlide 注册表重接线);均可撤销。
@@ -161,14 +164,13 @@ AI 修改三层(播放页,persistable 门禁):单页改写(#58)→ 一键精修(
 ## 候选方向(未做)
 
 1. 多语言课件一键翻译(整套 deck 翻译为另一语言)——用户曾明确跳过,勿擅自开工
-2. 讲稿引用素材:需先与用户商量 material 是否长期存在 deck 上(牵扯分享/导出契约)
-3. golden set 真实基线:用户本机 EVAL_LLM_KEY 跑第一份,之后 prompt 迭代对 Δ
-4. 整册修改 v3:新增页(需凭空生成内容)、更换版式
+2. golden set 真实基线:用户本机 EVAL_LLM_KEY 跑第一份,之后 prompt 迭代对 Δ
+3. 整册修改 v3:新增页(需凭空生成内容)、更换版式
 
 已完成(曾在候选里):自定义主题=PR #49;课件模板库=PR #52;导入 PPTX=PR #53;
 练习模式=PR #54;分享卡片/系统分享/接收端 CTA=PR #56;移动三件套=PR #57;
 播放页 AI 改写=PR #58;素材注入 v1=PR #59;质量评测器=PR #61;一键精修=PR #62;
 整册 AI 修改=PR #63;素材 v2 文件导入+切片=PR #65;导入件 AI 重构=PR #66;
-整册修改 v2 删页/调序=PR #68。
+整册修改 v2 删页/调序=PR #68;讲稿引用素材=PR #70。
 
 节奏照旧:实现→build→无头验证→草稿 PR→等合并→重置分支→下一个。
