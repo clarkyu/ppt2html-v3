@@ -315,8 +315,8 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         slideChangeCbs.push(cb)
         player!.onSlideChange(cb)
       }
-      const remountPlayer = (): void => {
-        const pos = Math.min(curNum, deck.slides.length)
+      const remountPlayer = (posOverride?: number): void => {
+        const pos = Math.min(posOverride ?? curNum, deck.slides.length)
         player?.destroy()
         player = mountPlayer(mount, deck)
         for (const cb of slideChangeCbs) player.onSlideChange(cb)
@@ -575,11 +575,16 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         // Whole-deck conversational edit: one instruction → visible per-page
         // plan → confirmed batch rewrite. In-place apply for rewrites; drops
         // and reorders replace the slide array and remount the player (baked
-        // page numbers and reveal's section list must be rebuilt).
+        // page numbers and reveal's section list must be rebuilt). Position is
+        // restored by slide IDENTITY when the viewed slide survives the
+        // recompose — inserts/drops shift page numbers, and coming back "on
+        // page 8" showing a different slide reads as a jump. (Undo passes
+        // clones, so identity misses there and the number fallback applies.)
         const applyStructure = (slides: Slide[]): void => {
+          const idx = slides.indexOf(deck.slides[curNum - 1])
           deck.slides = slides
           if (persistable) void saveDeck(deck)
-          remountPlayer()
+          remountPlayer(idx >= 0 ? idx + 1 : undefined)
         }
         const geditBtn = view.querySelector<HTMLButtonElement>('[data-gedit]')!
         geditBtn.hidden = false

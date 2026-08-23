@@ -22,7 +22,7 @@ import {
   type ThemeName,
 } from '../types'
 
-const LAYOUT_KEYS: Record<SlideLayout, string> = {
+export const LAYOUT_KEYS: Record<SlideLayout, string> = {
   cover: 'layout.cover',
   section: 'layout.section',
   bullets: 'layout.bullets',
