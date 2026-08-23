@@ -460,12 +460,12 @@ const DICT: Record<string, Entry> = {
   'ge.button': { zh: '整册 AI 修改（一句话指令，先出计划再执行）', en: 'Whole-deck AI edit (plan first, then apply)' },
   'ge.title': { zh: '整册 AI 修改', en: 'Whole-deck AI edit' },
   'ge.hint': {
-    zh: '说一个全篇性的修改要求（改写文字、删除页、调整顺序都可以），AI 先给出逐页计划，你确认后才执行，可整体撤销。',
-    en: 'Give one deck-wide instruction — rewrite text, drop pages, or reorder. AI proposes a per-page plan first; nothing happens until you confirm. Fully undoable.',
+    zh: '说一个全篇性的修改要求（改写文字、删除页、调整顺序、新增页、更换版式都可以），AI 先给出逐页计划，你确认后才执行，可整体撤销。',
+    en: 'Give one deck-wide instruction — rewrite text, drop / reorder / add pages, or switch layouts. AI proposes a per-page plan first; nothing happens until you confirm. Fully undoable.',
   },
   'ge.placeholder': {
-    zh: '例如：整体更口语化 / 每页补一个真实例子 / 砍到 8 页以内 / 把案例页挪到方案页前面',
-    en: 'e.g. friendlier tone throughout / add an example per page / cut to 8 slides / move the case study before the proposal',
+    zh: '例如：整体更口语化 / 砍到 8 页以内 / 在方案页后加一页风险应对 / 把要点页改成时间线版式',
+    en: 'e.g. friendlier tone throughout / cut to 8 slides / add a risk page after the proposal / turn the bullets page into a timeline',
   },
   'ge.planBtn': { zh: '生成修改计划', en: 'Draft the plan' },
   'ge.replan': { zh: '重新计划', en: 'Re-plan' },
@@ -475,9 +475,11 @@ const DICT: Record<string, Entry> = {
   'ge.run': { zh: '执行 {n} 项修改', en: 'Apply {n} change(s)' },
   'ge.actDrop': { zh: '删除这一页', en: 'Drop this page' },
   'ge.actMove': { zh: '移到第 {to} 页', en: 'Move to position {to}' },
-  'ge.doneV2': {
-    zh: '完成：改写 {x} 页，删除 {d} 页，移动 {m} 页，跳过 {y} 页。',
-    en: 'Done: {x} rewritten, {d} dropped, {m} moved, {y} skipped.',
+  'ge.actAdd': { zh: '在此页后新增一页', en: 'Add a page after this one' },
+  'ge.actRelayout': { zh: '换版式为 {layout}', en: 'Switch layout to {layout}' },
+  'ge.doneV3': {
+    zh: '完成：改写 {x} 页，换版式 {r} 页，新增 {a} 页，删除 {d} 页，移动 {m} 页，跳过 {y} 页。',
+    en: 'Done: {x} rewritten, {r} re-laid-out, {a} added, {d} dropped, {m} moved, {y} skipped.',
   },
   'share.systemShare': { zh: '分享到…', en: 'Share…' },
   'share.saveImage': { zh: '保存图片', en: 'Save image' },

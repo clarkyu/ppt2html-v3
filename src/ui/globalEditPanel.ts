@@ -1,13 +1,14 @@
 // Whole-deck conversational edit, step 2 of 2: the panel. One instruction →
 // planner (llm/globalEdit) → visible per-page plan the user confirms BEFORE
-// tokens are spent → two-phase execution: rewrites go one by one through
-// regenerateSlide (per-page apply, cancel keeps finished pages), then drops
-// and moves land in ONE local recompose (no LLM cost) that remounts the
-// player. Undo restores the full pre-execution snapshot.
+// tokens are spent → two-phase execution: rewrites/relayouts go one by one
+// through the single-page pipeline and new pages are synthesized (per-page
+// apply, cancel keeps finished pages), then drops, moves and inserts land in
+// ONE local recompose that remounts the player. Undo restores the full
+// pre-execution snapshot.
 
 import type { Deck, Slide } from '../types'
 import { planGlobalEdit, recomposeSlides, type GlobalEditOp } from '../llm/globalEdit'
-import { regenerateSlide } from '../llm/edit'
+import { regenerateSlide, relayoutSlide, generateNewSlide } from '../llm/edit'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { t } from '../i18n'
 import { toast } from '../lib/toast'
@@ -28,7 +29,11 @@ function opLine(deck: Deck, op: GlobalEditOp): string {
       ? escapeHtml(op.instruction ?? '')
       : op.action === 'drop'
         ? `${t('ge.actDrop')}${op.instruction ? `：${escapeHtml(op.instruction)}` : ''}`
-        : t('ge.actMove').replace('{to}', String(op.to))
+        : op.action === 'add'
+          ? `${t('ge.actAdd')}：${escapeHtml(op.instruction ?? '')}`
+          : op.action === 'relayout'
+            ? `${t('ge.actRelayout').replace('{layout}', op.layout ?? '')}${op.instruction ? `：${escapeHtml(op.instruction)}` : ''}`
+            : t('ge.actMove').replace('{to}', String(op.to))
   return `<li><b>P${op.page} · ${title}</b><ul><li>${detail}</li></ul></li>`
 }
 
@@ -120,30 +125,55 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
     planBtn.hidden = true
     input.disabled = true
     snapshot = structuredClone(deck.slides)
-    const rewrites = plan.filter((op) => op.action === 'rewrite')
-    const structural = plan.filter((op) => op.action !== 'rewrite')
-    let done = 0
+    const inPlace = plan.filter((op) => op.action === 'rewrite' || op.action === 'relayout')
+    const adds = plan.filter((op) => op.action === 'add')
+    const structural = plan.filter((op) => op.action === 'drop' || op.action === 'move')
+    const llmTotal = inPlace.length + adds.length
+    let rewritten = 0
+    let relaid = 0
+    let added = 0
     let skipped = 0
-    // Phase 1: content rewrites — page indices are still the original ones.
-    for (const op of rewrites) {
+    const step = (): number => rewritten + relaid + added + skipped + 1
+    // Phase 1: in-place rewrites/relayouts — page indices are still the
+    // original ones — then new-page synthesis (inserted later, so indices
+    // stay stable throughout every LLM call).
+    for (const op of inPlace) {
       if (controller.signal.aborted || !wrap.isConnected) return
-      status.textContent = t('refine.busy').replace('{i}', String(done + skipped + 1)).replace('{n}', String(rewrites.length))
+      status.textContent = t('refine.busy').replace('{i}', String(step())).replace('{n}', String(llmTotal))
       try {
-        const next = await regenerateSlide(deck, op.page - 1, op.instruction ?? '', settings, controller.signal)
+        const next =
+          op.action === 'relayout'
+            ? await relayoutSlide(deck, op.page - 1, op.layout!, op.instruction ?? '', settings, controller.signal)
+            : await regenerateSlide(deck, op.page - 1, op.instruction ?? '', settings, controller.signal)
         if (!wrap.isConnected) return
         hooks.apply(op.page - 1, next)
-        done++
+        if (op.action === 'relayout') relaid++
+        else rewritten++
       } catch (err) {
         if ((err as DOMException)?.name === 'AbortError') return
         skipped++ // one stubborn page must not sink the batch
       }
     }
-    // Phase 2: drops + moves in one local recompose (free), then remount.
-    if (structural.length && wrap.isConnected && !controller.signal.aborted) {
-      hooks.applyStructure(recomposeSlides(deck.slides, structural))
+    for (const op of adds) {
+      if (controller.signal.aborted || !wrap.isConnected) return
+      status.textContent = t('refine.busy').replace('{i}', String(step())).replace('{n}', String(llmTotal))
+      try {
+        op.slide = await generateNewSlide(deck, op.page - 1, op.instruction ?? '', settings, controller.signal)
+        added++
+      } catch (err) {
+        if ((err as DOMException)?.name === 'AbortError') return
+        skipped++
+      }
     }
-    status.textContent = t('ge.doneV2')
-      .replace('{x}', String(done))
+    // Phase 2: drops + moves + inserts in one local recompose, then remount.
+    const recomposeOps = [...structural, ...adds.filter((o) => o.slide)]
+    if (recomposeOps.length && wrap.isConnected && !controller.signal.aborted) {
+      hooks.applyStructure(recomposeSlides(deck.slides, recomposeOps))
+    }
+    status.textContent = t('ge.doneV3')
+      .replace('{x}', String(rewritten))
+      .replace('{r}', String(relaid))
+      .replace('{a}', String(added))
       .replace('{d}', String(structural.filter((o) => o.action === 'drop').length))
       .replace('{m}', String(structural.filter((o) => o.action === 'move').length))
       .replace('{y}', String(skipped))

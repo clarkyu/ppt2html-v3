@@ -2,30 +2,37 @@
 // sees the full deck digest + the user's global instruction ("整体更口语化"
 // "每页补一个真实例子" "砍到 8 页") and decides WHICH pages change and HOW —
 // with cross-page awareness (varied examples, consistent terms) that per-page
-// rewrites alone can't have. Step 2 executes rewrites through the existing
-// regenerateSlide pipeline; drops and moves are applied locally in one
-// recompose (no LLM cost) and the player is remounted.
+// rewrites alone can't have. Step 2 executes rewrites/relayouts through the
+// single-page LLM pipeline and synthesizes new pages; drops, moves and inserts
+// are then applied locally in ONE recompose and the player is remounted.
 //
-// v2 supports rewrite + drop + move. Still unsupported: adding pages and
-// changing layouts (both need content synthesis beyond a single-page rewrite).
+// v3 supports rewrite + drop + move + add (new page after an anchor) +
+// relayout (re-express a page in another layout).
 
-import type { Deck, Slide } from '../types'
+import { LAYOUTS, type Deck, type Slide, type SlideLayout } from '../types'
 import type { LlmSettings } from './settings'
 import { requestText } from './client'
 import { extractJson } from './extractJson'
 import { t } from '../i18n'
 
-export type GlobalEditAction = 'rewrite' | 'drop' | 'move'
+export type GlobalEditAction = 'rewrite' | 'drop' | 'move' | 'add' | 'relayout'
 
 export interface GlobalEditOp {
-  /** 1-based page number in the CURRENT deck. */
+  /** 1-based page number in the CURRENT deck. For `add`: the new page goes AFTER this page. */
   page: number
   action: GlobalEditAction
-  /** rewrite: self-contained instruction; drop: optional reason (display only). */
+  /** rewrite/add: self-contained instruction; drop: optional reason (display only). */
   instruction?: string
   /** move: 1-based target position (kept inside the cover…end content zone). */
   to?: number
+  /** relayout: the target layout (validated: content layouts only). */
+  layout?: SlideLayout
+  /** add: the generated slide, filled in by the executor before the recompose. */
+  slide?: Slide
 }
+
+/** Layouts a plan may target — everything except the cover/end anchors. */
+const CONTENT_LAYOUTS = new Set<string>(LAYOUTS.filter((l) => l !== 'cover' && l !== 'end'))
 
 const PLAN_SYSTEM = `你是课件整册修改的规划师。给定一份课件的逐页摘要和用户的全局修改要求，输出一个修改计划。
 
@@ -33,7 +40,9 @@ const PLAN_SYSTEM = `你是课件整册修改的规划师。给定一份课件�
 { "ops": [
   { "page": 3, "action": "rewrite", "instruction": "这一页具体怎么改（自包含）" },
   { "page": 5, "action": "drop", "instruction": "删除原因（一句话）" },
-  { "page": 4, "action": "move", "to": 2 }
+  { "page": 4, "action": "move", "to": 2 },
+  { "page": 6, "action": "add", "instruction": "新页写什么（自包含：主题、要点方向）" },
+  { "page": 7, "action": "relayout", "layout": "timeline", "instruction": "可选：转换侧重点" }
 ] }
 
 规则：
@@ -41,8 +50,10 @@ const PLAN_SYSTEM = `你是课件整册修改的规划师。给定一份课件�
 2. rewrite 的 instruction 必须**自包含且具体**：执行者只能看到这一页和这条指令。补例子时各页例子不能雷同；统一术语时写明目标术语。
 3. drop 用于删除信息量低、重复或与要求不符的页（如“砍到 N 页”“删掉重复内容”）；instruction 写一句删除原因。**绝不删除封面(cover)与结束页(end)**。
 4. move 用于调整页面顺序，to 为目标页号；**绝不移动封面与结束页**，也不要把内容页移到它们之外。
-5. 每页最多一个操作。当前版本**不支持新增页、不支持更换版式**——这类要求忽略并只做能做的部分。
-6. instruction 与课件同语言。`
+5. add 用于新增一页：新页插在**第 page 页之后**（不能插在结束页之后）；instruction 必须自包含——写清新页的主题与要点方向，执行者看不到其他页的修改。需要加几页就输出几个 add。
+6. relayout 用于更换某一页的版式：layout 只能取 section / bullets / two-col / big-number / stats / quote / comparison / timeline / code / image-text 之一，且必须与该页现版式不同；可用 instruction 补充转换侧重点。**封面与结束页绝不更换版式**。
+7. 除 add 外每页最多一个操作（被 add 锚定的页仍可有自己的操作）。
+8. instruction 与课件同语言。`
 
 function digest(deck: Deck): string {
   const brief = (s: Slide): string => {
@@ -75,8 +86,9 @@ export async function planGlobalEdit(
   if (!Array.isArray(parsed.ops)) throw new Error(t('err.noJson'))
 
   // Distrust the plan: page in range, valid action, cover/end untouchable by
-  // structural ops, rewrite needs an instruction, move needs a sane target,
-  // one op per page, hard cap.
+  // structural ops, rewrite/add need an instruction, move needs a sane target,
+  // relayout needs a valid different content layout, one op per page (adds
+  // don't occupy their anchor), hard cap.
   const n = deck.slides.length
   const seen = new Set<number>()
   const ops: GlobalEditOp[] = []
@@ -84,37 +96,52 @@ export async function planGlobalEdit(
     if (!item || typeof item !== 'object') continue
     const o = item as Record<string, unknown>
     const page = typeof o.page === 'number' ? Math.round(o.page) : NaN
-    if (!Number.isInteger(page) || page < 1 || page > n || seen.has(page)) continue
+    if (!Number.isInteger(page) || page < 1 || page > n) continue
     const action = (typeof o.action === 'string' ? o.action : 'rewrite') as GlobalEditAction
-    if (!['rewrite', 'drop', 'move'].includes(action)) continue
+    if (!['rewrite', 'drop', 'move', 'add', 'relayout'].includes(action)) continue
     const instr = typeof o.instruction === 'string' ? o.instruction.trim() : ''
     const isEdge = page === 1 || page === n
-    if (action === 'rewrite') {
+    if (action === 'add') {
+      // The anchor page itself is untouched, so adds bypass the seen-set;
+      // "after the end page" is the one impossible anchor.
+      if (page > n - 1 || !instr) continue
+      ops.push({ page, action, instruction: instr })
+    } else if (seen.has(page)) {
+      continue
+    } else if (action === 'rewrite') {
       if (!instr) continue
       ops.push({ page, action, instruction: instr })
+      seen.add(page)
     } else if (isEdge) {
       continue // cover/end are structural anchors
     } else if (action === 'drop') {
       ops.push({ page, action, instruction: instr || undefined })
+      seen.add(page)
+    } else if (action === 'relayout') {
+      const layout = typeof o.layout === 'string' ? o.layout.trim() : ''
+      if (!CONTENT_LAYOUTS.has(layout) || layout === deck.slides[page - 1].layout) continue
+      ops.push({ page, action, layout: layout as SlideLayout, instruction: instr || undefined })
+      seen.add(page)
     } else {
       const to = typeof o.to === 'number' ? Math.round(o.to) : NaN
       if (!Number.isInteger(to) || to < 2 || to > n - 1 || to === page) continue
       ops.push({ page, action, to })
+      seen.add(page)
     }
-    seen.add(page)
     if (ops.length >= 20) break
   }
   return ops.sort((a, b) => a.page - b.page)
 }
 
 /**
- * Apply the plan's structural ops (drops, then moves in plan order) to a
- * slide array in ONE recompose. Move targets are clamped inside the
- * cover…end zone of the current (post-drop) array. Pure — returns a new array.
+ * Apply the plan's structural ops (drops, then moves, then inserts, each in
+ * plan order) to a slide array in ONE recompose. Move/insert positions are
+ * clamped inside the cover…end zone of the current array. `add` ops without a
+ * generated `slide` (executor failure) are skipped. Pure — returns a new array.
  */
 export function recomposeSlides(slides: Slide[], ops: GlobalEditOp[]): Slide[] {
   const dropSet = new Set(ops.filter((o) => o.action === 'drop').map((o) => o.page))
-  let arr = slides.map((s, i) => ({ s, orig: i + 1 })).filter((x) => !dropSet.has(x.orig))
+  const arr = slides.map((s, i) => ({ s, orig: i + 1 })).filter((x) => !dropSet.has(x.orig))
   for (const op of ops) {
     if (op.action !== 'move') continue
     const from = arr.findIndex((x) => x.orig === op.page)
@@ -122,6 +149,27 @@ export function recomposeSlides(slides: Slide[], ops: GlobalEditOp[]): Slide[] {
     const [item] = arr.splice(from, 1)
     const at = Math.max(1, Math.min(arr.length - 1, (op.to ?? 2) - 1))
     arr.splice(at, 0, item)
+  }
+  // Inserts land right after their anchor (wherever it moved to), behind any
+  // earlier inserts at the same spot; a dropped anchor falls back to the
+  // nearest surviving page before it.
+  for (const op of ops) {
+    if (op.action !== 'add' || !op.slide) continue
+    let idx = arr.findIndex((x) => x.orig === op.page)
+    if (idx < 0) {
+      let bestOrig = 0
+      for (let i = 0; i < arr.length; i++) {
+        const g = arr[i].orig
+        if (g > bestOrig && g < op.page) {
+          bestOrig = g
+          idx = i
+        }
+      }
+    }
+    let at = idx + 1
+    while (at < arr.length && arr[at].orig === 0) at++
+    at = Math.max(1, Math.min(arr.length - 1, at))
+    arr.splice(at, 0, { s: op.slide, orig: 0 })
   }
   return arr.map((x) => x.s)
 }
