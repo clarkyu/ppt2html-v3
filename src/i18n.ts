@@ -475,8 +475,20 @@ const DICT: Record<string, Entry> = {
   'ge.run': { zh: '执行 {n} 项修改', en: 'Apply {n} change(s)' },
   'ge.actDrop': { zh: '删除这一页', en: 'Drop this page' },
   'ge.actMove': { zh: '移到第 {to} 页', en: 'Move to position {to}' },
-  'ge.actAdd': { zh: '在此页后新增一页', en: 'Add a page after this one' },
-  'ge.actRelayout': { zh: '换版式为 {layout}', en: 'Switch layout to {layout}' },
+  'ge.addHead': { zh: '{a}之后 · 新增一页', en: 'New page after {a}' },
+  'ge.actRelayout': { zh: '换版式为「{layout}」', en: 'Switch layout to “{layout}”' },
+  'ge.ignored': {
+    zh: '（另有 {n} 项操作不被允许，已忽略：封面/结束页受保护）',
+    en: ' ({n} disallowed op(s) ignored — cover/end pages are protected)',
+  },
+  'ge.allIgnored': {
+    zh: '计划里的操作都不被允许（封面/结束页不可删除/移动/换版式）——换个说法试试。',
+    en: 'Every planned op was disallowed (cover/end pages can’t be dropped, moved or re-laid-out) — try rephrasing.',
+  },
+  'ge.aborted': {
+    zh: '已中止：{k} 项修改已生效（可全部撤销），其余未执行。',
+    en: 'Stopped: {k} change(s) already applied (undo available); the rest were not run.',
+  },
   'ge.doneV3': {
     zh: '完成：改写 {x} 页，换版式 {r} 页，新增 {a} 页，删除 {d} 页，移动 {m} 页，跳过 {y} 页。',
     en: 'Done: {x} rewritten, {r} re-laid-out, {a} added, {d} dropped, {m} moved, {y} skipped.',

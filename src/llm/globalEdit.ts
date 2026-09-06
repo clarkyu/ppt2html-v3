@@ -71,13 +71,19 @@ function digest(deck: Deck): string {
     .join('\n')
 }
 
+export interface GlobalEditPlan {
+  ops: GlobalEditOp[]
+  /** Ops the model proposed but validation refused (cover/end protection etc.) — surfaced so an empty plan isn't misread as "nothing to change". */
+  ignored: number
+}
+
 /** Ask the model for a per-page edit plan; invalid ops are filtered locally. */
 export async function planGlobalEdit(
   deck: Deck,
   instruction: string,
   settings: LlmSettings,
   signal?: AbortSignal,
-): Promise<GlobalEditOp[]> {
+): Promise<GlobalEditPlan> {
   const user =
     `课件标题：${deck.title}\n共 ${deck.slides.length} 页，逐页摘要：\n${digest(deck)}\n\n` +
     `用户的全局修改要求：${instruction}\n\n请输出修改计划 JSON。只输出 JSON。`
@@ -88,49 +94,73 @@ export async function planGlobalEdit(
   // Distrust the plan: page in range, valid action, cover/end untouchable by
   // structural ops, rewrite/add need an instruction, move needs a sane target,
   // relayout needs a valid different content layout, one op per page (adds
-  // don't occupy their anchor), hard cap.
+  // don't occupy their anchor), hard cap. Refused ops are COUNTED, not just
+  // dropped, so the panel can tell the user "N ops were disallowed" instead
+  // of a false "nothing to change".
   const n = deck.slides.length
   const seen = new Set<number>()
   const ops: GlobalEditOp[] = []
+  let ignored = 0
   for (const item of parsed.ops) {
     if (!item || typeof item !== 'object') continue
     const o = item as Record<string, unknown>
     const page = typeof o.page === 'number' ? Math.round(o.page) : NaN
-    if (!Number.isInteger(page) || page < 1 || page > n) continue
     const action = (typeof o.action === 'string' ? o.action : 'rewrite') as GlobalEditAction
-    if (!['rewrite', 'drop', 'move', 'add', 'relayout'].includes(action)) continue
     const instr = typeof o.instruction === 'string' ? o.instruction.trim() : ''
+    if (
+      !Number.isInteger(page) || page < 1 || page > n ||
+      !['rewrite', 'drop', 'move', 'add', 'relayout'].includes(action)
+    ) {
+      ignored++
+      continue
+    }
     const isEdge = page === 1 || page === n
     if (action === 'add') {
-      // The anchor page itself is untouched, so adds bypass the seen-set;
-      // "after the end page" is the one impossible anchor.
-      if (page > n - 1 || !instr) continue
-      ops.push({ page, action, instruction: instr })
+      // The anchor page itself is untouched, so adds bypass the seen-set. An
+      // anchor on the end page ("add at the very end") is retargeted to the
+      // last content page instead of refused — the recompose clamps the
+      // insert before the end page anyway.
+      if (!instr || n < 2) {
+        ignored++
+        continue
+      }
+      ops.push({ page: Math.min(page, n - 1), action, instruction: instr })
     } else if (seen.has(page)) {
+      ignored++
       continue
     } else if (action === 'rewrite') {
-      if (!instr) continue
+      if (!instr) {
+        ignored++
+        continue
+      }
       ops.push({ page, action, instruction: instr })
       seen.add(page)
     } else if (isEdge) {
-      continue // cover/end are structural anchors
+      ignored++ // cover/end are structural anchors
+      continue
     } else if (action === 'drop') {
       ops.push({ page, action, instruction: instr || undefined })
       seen.add(page)
     } else if (action === 'relayout') {
       const layout = typeof o.layout === 'string' ? o.layout.trim() : ''
-      if (!CONTENT_LAYOUTS.has(layout) || layout === deck.slides[page - 1].layout) continue
+      if (!CONTENT_LAYOUTS.has(layout) || layout === deck.slides[page - 1].layout) {
+        ignored++
+        continue
+      }
       ops.push({ page, action, layout: layout as SlideLayout, instruction: instr || undefined })
       seen.add(page)
     } else {
       const to = typeof o.to === 'number' ? Math.round(o.to) : NaN
-      if (!Number.isInteger(to) || to < 2 || to > n - 1 || to === page) continue
+      if (!Number.isInteger(to) || to < 2 || to > n - 1 || to === page) {
+        ignored++
+        continue
+      }
       ops.push({ page, action, to })
       seen.add(page)
     }
     if (ops.length >= 20) break
   }
-  return ops.sort((a, b) => a.page - b.page)
+  return { ops: ops.sort((a, b) => a.page - b.page), ignored }
 }
 
 /**

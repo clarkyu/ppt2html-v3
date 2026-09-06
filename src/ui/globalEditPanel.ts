@@ -3,13 +3,18 @@
 // tokens are spent → two-phase execution: rewrites/relayouts go one by one
 // through the single-page pipeline and new pages are synthesized (per-page
 // apply, cancel keeps finished pages), then drops, moves and inserts land in
-// ONE local recompose that remounts the player. Undo restores the full
-// pre-execution snapshot.
+// ONE local recompose that remounts the player. A successful relayout ALSO
+// forces a remount even without structural ops — the section chrome
+// (data-layout, ghost number, full-bleed bg layer) is baked per-layout at
+// mount and an in-place .s swap would leave it stale. Undo restores the full
+// pre-execution snapshot; cancelling mid-run keeps the panel open so undo
+// stays reachable.
 
 import type { Deck, Slide } from '../types'
 import { planGlobalEdit, recomposeSlides, type GlobalEditOp } from '../llm/globalEdit'
 import { regenerateSlide, relayoutSlide, generateNewSlide } from '../llm/edit'
 import { loadSettings, isConfigured } from '../llm/settings'
+import { LAYOUT_KEYS } from './editor'
 import { t } from '../i18n'
 import { toast } from '../lib/toast'
 import { navigate } from '../router'
@@ -23,18 +28,22 @@ export interface GlobalEditHooks {
 }
 
 function opLine(deck: Deck, op: GlobalEditOp): string {
-  const title = escapeHtml(String(deck.slides[op.page - 1]?.title ?? '').replace(/\*\*/g, '').slice(0, 20))
+  const s = deck.slides[op.page - 1]
+  // big-number / quote pages routinely have no title — fall back like digest().
+  const title = escapeHtml(String(s?.title ?? s?.value ?? s?.text ?? '').replace(/\*\*/g, '').slice(0, 20))
+  const anchorRef = title ? `P${op.page}《${title}》` : `P${op.page}`
+  // An add doesn't modify its anchor — say so in the HEADER, not just the
+  // detail line, so a skimming user can't misread it as an edit of that page.
+  const head = op.action === 'add' ? t('ge.addHead').replace('{a}', anchorRef) : `P${op.page} · ${title}`
   const detail =
-    op.action === 'rewrite'
+    op.action === 'rewrite' || op.action === 'add'
       ? escapeHtml(op.instruction ?? '')
       : op.action === 'drop'
         ? `${t('ge.actDrop')}${op.instruction ? `：${escapeHtml(op.instruction)}` : ''}`
-        : op.action === 'add'
-          ? `${t('ge.actAdd')}：${escapeHtml(op.instruction ?? '')}`
-          : op.action === 'relayout'
-            ? `${t('ge.actRelayout').replace('{layout}', op.layout ?? '')}${op.instruction ? `：${escapeHtml(op.instruction)}` : ''}`
-            : t('ge.actMove').replace('{to}', String(op.to))
-  return `<li><b>P${op.page} · ${title}</b><ul><li>${detail}</li></ul></li>`
+        : op.action === 'relayout'
+          ? `${t('ge.actRelayout').replace('{layout}', op.layout ? t(LAYOUT_KEYS[op.layout]) : '')}${op.instruction ? `：${escapeHtml(op.instruction)}` : ''}`
+          : t('ge.actMove').replace('{to}', String(op.to))
+  return `<li><b>${head}</b><ul><li>${detail}</li></ul></li>`
 }
 
 export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: GlobalEditHooks): () => void {
@@ -48,6 +57,7 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
   let controller: AbortController | null = null
   let plan: GlobalEditOp[] = []
   let snapshot: Slide[] = []
+  let running = false
 
   const wrap = document.createElement('div')
   wrap.className = 'sharepanel gedit'
@@ -71,8 +81,17 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
     controller?.abort()
     wrap.remove()
   }
+  // While a run is in flight, the panel must stay open (it owns the undo
+  // snapshot): backdrop clicks are inert, and the cancel button only ABORTS —
+  // the run loop then reports what was already applied and reveals undo.
   wrap.addEventListener('click', (e) => {
-    if (e.target === wrap || (e.target as HTMLElement).closest('[data-ge-close]')) close()
+    const onClose = !!(e.target as HTMLElement).closest('[data-ge-close]')
+    if (e.target !== wrap && !onClose) return
+    if (running) {
+      if (onClose) controller?.abort()
+      return
+    }
+    close()
   })
 
   const input = wrap.querySelector<HTMLTextAreaElement>('[data-ge-input]')!
@@ -97,16 +116,21 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
     status.hidden = false
     status.textContent = t('ge.planning')
     try {
-      plan = await planGlobalEdit(deck, instruction, settings, controller.signal)
+      const res = await planGlobalEdit(deck, instruction, settings, controller.signal)
       if (!wrap.isConnected) return
+      plan = res.ops
       planBtn.disabled = false
+      const ignoredNote = res.ignored ? t('ge.ignored').replace('{n}', String(res.ignored)) : ''
       if (!plan.length) {
-        status.textContent = t('ge.noOps')
+        // Distinguish "the AI found nothing to change" from "everything the
+        // AI planned was disallowed" — blaming the instruction for the
+        // latter sends the user down the wrong path.
+        status.textContent = res.ignored ? t('ge.allIgnored') : t('ge.noOps')
         return
       }
       planEl.hidden = false
       planEl.innerHTML = plan.map((op) => opLine(deck, op)).join('')
-      status.textContent = t('ge.planReady')
+      status.textContent = t('ge.planReady') + ignoredNote
       runBtn.hidden = false
       runBtn.textContent = t('ge.run').replace('{n}', String(plan.length))
       planBtn.textContent = t('ge.replan') // instruction editable → plan again
@@ -121,6 +145,8 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
   const run = async (): Promise<void> => {
     controller?.abort()
     controller = new AbortController()
+    const signal = controller.signal
+    running = true
     runBtn.disabled = true
     planBtn.hidden = true
     input.disabled = true
@@ -133,52 +159,73 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
     let relaid = 0
     let added = 0
     let skipped = 0
+    let lastErr = ''
     const step = (): number => rewritten + relaid + added + skipped + 1
+    const halted = (): boolean => signal.aborted || !wrap.isConnected
     // Phase 1: in-place rewrites/relayouts — page indices are still the
     // original ones — then new-page synthesis (inserted later, so indices
     // stay stable throughout every LLM call).
     for (const op of inPlace) {
-      if (controller.signal.aborted || !wrap.isConnected) return
+      if (halted()) break
       status.textContent = t('refine.busy').replace('{i}', String(step())).replace('{n}', String(llmTotal))
       try {
         const next =
           op.action === 'relayout'
-            ? await relayoutSlide(deck, op.page - 1, op.layout!, op.instruction ?? '', settings, controller.signal)
-            : await regenerateSlide(deck, op.page - 1, op.instruction ?? '', settings, controller.signal)
-        if (!wrap.isConnected) return
+            ? await relayoutSlide(deck, op.page - 1, op.layout!, op.instruction ?? '', settings, signal)
+            : await regenerateSlide(deck, op.page - 1, op.instruction ?? '', settings, signal)
+        if (halted()) break
         hooks.apply(op.page - 1, next)
         if (op.action === 'relayout') relaid++
         else rewritten++
       } catch (err) {
-        if ((err as DOMException)?.name === 'AbortError') return
+        if ((err as DOMException)?.name === 'AbortError') break
+        lastErr = (err as Error)?.message || ''
         skipped++ // one stubborn page must not sink the batch
       }
     }
     for (const op of adds) {
-      if (controller.signal.aborted || !wrap.isConnected) return
+      if (halted()) break
       status.textContent = t('refine.busy').replace('{i}', String(step())).replace('{n}', String(llmTotal))
       try {
-        op.slide = await generateNewSlide(deck, op.page - 1, op.instruction ?? '', settings, controller.signal)
+        op.slide = await generateNewSlide(deck, op.page - 1, op.instruction ?? '', settings, signal)
         added++
       } catch (err) {
-        if ((err as DOMException)?.name === 'AbortError') return
+        if ((err as DOMException)?.name === 'AbortError') break
+        lastErr = (err as Error)?.message || ''
         skipped++
       }
     }
     // Phase 2: drops + moves + inserts in one local recompose, then remount.
-    const recomposeOps = [...structural, ...adds.filter((o) => o.slide)]
-    if (recomposeOps.length && wrap.isConnected && !controller.signal.aborted) {
+    // On abort the structural ops are NOT applied — but applied relayouts
+    // still need the remount to rebuild their baked section chrome.
+    const recomposeOps = signal.aborted ? [] : [...structural, ...adds.filter((o) => o.slide)]
+    let structuralApplied = false
+    if (recomposeOps.length) {
       hooks.applyStructure(recomposeSlides(deck.slides, recomposeOps))
+      structuralApplied = true
+    } else if (relaid > 0) {
+      hooks.applyStructure([...deck.slides])
     }
-    status.textContent = t('ge.doneV3')
-      .replace('{x}', String(rewritten))
-      .replace('{r}', String(relaid))
-      .replace('{a}', String(added))
-      .replace('{d}', String(structural.filter((o) => o.action === 'drop').length))
-      .replace('{m}', String(structural.filter((o) => o.action === 'move').length))
-      .replace('{y}', String(skipped))
+    running = false
+    if (!wrap.isConnected) return
+    const applied =
+      rewritten + relaid + (structuralApplied ? structural.length + adds.filter((o) => o.slide).length : 0)
+    if (signal.aborted) {
+      status.textContent = t('ge.aborted').replace('{k}', String(rewritten + relaid))
+    } else {
+      // Surface the last error alongside the counts — "跳过 N 页" alone reads
+      // as "the AI had nothing better", not "my key/quota/network broke".
+      status.textContent =
+        t('ge.doneV3')
+          .replace('{x}', String(rewritten))
+          .replace('{r}', String(relaid))
+          .replace('{a}', String(structuralApplied ? adds.filter((o) => o.slide).length : 0))
+          .replace('{d}', String(structuralApplied ? structural.filter((o) => o.action === 'drop').length : 0))
+          .replace('{m}', String(structuralApplied ? structural.filter((o) => o.action === 'move').length : 0))
+          .replace('{y}', String(skipped)) + (skipped > 0 && lastErr ? `（${lastErr}）` : '')
+    }
     runBtn.hidden = true
-    undoBtn.hidden = false
+    undoBtn.hidden = applied === 0 // nothing changed → nothing to undo
     closeBtn.textContent = t('common.gotIt')
   }
 

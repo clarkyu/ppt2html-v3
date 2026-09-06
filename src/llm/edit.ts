@@ -43,7 +43,9 @@ export async function regenerateSlide(
   return { ...norm, layout: slide.layout, bg: slide.bg, bgOff: slide.bgOff, imageQuery: norm.imageQuery ?? slide.imageQuery }
 }
 
-/** The one field group `layout` cannot render without (title-only pages pass for the rest). */
+/** The one field group `layout` cannot render without — a reply that declares a
+ * layout but lacks its fields (e.g. echoing the original slide) must be
+ * rejected, not force-relabeled into an empty or gutted page. */
 function layoutHasContent(s: Slide, layout: SlideLayout): boolean {
   switch (layout) {
     case 'two-col':
@@ -60,8 +62,13 @@ function layoutHasContent(s: Slide, layout: SlideLayout): boolean {
       return !!s.steps?.length
     case 'code':
       return !!s.code
+    case 'bullets':
+    case 'image-text':
+      return !!(s.bullets?.length || s.body)
+    case 'section':
+      return !!(s.title || s.subtitle)
     default:
-      return true // section/bullets/image-text render from title/bullets/body
+      return true // cover/end never reach here as targets
   }
 }
 
@@ -147,5 +154,9 @@ export async function generateNewSlide(
   // A second cover/end would break the deck's structural anchors — demote it.
   if (norm.layout === 'cover' || norm.layout === 'end')
     norm.layout = norm.bullets || norm.body ? 'bullets' : 'section'
+  // Same guard as relayout: a declared layout whose key fields were stripped
+  // by normalization would insert a visually empty page — fail so the op is
+  // counted as skipped instead.
+  if (!layoutHasContent(norm, norm.layout)) throw new Error(t('err.noJson'))
   return norm
 }
