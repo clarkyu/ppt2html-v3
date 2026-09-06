@@ -3,12 +3,49 @@
 按 PR 逆序记录每次落地的内容与关键决策,供后续会话/协作者快速恢复上下文。
 项目约定与架构地图见仓库根 `CLAUDE.md`。
 
-## 会话四(2026-07,PR #56–#59,分支 claude/project-review-jt4jb5)
+## 会话四(2026-07 至 2026-09,PR #56–#73,分支 claude/project-review-jt4jb5)
 
 起点:10 个并行 agent 全量精读 80 个文件恢复上下文。随后两条产品讨论定调:
 ①「一句话生成高质量课件」的本质 = 意图澄清 + 内容硬指标 + 可靠性护栏 + 低成本
 人工把关,一句话只是触发器;质量天花板在用户私有事实 → 素材注入是最大杠杆。
 ②手机场景四连问(丝滑/质量/分享欲/分享通道)→ 移动三 PR 系列先行。
+
+### PR #73 — 整册修改 v3 审查修复（对抗性审查 11 条实锤全修）
+- 来源:#72 合并后台的审查 workflow(3 视角评审 × 每条独立对抗验证,11 实锤/0 误报)。
+- 核心(HIGH):**换版式后残留旧版式外壳**——`data-layout`/章节鬼影/Part 角标/
+  全幅背景层都在挂载期按版式烘焙进 section,原地换 `.s` 块不碰它们;照片背景页
+  换版式会双影(→image-text)或照片消失(image-text→其它),纯换版式计划从不重挂。
+  修法:只要有换版式成功就 `applyStructure` 强制重挂(无结构操作时单独触发)。
+- 健壮性:`generateNewSlide` 补 `layoutHasContent` 校验(声明版式但关键字段被归一化
+  剥空→判失败跳过,不插空页);`layoutHasContent` 收紧 bullets/image-text(需
+  bullets/body)与 section(需 title/subtitle)——模型原样回声旧字段时保原页。
+- UX:`planGlobalEdit` 返回 `{ops, ignored}`,面板区分"AI 认为无需修改"与"计划项都
+  不被允许";锚在结束页的 add 钳制到末内容页("结尾加一页总结"不再被静默丢弃);
+  运行期背板点击失效、取消只中止不关面板(撤销快照不丢);全失败显示末次错误;
+  零生效不给撤销;结构重挂按幻灯片**身份**恢复位置;计划列表版式名本地化
+  (复用 `layout.*`)、无标题页回退 value/text、新增行标题即标"P4《…》之后 · 新增一页"。
+- 验证 22/22(含纯换版式计划的 DOM `data-layout` 重建断言——修复前必挂)。
+
+### PR #72 — 整册修改 v3（新增页 + 更换版式）
+- 规划器加 `add`(锚定"插在第 page 页之后",instruction 自包含)与 `relayout`
+  (目标版式限 10 种内容版式且须与现版式不同);add 不占用锚点页的"每页一操作"名额。
+- 执行:阶段一改写/换版式原地 LLM(页码稳定)→ 新页内容先生成不插入 →
+  阶段二 `recomposeSlides` 一次重组:先删、再移、最后插(锚点被删则回退到原页号
+  最近的前一页;同锚多插保持计划顺序;尾插钳在结束页前;无内容的 add 跳过)。
+- `edit.ts` 新增 `relayoutSlide`(强制目标版式,关键字段缺失判失败)与
+  `generateNewSlide`(全篇一览+前后页标题定语境,**携带 deck.material 切片**引用事实,
+  cover/end 回复降级为 bullets/section)。
+- 教训:**容器重开会丢未提交改动**(会话恢复=仓库重新克隆)——这次 v3 靠上下文里
+  的编辑记录一字不差重建;此后功能验证通过即刻提交推送,别等审查。
+- 复合 Bash 命令里 `pkill -f '[v]ite …'` 仍会连坐外层 shell(整条命令行含
+  `npx vite …`),要把 pkill 单独放一条命令。
+
+### 备忘 — DeepSeek V4 Pro 0813(2026-08 查证,无需改码)
+- 官方 `api.deepseek.com` 只接受别名 ID(`deepseek-v4-pro`/`deepseek-v4-flash`/
+  `deepseek-v4-flash-vision-exp`),**不接受带日期的 `deepseek-v4-pro-0813`**;
+  别名已自动指向 0813 正式版。系统默认 `deepseek-v4-pro` 即最新,硬编码日期会打断
+  免 Key 路径。带日期 ID 只在 OpenRouter/Fireworks 等转发商可用(BYOK 自填)。
+- 待核:0813 输出上限大增(官称 384K),`client.ts` 对 DeepSeek 域仍钳 `max_tokens≤8192`。
 
 ### PR #70 — 讲稿引用素材（material 存 deck 的契约落定）
 - 契约决策(PR 正文陈述,用户合并即认可):`deck.material` 本地持久化。

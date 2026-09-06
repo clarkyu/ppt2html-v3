@@ -53,7 +53,10 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 - 无头 locale 是 en-US:UI 语言检测会正确返回 'en',断言"语言跟随"需先
   `localStorage.setItem('ui-lang','zh')` 再 reload。
 - Bash 里 `pkill -f 'vite --port …'` 会匹配到自己的命令行把 shell 杀掉(exit 144),
-  用 `pkill -f '[v]ite --port …'` 防自匹配。
+  用 `pkill -f '[v]ite --port …'` 防自匹配——但若同一条复合命令里还写了
+  `npx vite --port …`,外层 shell 的命令行仍会被匹配连坐:**pkill 单独放一条命令**。
+- **容器/会话重开 = 仓库重新克隆,未提交改动全部丢失**(node_modules 也没了,先
+  `npm ci`)。功能验证通过就立刻提交推送,别把提交压到审查之后。
 
 ## 架构地图(按功能找文件)
 
@@ -74,7 +77,9 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
   (向导,prefetch/草稿续作)、`generating.ts`(分段成稿+胶片墙)、`viewer.ts`(播放页全部工具,
   Wake Lock 防熄屏)、`rewritePanel.ts`(播放页单页 AI 改写浮层,原地换 .s 块不重挂播放器)、
   `refinePanel.ts`(一键精修:lib/quality 机械定位→只重写不达标页)、`globalEditPanel.ts`
-  +`llm/globalEdit.ts`(整册指令:先出逐页计划再执行,v1 仅页内改写)、
+  +`llm/globalEdit.ts`(整册指令:先出逐页计划再执行;v3 五操作 rewrite/drop/move/
+  add/relayout,`recomposeSlides` 删→移→插一次重组;`edit.ts` 的 relayoutSlide/
+  generateNewSlide 供其调用)、
   `editor.ts`(逐页编辑/AI 改写/候选图/AI 配图)、`settings.ts`、`stylePicker.ts`
   (换风格画廊:7 内置 + 我的风格)、`sharePanel.ts`(分享+二维码+卡片图+系统分享)
 - **质量**:`src/lib/quality.ts`(机械质量检查:容量/锚点/观点句/备注,与 prompt §8、
@@ -120,12 +125,17 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
   栅格化跨浏览器不可靠,分享卡片因此在 canvas 上自绘背景而非贴 SVG。
 - **播放页原地改单页**:只换 section 里的 `.s` 块 + `aside.notes`,别重挂播放器
   (会丢所有 onSlideChange 回调);换完 `reveal.sync()`(步进 fragments)+ `fitSlide`。
+  **仅限版式不变的改写**——`data-layout`/章节鬼影/Part 角标/全幅背景层都在挂载期按
+  版式烘焙进 section,换版式必须走 `applyStructure`→`remountPlayer`(viewer 的
+  onSlide 注册表会把回调重接线;位置按幻灯片身份恢复)。
+- **DeepSeek 官方 API 只收别名模型 ID**(`deepseek-v4-pro` 等,已自动指向最新
+  0813),不收带日期 ID——系统默认别名即最新,别硬编码日期(会打断免 Key 路径)。
 - **hash-fragment 分享链接无法做 OG 富预览**(内容不经服务器)——分享卡片图就是
   预览的替代方案,别再尝试动态 OG。
 - **deck.material 是 local-only 契约**(PR #70 用户已认可):share.ts 的 portable()
   是显式字段白名单,material 绝不能加入;导出同样不得携带。
 
-## 功能全景(截至 PR #63,全部已上线)
+## 功能全景(截至 PR #73,全部已上线)
 
 生成:引导问答(1~2 问)→ 结构确认 → 分部大纲 → 分段成稿(胶片墙揭幕/断段重试/
 草稿续作/预取);快速一次成稿模式;单页 AI 改写(可撤销);**课件模板库**
@@ -149,7 +159,9 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 **讲稿引用素材**(deck.material 本地持久化,逐字稿优先引用素材事实)。
 AI 修改三层(播放页,persistable 门禁):单页改写(#58)→ 一键精修(#62,机械
 定位只修不达标页)→ 整册指令(#63 页内改写;#68 v2 加删除页/调整顺序——
-两阶段执行,结构变动走 remountPlayer 重挂+onSlide 注册表重接线);均可撤销。
+两阶段执行,结构变动走 remountPlayer 重挂+onSlide 注册表重接线;#72 v3 加
+新增页(凭空生成,携带素材)/更换版式;#73 审查修复:换版式强制重挂、空页/回声
+防护、end 锚点钳制、中止可撤销、错误可见、按身份回位、计划列表本地化);均可撤销。
 质量度量:`npm run eval` 评测器(golden 16 主题/本地模板/评分器自测,--baseline 出 Δ)。
 
 ## 补充坑(PR14–16 踩到的)
@@ -165,12 +177,15 @@ AI 修改三层(播放页,persistable 门禁):单页改写(#58)→ 一键精修(
 
 1. 多语言课件一键翻译(整套 deck 翻译为另一语言)——用户曾明确跳过,勿擅自开工
 2. golden set 真实基线:用户本机 EVAL_LLM_KEY 跑第一份,之后 prompt 迭代对 Δ
-3. 整册修改 v3:新增页(需凭空生成内容)、更换版式
+3. 全项目高标准审计(2026-09 用户要求,workflow 32 审查者 × 逐条对抗验证)的
+   修复批次——报告出来后按"安全/数据 → 常见路径 bug → UX/a11y → 可维护性"分 PR 落地
+4. DeepSeek 0813 输出上限核实后放宽 `client.ts` 的 8192 钳制(能少分段)
 
 已完成(曾在候选里):自定义主题=PR #49;课件模板库=PR #52;导入 PPTX=PR #53;
 练习模式=PR #54;分享卡片/系统分享/接收端 CTA=PR #56;移动三件套=PR #57;
 播放页 AI 改写=PR #58;素材注入 v1=PR #59;质量评测器=PR #61;一键精修=PR #62;
 整册 AI 修改=PR #63;素材 v2 文件导入+切片=PR #65;导入件 AI 重构=PR #66;
-整册修改 v2 删页/调序=PR #68;讲稿引用素材=PR #70。
+整册修改 v2 删页/调序=PR #68;讲稿引用素材=PR #70;整册修改 v3 新增页/换版式=PR #72
+(+#73 审查修复)。
 
 节奏照旧:实现→build→无头验证→草稿 PR→等合并→重置分支→下一个。
