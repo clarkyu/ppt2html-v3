@@ -1,4 +1,5 @@
 import {
+  type Branding,
   type Deck,
   type DeckSpec,
   type Slide,
@@ -14,6 +15,8 @@ import {
 import { genId } from '../lib/dom'
 import { deckIsCjk } from '../lib/lang'
 import { semIconKey } from './semanticIcons'
+import { sanitizeCustomTheme } from './customTheme'
+import { MATERIAL_MAX_CHARS } from '../llm/prompt'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
 const THEME_SET = new Set<string>(THEMES)
@@ -87,12 +90,15 @@ function asCompareItems(v: unknown): CompareItem[] | undefined {
   for (const raw of v) {
     if (!raw || typeof raw !== 'object') continue
     const o = raw as Record<string, unknown>
-    const heading = asString(o.heading)
-    if (!heading) continue
+    // The editor allows a heading-less card that only carries points — keep
+    // anything content-bearing rather than dropping the whole card.
+    const heading = asString(o.heading) ?? ''
+    const points = asStringArray(o.points)
+    if (!heading && !points) continue
     const tone = asString(o.tone)
     out.push({
       heading,
-      points: asStringArray(o.points),
+      points,
       tone: tone === 'positive' || tone === 'negative' ? tone : 'neutral',
     })
   }
@@ -105,24 +111,55 @@ function asTimelineSteps(v: unknown): TimelineStep[] | undefined {
   for (const raw of v) {
     if (!raw || typeof raw !== 'object') continue
     const o = raw as Record<string, unknown>
-    const label = asString(o.label)
-    if (!label) continue
-    out.push({ label, text: asString(o.text) })
+    const label = asString(o.label) ?? ''
+    const text = asString(o.text)
+    if (!label && !text) continue // keep label-less steps that carry text
+    out.push({ label, text })
   }
   return out.length ? out : undefined
+}
+
+/** Where a background may come from (src/images/*); anything else → 'unknown'
+ * so a prototype-key `source` can never reach an object lookup. */
+const BG_SOURCES = new Set(['unsplash', 'pexels', 'pixabay', 'openverse', 'abstract', 'ai', 'unknown'])
+/** Strict data-URL grammar for images: `data:image/<type>[;param[=value]]*,…`
+ * (covers `;base64`, `;charset=utf-8` and the common non-standard `;utf8`). */
+const DATA_IMAGE_RE = /^data:image\/[a-z0-9.+-]+(;[a-z0-9.+-]+(=[a-z0-9.+-]+)?)*,/i
+const IMAGE_URL_MAX = 3_000_000
+
+/** An image URL we are willing to put into a src/background sink. */
+function asImageUrl(v: unknown): string | undefined {
+  const url = asString(v)
+  if (!url || url.length > IMAGE_URL_MAX) return undefined
+  return /^https?:\/\//i.test(url) || DATA_IMAGE_RE.test(url) ? url : undefined
 }
 
 function asSlideBg(v: unknown): SlideBg | undefined {
   if (!v || typeof v !== 'object') return undefined
   const o = v as Record<string, unknown>
-  const url = asString(o.url)
-  if (!url || !/^https?:\/\//i.test(url)) return undefined
+  // http(s) photos, or data:image/ (generated abstract SVGs / AI illustrations
+  // already stored on a deck — a backup restore must not lose them). Anything
+  // else (javascript:, blob:, relative) is dropped; bgCssUrl encodes the rest.
+  const url = asImageUrl(o.url)
+  if (!url) return undefined
+  const source = asString(o.source) ?? 'unknown'
+  const link = asString(o.link)
   return {
     url,
-    source: asString(o.source) ?? 'unknown',
+    source: BG_SOURCES.has(source) ? source : 'unknown',
     credit: asString(o.credit),
-    link: asString(o.link),
+    link: link && /^https?:\/\//i.test(link) ? link : undefined,
   }
+}
+
+/** Branding fields are user text that lands in innerHTML sinks (escaped there)
+ * and a logo URL that lands in a src attribute — allow only image-ish schemes. */
+export function sanitizeBranding(v: unknown): Branding | undefined {
+  if (!v || typeof v !== 'object') return undefined
+  const o = v as Record<string, unknown>
+  const short = (x: unknown): string | undefined => asString(x)?.slice(0, 120)
+  const b: Branding = { presenter: short(o.presenter), org: short(o.org), date: short(o.date), logo: asImageUrl(o.logo) }
+  return b.presenter || b.org || b.date || b.logo ? b : undefined
 }
 
 function coerceLayout(v: unknown, slide: Record<string, unknown>): SlideLayout {
@@ -162,7 +199,9 @@ export function normalizeSlide(raw: unknown): Slide | null {
     author: asString(o.author),
     items: asCompareItems(o.items),
     steps: asTimelineSteps(o.steps),
-    code: asString(o.code),
+    // Code keeps its whitespace (first-line indentation, trailing newline): the
+    // editor stores it verbatim and a restore/share must not reflow it.
+    code: typeof o.code === 'string' && o.code.trim() ? o.code : undefined,
     language: asString(o.language),
     body: asString(o.body),
     note: asString(o.note),
@@ -171,20 +210,27 @@ export function normalizeSlide(raw: unknown): Slide | null {
     bgOff: o.bgOff === true ? true : undefined,
   }
 
-  // Drop slides that would render empty.
+  // Drop slides that would render empty. A picture-only image-text page, an
+  // eyebrow-only divider or a note-carrying page is NOT empty (the editor
+  // produces all three), so those fields count too.
   const hasContent =
     slide.title ||
     slide.subtitle ||
+    slide.eyebrow ||
     slide.bullets ||
     slide.stats ||
     slide.left ||
     slide.right ||
     slide.value ||
+    slide.caption ||
     slide.text ||
+    slide.author ||
     slide.items ||
     slide.steps ||
     slide.code ||
-    slide.body
+    slide.body ||
+    slide.note ||
+    slide.bg
   return hasContent ? slide : null
 }
 
@@ -197,24 +243,27 @@ function pickTheme(specTheme: unknown, fallback?: ThemeName): ThemeName {
 /** Validate + normalize a loose model/sample spec into a renderable Deck. */
 export function normalizeDeck(
   spec: DeckSpec,
-  meta: { prompt: string; model?: string; theme?: ThemeName; id?: string; createdAt?: number },
+  meta: { prompt: string; model?: string; theme?: ThemeName; id?: string; createdAt?: number; fill?: boolean },
 ): Deck {
   const slides = (Array.isArray(spec.slides) ? spec.slides : [])
     .map(normalizeSlide)
     .filter((s): s is Slide => s !== null)
 
-  // Guarantee a title slide up front.
   const firstCover = slides.find((s) => s.layout === 'cover')
   const title =
     asString(spec.title) || firstCover?.title || meta.prompt.slice(0, 40) || '未命名课件'
 
-  if (!firstCover) {
-    slides.unshift({ layout: 'cover', title, subtitle: asString(spec.subtitle) })
-  }
-
-  // Guarantee a closing slide (in the deck's own language).
-  if (slides.length && slides[slides.length - 1].layout !== 'end') {
-    slides.push({ layout: 'end', title: deckIsCjk({ title, slides }) ? '谢谢观看' : 'Thank You' })
+  // Guarantee a title slide up front and a closing slide (in the deck's own
+  // language) — for fresh model output only (`fill` defaults on). A stored
+  // deck the user edited may legitimately lack either (cover deleted, a page
+  // added after the end) and must come back exactly as saved.
+  if (meta.fill !== false) {
+    if (!firstCover) {
+      slides.unshift({ layout: 'cover', title, subtitle: asString(spec.subtitle) })
+    }
+    if (slides.length && slides[slides.length - 1].layout !== 'end') {
+      slides.push({ layout: 'end', title: deckIsCjk({ title, slides }) ? '谢谢观看' : 'Thank You' })
+    }
   }
 
   const now = meta.createdAt ?? Date.now()
@@ -229,4 +278,57 @@ export function normalizeDeck(
     createdAt: now,
     updatedAt: now,
   }
+}
+
+/**
+ * Trust boundary for a whole deck object that did NOT come from this app's own
+ * generator: share-link payloads (attacker-controllable) and backup files
+ * (user-controllable, possibly hand-edited or from an older version). Every
+ * field is re-validated — layouts, theme, tones, URLs, palette, branding — so
+ * nothing unnormalized can reach an innerHTML/attribute sink or IndexedDB.
+ * Returns null when no slide survives (an empty deck would crash the library
+ * thumbnails and the player).
+ */
+/** Hard ceiling on pages accepted from outside — a deflated share link can
+ * pack hundreds of thousands of repetitive slides into a few KB and freeze
+ * the receiver's tab for minutes while reveal mounts them. */
+export const DECK_MAX_SLIDES = 400
+
+/** A stored slide keeps icons in the parallel `bulletIcons` array while the
+ * model emits them inline ({text, icon}); fold the stored form into the inline
+ * one so normalizeSlide (unchanged for the generator path) keeps them. */
+function inlineStoredIcons(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw
+  const o = raw as Record<string, unknown>
+  if (!Array.isArray(o.bullets) || !Array.isArray(o.bulletIcons)) return raw
+  const icons = o.bulletIcons
+  return {
+    ...o,
+    bullets: o.bullets.map((b, i) => (typeof b === 'string' && semIconKey(icons[i]) ? { text: b, icon: icons[i] } : b)),
+  }
+}
+
+export function sanitizeDeck(
+  raw: unknown,
+  opts: { id?: string; allowMaterial: boolean; now: number },
+): Deck | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  if (!Array.isArray(o.slides)) return null
+  const slides = o.slides.slice(0, DECK_MAX_SLIDES).map(inlineStoredIcons)
+  if (!slides.some((s) => normalizeSlide(s))) return null
+  const id = opts.id ?? (typeof o.id === 'string' && o.id.trim() ? o.id.trim() : undefined)
+  const createdAt = typeof o.createdAt === 'number' && Number.isFinite(o.createdAt) ? o.createdAt : opts.now
+  const deck = normalizeDeck(
+    { title: o.title, subtitle: o.subtitle, theme: o.theme, slides } as DeckSpec,
+    { prompt: asString(o.prompt) ?? '', model: asString(o.model), id, createdAt, fill: false },
+  )
+  deck.updatedAt = typeof o.updatedAt === 'number' && Number.isFinite(o.updatedAt) ? o.updatedAt : createdAt
+  deck.customTheme = sanitizeCustomTheme(o.customTheme)
+  deck.branding = sanitizeBranding(o.branding)
+  // deck.material is a local-only contract (share must never carry it); the
+  // restore path keeps it so speaker scripts can still quote real facts.
+  const material = opts.allowMaterial && typeof o.material === 'string' ? o.material.trim() : ''
+  if (material) deck.material = material.slice(0, MATERIAL_MAX_CHARS)
+  return deck
 }

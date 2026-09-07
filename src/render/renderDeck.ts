@@ -77,7 +77,7 @@ export function renderDeckSlides(deck: Deck): string {
       const endRecapHtml = slide.layout === 'end' ? recapHtml : ''
 
       return (
-        `<section data-layout="${slide.layout}" class="deck-slide"${transition}>` +
+        `<section data-layout="${escapeHtml(slide.layout)}" class="deck-slide"${transition}>` +
         slideBgHtml(slide) +
         ghostHtml +
         renderSlideInner(slide) +

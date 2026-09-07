@@ -8,7 +8,18 @@
 // via the existing lazy image fill. http(s) photo URLs are small and kept.
 
 import type { Deck } from '../types'
-import { sanitizeCustomTheme } from '../render/customTheme'
+import { sanitizeDeck } from '../render/normalize'
+
+/** A data: logo above this many chars is dropped from share payloads — a 300 KB
+ * uploaded logo would otherwise turn the link into a 400K-char URL. Typical
+ * logos (20–150 KB → up to ~200K chars base64) still travel; the QR code has
+ * its own, much tighter, gate (QR_MAX_CHARS). */
+const SHARE_LOGO_MAX_CHARS = 200_000
+/** Reject absurd fragments before touching them, and bound the INFLATED size:
+ * deflate packs 100k identical slides into a ~20K-char link that would freeze
+ * the receiver's tab for minutes. */
+const SHARE_MAX_HASH_CHARS = 400_000
+const SHARE_MAX_INFLATED_BYTES = 4_000_000
 
 const B64 = { '+': '-', '/': '_', '=': '' } as const
 
@@ -32,6 +43,31 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
   return new Uint8Array(await out.arrayBuffer())
 }
 
+/** Inflate with a byte budget: stop (and throw) as soon as the output exceeds
+ * `max`, instead of materializing a decompression bomb first. */
+async function inflateBounded(bytes: Uint8Array, max: number): Promise<Uint8Array> {
+  const reader = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > max) {
+      await reader.cancel()
+      throw new Error('bad share payload')
+    }
+    chunks.push(value)
+  }
+  const out = new Uint8Array(total)
+  let off = 0
+  for (const c of chunks) {
+    out.set(c, off)
+    off += c.byteLength
+  }
+  return out
+}
+
 export function shareSupported(): boolean {
   return typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined'
 }
@@ -40,13 +76,18 @@ export function shareSupported(): boolean {
  * NOTE: this is an ALLOWLIST — `deck.material` (the user's pasted source
  * material) is deliberately absent and must never be added here. */
 function portable(deck: Deck): Record<string, unknown> {
+  const logo = deck.branding?.logo
+  const branding =
+    logo && logo.startsWith('data:') && logo.length > SHARE_LOGO_MAX_CHARS
+      ? { ...deck.branding, logo: undefined }
+      : deck.branding
   return {
     title: deck.title,
     subtitle: deck.subtitle,
     theme: deck.theme,
     customTheme: deck.customTheme,
     prompt: deck.prompt,
-    branding: deck.branding,
+    branding,
     slides: deck.slides.map((s) => {
       const { bg, ...rest } = s
       return bg && !bg.url.startsWith('data:') ? { ...rest, bg } : rest
@@ -61,24 +102,16 @@ export async function encodeDeckToHash(deck: Deck): Promise<string> {
 }
 
 export async function decodeDeckFromHash(data: string): Promise<Deck> {
-  const bytes = await pipe(fromBase64Url(data), new DecompressionStream('deflate-raw'))
-  const spec = JSON.parse(new TextDecoder().decode(bytes)) as Partial<Deck>
-  if (!spec || !Array.isArray(spec.slides) || !spec.slides.length) throw new Error('bad share payload')
-  const now = Date.now()
-  return {
-    id: 'shared',
-    title: spec.title || 'Untitled',
-    subtitle: spec.subtitle,
-    theme: (spec.theme as Deck['theme']) || 'aurora',
-    // Untrusted (attacker-controllable) payload — validate before it reaches
-    // rendering, or a malformed palette would crash the deck / poison a copy.
-    customTheme: sanitizeCustomTheme(spec.customTheme),
-    slides: spec.slides,
-    prompt: spec.prompt || '',
-    branding: spec.branding,
-    createdAt: now,
-    updatedAt: now,
-  }
+  if (data.length > SHARE_MAX_HASH_CHARS) throw new Error('bad share payload')
+  const bytes = await inflateBounded(fromBase64Url(data), SHARE_MAX_INFLATED_BYTES)
+  const spec: unknown = JSON.parse(new TextDecoder().decode(bytes))
+  // Untrusted (attacker-controllable) payload: EVERYTHING goes through the
+  // deck sanitizer before it can reach an attribute/innerHTML sink or be saved
+  // as a copy — an unvalidated `layout`/`theme`/`tone` string was a stored XSS.
+  // `material` is never accepted from a link (local-only contract).
+  const deck = sanitizeDeck(spec, { id: 'shared', allowMaterial: false, now: Date.now() })
+  if (!deck) throw new Error('bad share payload')
+  return deck
 }
 
 /** Full share URL for the current origin/path. */
