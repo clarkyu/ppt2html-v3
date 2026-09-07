@@ -107,8 +107,10 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
   display 会压过 UA 规则(示例课件的编辑按钮曾因此常年可见)。
 - **bgCssUrl**:data URI 必须单引号包裹(`url('...')`,内部 `'`→`%27`),双引号会把
   style 属性截断。
-- **DeepSeek**:thinking 模式不支持 response_format:json_object(会返回空);
-  max_tokens 上限 8192,长课件必须分段生成。
+- **DeepSeek**:thinking 模式不支持 response_format:json_object(会返回空)。
+  V4 0813 官方最大输出 384K(`client.ts` 的 DeepSeek 钳制已从 8192 放宽,快速模式
+  单次整册调用不再被截断);向导的分段生成仍保留——理由是分段重试/逐页揭幕/
+  质量不摊薄,不是 token 上限。
 - **编辑器 collectSlide**:carry-over 模式——没有表单控件的字段必须显式从 prev 带过来,
   否则保存即丢(note 字段曾因此在非 bullets 版式上静默丢失)。
 - **分享链接**:二维码容量 ~2.9K 字符;data: URI 背景必须剥离(QR_MAX_CHARS 在 share.ts)。
@@ -179,7 +181,6 @@ AI 修改三层(播放页,persistable 门禁):单页改写(#58)→ 一键精修(
 2. golden set 真实基线:用户本机 EVAL_LLM_KEY 跑第一份,之后 prompt 迭代对 Δ
 3. 全项目高标准审计(2026-09 用户要求,workflow 32 审查者 × 逐条对抗验证)的
    修复批次——报告出来后按"安全/数据 → 常见路径 bug → UX/a11y → 可维护性"分 PR 落地
-4. DeepSeek 0813 输出上限核实后放宽 `client.ts` 的 8192 钳制(能少分段)
 
 已完成(曾在候选里):自定义主题=PR #49;课件模板库=PR #52;导入 PPTX=PR #53;
 练习模式=PR #54;分享卡片/系统分享/接收端 CTA=PR #56;移动三件套=PR #57;
