@@ -228,7 +228,16 @@ export function bgCssUrl(url: string | undefined): string | null {
   // Single-quote the CSS string (escaping any raw ' the encoder left behind):
   // slideBgHtml embeds this inside a double-quoted style attribute, where a
   // double-quoted url("…") would terminate the attribute and kill the image.
-  if (/^data:image\//i.test(url)) return `url('${url.replace(/'/g, '%27')}')`
+  if (/^data:image\//i.test(url)) {
+    // The URL may come from a share link or a backup, not only our own
+    // encoder: percent-encode every char that could close the CSS string, the
+    // style attribute or an HTML tag (" ' ( ) < > \ whitespace …). Already
+    // percent-encoded sequences (%XX) pass through untouched.
+    const safe = url.replace(/[^A-Za-z0-9+/=%.,;:_~-]/g, (c) =>
+      encodeURIComponent(c).replace(/[!'()*]/g, (x) => `%${x.charCodeAt(0).toString(16).toUpperCase()}`),
+    )
+    return `url('${safe}')`
+  }
   if (!/^https?:\/\//i.test(url)) return null
   const safe = encodeURI(url).replace(/['"()<>\\]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)
   return `url('${safe}')`
@@ -263,7 +272,9 @@ const PLATFORM: Record<string, string> = {
  */
 export function creditHtml(bg: SlideBg | undefined): string {
   if (!bg || !/^https?:\/\//i.test(bg.url)) return ''
-  const platform = PLATFORM[bg.source] ?? ''
+  // Own-property lookup only: a `source` like "constructor" (share link /
+  // hand-edited backup) must not resolve to a prototype function.
+  const platform = Object.prototype.hasOwnProperty.call(PLATFORM, bg.source) ? PLATFORM[bg.source] : ''
   const who = (bg.credit ?? '').trim()
   // Openverse credit already carries "creator · provider"; others append platform.
   let label = who

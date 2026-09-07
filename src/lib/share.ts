@@ -11,8 +11,15 @@ import type { Deck } from '../types'
 import { sanitizeDeck } from '../render/normalize'
 
 /** A data: logo above this many chars is dropped from share payloads — a 300 KB
- * uploaded logo would otherwise turn the link into a 400K-char URL. */
-const SHARE_LOGO_MAX_CHARS = 12_000
+ * uploaded logo would otherwise turn the link into a 400K-char URL. Typical
+ * logos (20–150 KB → up to ~200K chars base64) still travel; the QR code has
+ * its own, much tighter, gate (QR_MAX_CHARS). */
+const SHARE_LOGO_MAX_CHARS = 200_000
+/** Reject absurd fragments before touching them, and bound the INFLATED size:
+ * deflate packs 100k identical slides into a ~20K-char link that would freeze
+ * the receiver's tab for minutes. */
+const SHARE_MAX_HASH_CHARS = 400_000
+const SHARE_MAX_INFLATED_BYTES = 4_000_000
 
 const B64 = { '+': '-', '/': '_', '=': '' } as const
 
@@ -34,6 +41,31 @@ function fromBase64Url(s: string): Uint8Array {
 async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
   const out = new Response(new Blob([bytes as BlobPart]).stream().pipeThrough(stream))
   return new Uint8Array(await out.arrayBuffer())
+}
+
+/** Inflate with a byte budget: stop (and throw) as soon as the output exceeds
+ * `max`, instead of materializing a decompression bomb first. */
+async function inflateBounded(bytes: Uint8Array, max: number): Promise<Uint8Array> {
+  const reader = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > max) {
+      await reader.cancel()
+      throw new Error('bad share payload')
+    }
+    chunks.push(value)
+  }
+  const out = new Uint8Array(total)
+  let off = 0
+  for (const c of chunks) {
+    out.set(c, off)
+    off += c.byteLength
+  }
+  return out
 }
 
 export function shareSupported(): boolean {
@@ -70,7 +102,8 @@ export async function encodeDeckToHash(deck: Deck): Promise<string> {
 }
 
 export async function decodeDeckFromHash(data: string): Promise<Deck> {
-  const bytes = await pipe(fromBase64Url(data), new DecompressionStream('deflate-raw'))
+  if (data.length > SHARE_MAX_HASH_CHARS) throw new Error('bad share payload')
+  const bytes = await inflateBounded(fromBase64Url(data), SHARE_MAX_INFLATED_BYTES)
   const spec: unknown = JSON.parse(new TextDecoder().decode(bytes))
   // Untrusted (attacker-controllable) payload: EVERYTHING goes through the
   // deck sanitizer before it can reach an attribute/innerHTML sink or be saved
