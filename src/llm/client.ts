@@ -81,13 +81,17 @@ function safeHost(url: string): string {
 
 /**
  * Explicit output-token limit for OpenAI-compatible endpoints. Without one,
- * providers apply a small default (DeepSeek: ~4K) that silently truncates a
- * long deck's JSON mid-stream — the whole generation then fails. DeepSeek caps
- * output at 8192; newer OpenAI models (o-series, gpt-5 family) reject
- * `max_tokens` and want `max_completion_tokens` instead.
+ * providers apply a small default that silently truncates a long deck's JSON
+ * mid-stream — the whole generation then fails. DeepSeek V4 (0813) allows up
+ * to 384K output tokens on the official API (api-docs.deepseek.com, Models &
+ * Pricing); the old 8192 cap belonged to V3-era models and starved quick-mode
+ * (single whole-deck call) decks on the free system-key path. Newer OpenAI
+ * models (o-series, gpt-5 family) reject `max_tokens` and want
+ * `max_completion_tokens` instead.
  */
+const DEEPSEEK_MAX_OUTPUT = 384_000
 function tokenLimit(cfg: ProviderConfig, want: number): Record<string, number> {
-  if (safeHost(cfg.baseUrl).includes('deepseek')) return { max_tokens: Math.min(want, 8192) }
+  if (safeHost(cfg.baseUrl).includes('deepseek')) return { max_tokens: Math.min(want, DEEPSEEK_MAX_OUTPUT) }
   if (/^(o\d|gpt-5)/i.test(cfg.model.trim())) return { max_completion_tokens: want }
   return { max_tokens: want }
 }
