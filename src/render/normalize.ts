@@ -1,4 +1,5 @@
 import {
+  type Branding,
   type Deck,
   type DeckSpec,
   type Slide,
@@ -14,6 +15,8 @@ import {
 import { genId } from '../lib/dom'
 import { deckIsCjk } from '../lib/lang'
 import { semIconKey } from './semanticIcons'
+import { sanitizeCustomTheme } from './customTheme'
+import { MATERIAL_MAX_CHARS } from '../llm/prompt'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
 const THEME_SET = new Set<string>(THEMES)
@@ -116,13 +119,36 @@ function asSlideBg(v: unknown): SlideBg | undefined {
   if (!v || typeof v !== 'object') return undefined
   const o = v as Record<string, unknown>
   const url = asString(o.url)
-  if (!url || !/^https?:\/\//i.test(url)) return undefined
+  // http(s) photos, or data:image/ (generated abstract SVGs / AI illustrations
+  // already stored on a deck — a backup restore must not lose them). Anything
+  // else (javascript:, blob:, relative) is dropped; bgCssUrl re-checks too.
+  if (!url || !/^(https?:\/\/|data:image\/)/i.test(url)) return undefined
+  const link = asString(o.link)
   return {
     url,
     source: asString(o.source) ?? 'unknown',
     credit: asString(o.credit),
-    link: asString(o.link),
+    link: link && /^https?:\/\//i.test(link) ? link : undefined,
   }
+}
+
+/** Parallel per-bullet icon keys as stored on a deck (`bulletIcons`), validated. */
+function asIconArray(v: unknown, n: number): Array<string | undefined> | undefined {
+  if (!Array.isArray(v) || !n) return undefined
+  const out = Array.from({ length: n }, (_, i) => semIconKey(v[i]))
+  return out.some(Boolean) ? out : undefined
+}
+
+/** Branding fields are user text that lands in innerHTML sinks (escaped there)
+ * and a logo URL that lands in a src attribute — allow only image-ish schemes. */
+export function sanitizeBranding(v: unknown): Branding | undefined {
+  if (!v || typeof v !== 'object') return undefined
+  const o = v as Record<string, unknown>
+  const short = (x: unknown): string | undefined => asString(x)?.slice(0, 120)
+  const logoRaw = asString(o.logo)
+  const logo = logoRaw && /^(https?:\/\/|data:image\/)/i.test(logoRaw) ? logoRaw : undefined
+  const b: Branding = { presenter: short(o.presenter), org: short(o.org), date: short(o.date), logo }
+  return b.presenter || b.org || b.date || b.logo ? b : undefined
 }
 
 function coerceLayout(v: unknown, slide: Record<string, unknown>): SlideLayout {
@@ -152,7 +178,10 @@ export function normalizeSlide(raw: unknown): Slide | null {
     subtitle: asString(o.subtitle),
     eyebrow: asString(o.eyebrow),
     bullets: b.texts,
-    bulletIcons: b.icons,
+    // Model output carries icons inline ({text, icon}); a stored/shared deck
+    // carries them as the parallel `bulletIcons` array — keep both so
+    // re-normalizing an existing deck is lossless.
+    bulletIcons: b.icons ?? asIconArray(o.bulletIcons, b.texts?.length ?? 0),
     stats: asStats(o.stats),
     left: asColumn(o.left),
     right: asColumn(o.right),
@@ -229,4 +258,36 @@ export function normalizeDeck(
     createdAt: now,
     updatedAt: now,
   }
+}
+
+/**
+ * Trust boundary for a whole deck object that did NOT come from this app's own
+ * generator: share-link payloads (attacker-controllable) and backup files
+ * (user-controllable, possibly hand-edited or from an older version). Every
+ * field is re-validated — layouts, theme, tones, URLs, palette, branding — so
+ * nothing unnormalized can reach an innerHTML/attribute sink or IndexedDB.
+ * Returns null when no slide survives (an empty deck would crash the library
+ * thumbnails and the player).
+ */
+export function sanitizeDeck(
+  raw: unknown,
+  opts: { id?: string; allowMaterial: boolean; now: number },
+): Deck | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  if (!Array.isArray(o.slides) || !o.slides.some((s) => normalizeSlide(s))) return null
+  const id = opts.id ?? (typeof o.id === 'string' && o.id.trim() ? o.id.trim() : undefined)
+  const createdAt = typeof o.createdAt === 'number' && Number.isFinite(o.createdAt) ? o.createdAt : opts.now
+  const deck = normalizeDeck(
+    { title: o.title, subtitle: o.subtitle, theme: o.theme, slides: o.slides } as DeckSpec,
+    { prompt: asString(o.prompt) ?? '', model: asString(o.model), id, createdAt },
+  )
+  deck.updatedAt = typeof o.updatedAt === 'number' && Number.isFinite(o.updatedAt) ? o.updatedAt : createdAt
+  deck.customTheme = sanitizeCustomTheme(o.customTheme)
+  deck.branding = sanitizeBranding(o.branding)
+  // deck.material is a local-only contract (share must never carry it); the
+  // restore path keeps it so speaker scripts can still quote real facts.
+  const material = opts.allowMaterial && typeof o.material === 'string' ? o.material.trim() : ''
+  if (material) deck.material = material.slice(0, MATERIAL_MAX_CHARS)
+  return deck
 }

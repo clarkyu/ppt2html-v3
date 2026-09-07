@@ -8,7 +8,11 @@
 // via the existing lazy image fill. http(s) photo URLs are small and kept.
 
 import type { Deck } from '../types'
-import { sanitizeCustomTheme } from '../render/customTheme'
+import { sanitizeDeck } from '../render/normalize'
+
+/** A data: logo above this many chars is dropped from share payloads — a 300 KB
+ * uploaded logo would otherwise turn the link into a 400K-char URL. */
+const SHARE_LOGO_MAX_CHARS = 12_000
 
 const B64 = { '+': '-', '/': '_', '=': '' } as const
 
@@ -40,13 +44,18 @@ export function shareSupported(): boolean {
  * NOTE: this is an ALLOWLIST — `deck.material` (the user's pasted source
  * material) is deliberately absent and must never be added here. */
 function portable(deck: Deck): Record<string, unknown> {
+  const logo = deck.branding?.logo
+  const branding =
+    logo && logo.startsWith('data:') && logo.length > SHARE_LOGO_MAX_CHARS
+      ? { ...deck.branding, logo: undefined }
+      : deck.branding
   return {
     title: deck.title,
     subtitle: deck.subtitle,
     theme: deck.theme,
     customTheme: deck.customTheme,
     prompt: deck.prompt,
-    branding: deck.branding,
+    branding,
     slides: deck.slides.map((s) => {
       const { bg, ...rest } = s
       return bg && !bg.url.startsWith('data:') ? { ...rest, bg } : rest
@@ -62,23 +71,14 @@ export async function encodeDeckToHash(deck: Deck): Promise<string> {
 
 export async function decodeDeckFromHash(data: string): Promise<Deck> {
   const bytes = await pipe(fromBase64Url(data), new DecompressionStream('deflate-raw'))
-  const spec = JSON.parse(new TextDecoder().decode(bytes)) as Partial<Deck>
-  if (!spec || !Array.isArray(spec.slides) || !spec.slides.length) throw new Error('bad share payload')
-  const now = Date.now()
-  return {
-    id: 'shared',
-    title: spec.title || 'Untitled',
-    subtitle: spec.subtitle,
-    theme: (spec.theme as Deck['theme']) || 'aurora',
-    // Untrusted (attacker-controllable) payload — validate before it reaches
-    // rendering, or a malformed palette would crash the deck / poison a copy.
-    customTheme: sanitizeCustomTheme(spec.customTheme),
-    slides: spec.slides,
-    prompt: spec.prompt || '',
-    branding: spec.branding,
-    createdAt: now,
-    updatedAt: now,
-  }
+  const spec: unknown = JSON.parse(new TextDecoder().decode(bytes))
+  // Untrusted (attacker-controllable) payload: EVERYTHING goes through the
+  // deck sanitizer before it can reach an attribute/innerHTML sink or be saved
+  // as a copy — an unvalidated `layout`/`theme`/`tone` string was a stored XSS.
+  // `material` is never accepted from a link (local-only contract).
+  const deck = sanitizeDeck(spec, { id: 'shared', allowMaterial: false, now: Date.now() })
+  if (!deck) throw new Error('bad share payload')
+  return deck
 }
 
 /** Full share URL for the current origin/path. */

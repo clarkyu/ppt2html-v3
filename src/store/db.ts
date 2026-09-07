@@ -51,7 +51,7 @@ export async function importDecks(decks: Deck[]): Promise<number> {
   const tx = database.transaction('decks', 'readwrite')
   let n = 0
   for (const d of decks) {
-    if (d && typeof d.id === 'string' && typeof d.title === 'string' && Array.isArray(d.slides)) {
+    if (d && typeof d.id === 'string' && typeof d.title === 'string' && Array.isArray(d.slides) && d.slides.length) {
       await tx.store.put(d)
       n++
     }

@@ -19,6 +19,7 @@ import { openGlobalEditPanel } from './globalEditPanel'
 import { abstractBg, abstractBgWith } from '../images/abstract'
 import { applyCustomTheme, customAbstractPalette, isLightCustom } from '../render/customTheme'
 import { fitSlide } from '../render/fit'
+import { escapeHtml } from '../lib/markdown'
 import { renderSlideInner } from '../render/layouts'
 import type { Deck, Slide, ThemeName } from '../types'
 
@@ -420,7 +421,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
                   const over = r.sec > r.budget
                   const label = loadedDeck!.slides[r.i]?.title || `${r.i + 1}`
                   return `<div class="rehearse-summary__row${over ? ' over' : ''}">
-                    <span class="rehearse-summary__name">${r.i + 1}. ${label.replace(/\*\*/g, '').slice(0, 18)}</span>
+                    <span class="rehearse-summary__name">${r.i + 1}. ${escapeHtml(label.replace(/\*\*/g, '').slice(0, 18))}</span>
                     <span class="rehearse-summary__time">${fmtClock(r.sec)} / ${fmtClock(r.budget)}${over ? ` · ${t('reh.over')}` : ''}</span>
                     <i style="width:${pct.toFixed(0)}%"></i>
                   </div>`

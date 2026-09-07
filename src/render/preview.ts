@@ -2,6 +2,7 @@ import type { CustomTheme, Deck, Slide, ThemeName } from '../types'
 import { renderSlideInner, slideBgHtml, slideCreditHtml } from './layouts'
 import { applyCustomTheme } from './customTheme'
 import { fitSlide } from './fit'
+import { escapeHtml } from '../lib/markdown'
 import './themes.css'
 import './slides.css'
 
@@ -18,10 +19,10 @@ export function mountSlidePreview(
 ): () => void {
   container.innerHTML =
     `<div class="thumb__stage">` +
-    `<div class="player theme-${theme}">` +
+    `<div class="player theme-${escapeHtml(theme)}">` +
     `<div class="player__bg"></div>` +
     `<div class="reveal deck"><div class="slides">` +
-    `<section class="deck-slide" data-layout="${slide.layout}">${slideBgHtml(slide)}${renderSlideInner(slide)}${slideCreditHtml(slide)}</section>` +
+    `<section class="deck-slide" data-layout="${escapeHtml(slide.layout)}">${slideBgHtml(slide)}${renderSlideInner(slide)}${slideCreditHtml(slide)}</section>` +
     `</div></div></div></div>`
 
   applyCustomTheme(container.querySelector<HTMLElement>('.player')!, custom)
@@ -43,13 +44,22 @@ export function mountSlidePreview(
  * (expected to be a `.thumb` element). Returns a cleanup function.
  */
 export function mountThumb(container: HTMLElement, deck: Deck): () => void {
-  const cover = deck.slides[0]
+  // A stored deck with no slides or a corrupt first slide (old import,
+  // hand-edited backup) must not throw here — one bad thumbnail used to blank
+  // the entire library.
+  const cover = deck.slides?.[0]
+  let coverHtml = ''
+  try {
+    coverHtml = cover ? `${slideBgHtml(cover)}${renderSlideInner(cover)}` : ''
+  } catch {
+    coverHtml = ''
+  }
   container.innerHTML =
     `<div class="thumb__stage">` +
-    `<div class="player theme-${deck.theme}">` +
+    `<div class="player theme-${escapeHtml(deck.theme)}">` +
     `<div class="player__bg"></div>` +
     `<div class="reveal deck"><div class="slides">` +
-    `<section class="deck-slide">${slideBgHtml(cover)}${renderSlideInner(cover)}</section>` +
+    `<section class="deck-slide">${coverHtml}</section>` +
     `</div></div></div></div>`
 
   applyCustomTheme(container.querySelector<HTMLElement>('.player')!, deck.customTheme)

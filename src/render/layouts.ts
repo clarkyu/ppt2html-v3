@@ -115,7 +115,7 @@ function compareCard(item: CompareItem, i: number): string {
   const points = (item.points ?? [])
     .map((p) => `<li>${mdInline(p)}</li>`)
     .join('')
-  return `<div class="s-cmp fragment fade-up s-cmp--${item.tone ?? 'neutral'}" style="--i:${i}">
+  return `<div class="s-cmp fragment fade-up s-cmp--${escapeHtml(item.tone ?? 'neutral')}" style="--i:${i}">
     <h3 class="s-cmp__heading">${mdInline(item.heading)}</h3>
     ${points ? `<ul class="s-cmp__points">${points}</ul>` : ''}
   </div>`
