@@ -3,6 +3,29 @@
 按 PR 逆序记录每次落地的内容与关键决策,供后续会话/协作者快速恢复上下文。
 项目约定与架构地图见仓库根 `CLAUDE.md`。
 
+## 会话五(2026-09 起,分支 claude/amazing-wozniak-8frd0x)
+
+起点:用户拿真实课题试产品——湖北专升本《大学英语》大纲 + 2025/2026 真题 + 学校
+3064 词核心词表 → 面向英语弱基础的摄影摄像专业学生,做一份 20 分钟「如何用
+DeepSeek 备考」课件。流程:64 个智能体的工作流先求解两年真题、双复核员推翻式
+复核、终审,再按六题型双角度设计「解题助手 / 同题仿真」提示词并评审合成;课件
+34 页(主讲 24 + 附录提示词卡 10)按 Deck 契约手写,`deckIssues` 零告警,无头逐页
+截图无溢出,用项目导出器出 PPTX / PDF / 单文件 HTML。导出时暴露了打印 bug → #77。
+
+### PR #77 — 打印/PDF 导出还原为满页 1280×720 分页
+- 症状:播放页打印与 `page.pdf()` 的每一页整体缩到 ~0.63、右移 120px,标题 24pt,
+  `.s` flex 被打散,末尾多一张空白页。此前验证只数页数,未看版面。
+- 三因三修:①reveal.css 自带 `html:not(.print-pdf)` 纸质打印块(!important、比
+  player.css 更具体)→ beforeprint 给 `<html>` 挂 `print-pdf` 关掉整块,afterprint/
+  卸载移除;②应用外壳 `.view` 居中 1120 + 内边距把页面推出 120px 致 Chrome 整页
+  缩放 → 打印块放开 `.view`;③reveal `.aria-status` 1px 活区在末页之下多 1px →
+  打印隐藏,末页不再 page-break-after。
+- 验证:34 页课件 `page.pdf()` 恰 34 页,每页 section 1280×720、`.s` 1096×592、
+  标题 54px,与屏幕一致;PyMuPDF 逐页渲染目检。
+- 顺带经验:PPTX 导出每页背景 PNG ~0.8MB(34 页 28MB),外部用 PIL 量化 256 色
+  可压到 6.5MB 不改结构;Chrome PDF 用 PyMuPDF `garbage=4, deflate` 可再压 ~30%,
+  但**别用 `rewrite_images`**(会丢 Pattern 资源报错)。
+
 ## 会话四(2026-07 至 2026-09,PR #56–#73,分支 claude/project-review-jt4jb5)
 
 起点:10 个并行 agent 全量精读 80 个文件恢复上下文。随后两条产品讨论定调:

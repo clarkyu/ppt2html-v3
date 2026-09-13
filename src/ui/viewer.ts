@@ -160,6 +160,12 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   // overflow:hidden. Fit every slide right before printing (covers both the
   // toolbar button and Ctrl+P — beforeprint fires for window.print() too).
   const fitAllForPrint = () => {
+    // reveal.css ships "paper" print rules under `html:not(.print-pdf)` (auto
+    // heights, 60px/20px padding, 24pt headings, every div forced to block) with
+    // !important and a higher specificity than player.css — they used to shrink
+    // and reflow every printed page. Flagging print-pdf switches that whole block
+    // off so the player's own 1280×720 page layout applies; cleared afterprint.
+    document.documentElement.classList.add('print-pdf')
     mount.querySelectorAll<HTMLElement>('.reveal .slides > section').forEach((sec) => {
       const prev = { display: sec.style.display, visibility: sec.style.visibility }
       sec.style.display = 'block'
@@ -169,7 +175,9 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
       sec.style.visibility = prev.visibility
     })
   }
+  const afterPrint = () => document.documentElement.classList.remove('print-pdf')
   window.addEventListener('beforeprint', fitAllForPrint)
+  window.addEventListener('afterprint', afterPrint)
 
   // Export the deck as a single, offline-playable .html file.
   view.querySelector('[data-export]')!.addEventListener('click', () => {
@@ -670,6 +678,8 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
     window.clearInterval(rehInterval)
     window.removeEventListener('keydown', onKey)
     window.removeEventListener('beforeprint', fitAllForPrint)
+    window.removeEventListener('afterprint', afterPrint)
+    afterPrint()
     document.removeEventListener('visibilitychange', onVisibility)
     wakeLock?.release().catch(() => {})
     imgAbort.abort()

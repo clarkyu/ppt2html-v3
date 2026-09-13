@@ -10,7 +10,8 @@ LLM。部署在 GitHub Pages:https://clarkyu.github.io/ppt2html-v3/
 ## 开发约定(必守)
 
 - **分支**:只在**当前会话被指定的 `claude/*` 分支**上开发(会话三及以前是
-  `claude/pwa-slide-generator-0s4imt`,会话四起是 `claude/project-review-jt4jb5`);
+  `claude/pwa-slide-generator-0s4imt`,会话四是 `claude/project-review-jt4jb5`,会话五起是
+  `claude/amazing-wozniak-8frd0x`);
   每次 PR 被合并后 `git fetch origin main && git checkout -B <该分支> origin/main`
   重置,并推送同步远端(纯已合并历史,`--force-with-lease` 即可)。绝不推其他分支。
 - **提交身份**:提交前先 `git config user.email noreply@anthropic.com && git config user.name Claude`,
@@ -119,6 +120,10 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
   亮/暗判定用 WCAG 对比度(取黑/白文字对比更高者),别用 `luminance>0.5`(高饱和中
   亮度色会选错);CSS 与 PPTX 两条推导共用同一判定,别各写一套。用户可输入的风格名
   进 innerHTML 必须 `escapeHtml`(存储型自 XSS)。
+- **打印/PDF**:reveal.css 自带 `@media print { html:not(.print-pdf) … !important }` 纸质
+  打印块,比 player.css 更具体,会把每页压成 auto 高、60/20 内边距、pt 字号、div 全变
+  block——打印期间必须给 `<html>` 挂 `print-pdf`(viewer beforeprint 已做);应用外壳
+  `.view` 的居中/内边距和 reveal `.aria-status` 1px 活区也要在打印块里清掉(PR #77)。
 - **导出/演讲者视图**:body/html 需带 `.player` 类,否则 `--font-body`/`--pos`/`--neg`
   (只在 `.player` 里定义)不解析——曾导致导出件字体退化。
 - 系统密钥经 GitHub Actions secrets 注入(VITE_DEEPSEEK_API_KEY / VITE_UNSPLASH_KEY /
