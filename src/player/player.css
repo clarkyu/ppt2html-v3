@@ -113,9 +113,15 @@
   }
   .viewer { position: static !important; }
   .viewer__mount { position: static !important; inset: auto !important; }
+  /* The app shell centers `.view` at max-width 1120px with side padding. In
+     print that leaves the 1280px slides offset by ~120px, the page overflows
+     and Chrome shrinks every page to ~0.63 to fit — let the shell span the page. */
+  .view { max-width: none !important; width: 1280px !important; margin: 0 !important; padding: 0 !important; }
   html, body { background: #fff !important; }
+  /* .aria-status is reveal's 1px live region pinned below the last slide — it
+     alone pushed the document 1px past the last page and printed a blank 35th. */
   .appbar, .viewer__bar, .viewer__notes, .viewer__help, .rotate-hint, .toast,
-  .reveal .controls, .reveal .progress, .reveal .slide-number, .reveal .backgrounds {
+  .reveal .controls, .reveal .progress, .reveal .slide-number, .reveal .backgrounds, .reveal .aria-status {
     display: none !important;
   }
   /* Chrome skips backgrounds by default; 5 of 7 themes are dark-on-dark, which
@@ -153,6 +159,11 @@
     page-break-after: always;
     break-after: page;
     overflow: hidden;
+  }
+  /* No page break after the last slide — it used to print a trailing blank page. */
+  .player .reveal .slides > section:last-of-type {
+    page-break-after: auto;
+    break-after: auto;
   }
   .player .reveal .slides > section .fragment {
     opacity: 1 !important;
