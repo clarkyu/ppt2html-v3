@@ -5,18 +5,28 @@ import { VitePWA } from 'vite-plugin-pwa'
 // Dev server runs at root. Hash-based routing keeps deep links working on both.
 const REPO_BASE = '/ppt2html-v3/'
 
-export default defineConfig(({ command }) => ({
-  base: command === 'build' ? REPO_BASE : '/',
+export default defineConfig(({ command, isPreview }) => ({
+  // `vite preview` serves the built dist, so it needs the build's base too —
+  // with '/' every asset URL fell through to the SPA fallback and the preview
+  // (the only way to exercise the service worker locally) was a blank page.
+  base: command === 'build' || isPreview ? REPO_BASE : '/',
   build: {
     target: 'es2022',
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks(id: string) {
-          // Heavy, rarely-used parsers get stable chunk names so the PWA
-          // precache can exclude them (they lazy-load online when needed).
-          if (id.includes('pdfjs-dist')) return 'pdfjs'
-          if (id.includes('mammoth')) return 'mammoth'
-          return undefined
+        // Heavy, rarely-used parsers get stable chunk names so the PWA precache
+        // can exclude them (they lazy-load online when needed). The group test
+        // is restricted to the packages themselves and dependencies are NOT
+        // pulled in recursively: the old manualChunks compat hoisted a module
+        // shared with the entry into the pdfjs chunk, so index.html
+        // modulepreloaded a precache-excluded file and the app booted to a
+        // blank page offline. scripts/check-chunks.mjs guards this after build.
+        advancedChunks: {
+          includeDependenciesRecursively: false,
+          groups: [
+            { name: 'pdfjs', test: /node_modules[\\/]pdfjs-dist[\\/]/ },
+            { name: 'mammoth', test: /node_modules[\\/]mammoth[\\/]/ },
+          ],
         },
       },
     },
@@ -24,7 +34,10 @@ export default defineConfig(({ command }) => ({
   },
   plugins: [
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': a new build waits until the user taps "reload" — autoUpdate
+      // hard-reloaded the tab within seconds of a deploy, wiping the composer,
+      // in-flight generation, unsaved edits and live presentations.
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
         name: '课件生成器 · 一句话变精美 PPT',

@@ -1,4 +1,5 @@
-import { getDeck, saveDeck } from '../store/db'
+import { getDeck } from '../store/db'
+import { persistDeck } from '../lib/persist'
 import { getSampleDeck } from '../sample'
 import { mountPlayer, type PlayerHandle } from '../player/player'
 import { populateDeckImages } from '../images/search'
@@ -304,7 +305,8 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         keepBtn.hidden = false
         keepBtn.addEventListener('click', () => {
           const copy: Deck = { ...deck, id: crypto.randomUUID(), createdAt: Date.now(), updatedAt: Date.now() }
-          void saveDeck(copy).then(() => {
+          void persistDeck(copy).then((ok) => {
+            if (!ok) return
             toast(t('share.savedCopy'))
             navigate(`#/play/${copy.id}`)
           })
@@ -507,7 +509,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             })
             label = t('style.mine')
           }
-          if (persistable) void saveDeck(deck)
+          if (persistable) void persistDeck(deck)
           toast(t('style.applied').replace('{name}', label))
         })
       })
@@ -566,7 +568,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         }
         setNote(deck.slides[curNum - 1]?.note)
         presenter?.update(curNum)
-        if (persistable) void saveDeck(deck)
+        if (persistable) void persistDeck(deck)
       }
       const rewriteBtn = view.querySelector<HTMLButtonElement>('[data-rewrite]')!
       const refineBtn = view.querySelector<HTMLButtonElement>('[data-refine]')!
@@ -592,7 +594,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         const applyStructure = (slides: Slide[]): void => {
           const idx = slides.indexOf(deck.slides[curNum - 1])
           deck.slides = slides
-          if (persistable) void saveDeck(deck)
+          if (persistable) void persistDeck(deck)
           remountPlayer(idx >= 0 ? idx + 1 : undefined)
         }
         const geditBtn = view.querySelector<HTMLButtonElement>('[data-gedit]')!
@@ -619,7 +621,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
               signal: imgAbort.signal,
               onProgress: (done) => {
                 genBtn.innerHTML = `${icons.mic} <b>${done}/${total}</b>`
-                if (persistable) void saveDeck(loadedDeck!)
+                if (persistable) void persistDeck(loadedDeck!)
                 setNote(loadedDeck!.slides[curNum - 1]?.note)
                 presenter?.update(curNum)
               },
@@ -651,7 +653,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         const scheduleSave = () => {
           if (!persistable) return
           window.clearTimeout(saveTimer)
-          saveTimer = window.setTimeout(() => void saveDeck(deck), 800)
+          saveTimer = window.setTimeout(() => void persistDeck(deck), 800)
         }
         void populateDeckImages(deck, settings, {
           signal: imgAbort.signal,
@@ -661,7 +663,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           },
         })
           .then(() => {
-            if (!imgAbort.signal.aborted && persistable) void saveDeck(deck)
+            if (!imgAbort.signal.aborted && persistable) void persistDeck(deck)
           })
           .catch(() => {
             /* best-effort: a missing background just leaves the theme gradient */

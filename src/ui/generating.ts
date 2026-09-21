@@ -10,7 +10,7 @@ import { toast } from '../lib/toast'
 import { escapeHtml } from '../lib/markdown'
 import { clearDraft } from '../lib/draft'
 import { t } from '../i18n'
-import type { GenerateOptions, Outline } from '../types'
+import type { Deck, GenerateOptions, Outline } from '../types'
 
 export interface GenerateHooks {
   /** The deck was saved and playback is opening — tear down whatever's beneath. */
@@ -78,6 +78,7 @@ export function generateAndPlay(
 
   let controller = new AbortController()
   const slides: Array<Record<string, unknown>> = [] // completed segments only
+  const segDone: number[] = [] // how many slides each completed segment contributed
   let revealed = 0
 
   const dismiss = () => {
@@ -118,14 +119,38 @@ export function generateAndPlay(
     // allowlist excludes it) so the speaker-script pass can quote real facts.
     if (opts.material?.trim()) deck.material = opts.material.trim().slice(0, MATERIAL_MAX_CHARS)
     // Background images are fetched lazily in the player (non-blocking).
-    void saveDeck(deck)
-      .then(() => {
-        clearDraft()
-        el.remove()
-        hooks.onDone?.()
-        navigate(`#/play/${deck.id}`)
-      })
-      .catch(() => showError(segments.length - 1, t('lib.readError')))
+    // A save failure is NOT a generation failure: its retry only re-saves
+    // (nothing regenerated or billed), instead of re-streaming the last
+    // segment onto slides that already hold every page.
+    const save = (): void => {
+      saveDeck(deck)
+        .then(() => {
+          clearDraft()
+          el.remove()
+          hooks.onDone?.()
+          navigate(`#/play/${deck.id}`)
+        })
+        .catch(() => showSaveError(save))
+    }
+    save()
+  }
+
+  const showSaveError = (retry: () => void) => {
+    errEl.hidden = false
+    errEl.innerHTML = `
+      <h2 class="gen__error">${t('gen.saveFailed')}</h2>
+      <p style="color:var(--text-muted)">${t('gen.saveFailedHint')}</p>`
+    actionsEl.innerHTML = `
+      <button class="btn btn--ghost" data-back>${t('gen.backToOutline')}</button>
+      <button class="btn btn--primary" data-retry>${t('gen.retrySave')}</button>`
+    actionsEl.querySelector('[data-back]')!.addEventListener('click', dismiss)
+    actionsEl.querySelector('[data-retry]')!.addEventListener('click', () => {
+      errEl.hidden = true
+      errEl.innerHTML = ''
+      actionsEl.innerHTML = `<button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button>`
+      actionsEl.querySelector('[data-cancel]')!.addEventListener('click', dismiss)
+      retry()
+    })
   }
 
   const showError = (segIdx: number, msg: string) => {
@@ -148,6 +173,11 @@ export function generateAndPlay(
 
   const runFrom = async (fromSeg: number) => {
     controller = new AbortController()
+    // Retrying segment N must start from exactly the pages segments 0..N-1
+    // produced — a retry used to push the segment again onto an array that
+    // already held it (a 4-page outline saved as 7 pages).
+    slides.length = segDone.slice(0, fromSeg).reduce((n, k) => n + k, 0)
+    segDone.length = fromSeg
     let si = fromSeg
     try {
       for (; si < segments.length; si++) {
@@ -175,6 +205,7 @@ export function generateAndPlay(
         // Any pages not caught mid-stream (or padded from the outline).
         segSlides.forEach((s, k) => reveal(s, base + k))
         slides.push(...segSlides)
+        segDone.push(segSlides.length)
       }
       finish()
     } catch (err: unknown) {
@@ -250,6 +281,29 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
     cell.scrollIntoView({ block: 'nearest' })
   }
 
+  // A save failure gets its own retry that only re-saves — the deck is already
+  // generated (and billed); re-running the whole LLM call for a storage error
+  // was the old behaviour.
+  const saveAndOpen = (deck: Deck): Promise<void> =>
+    saveDeck(deck).then(() => {
+      el.remove()
+      navigate(`#/play/${deck.id}`)
+    })
+  const showSaveFail = (deck: Deck): void => {
+    errEl.hidden = false
+    errEl.innerHTML = `
+      <h2 class="gen__error">${t('gen.saveFailed')}</h2>
+      <p style="color:var(--text-muted)">${t('gen.saveFailedHint')}</p>`
+    actionsEl.innerHTML = `
+      <button class="btn btn--ghost" data-close>${t('common.close')}</button>
+      <button class="btn btn--primary" data-retry>${t('gen.retrySave')}</button>`
+    actionsEl.querySelector('[data-close]')!.addEventListener('click', dismiss)
+    actionsEl.querySelector('[data-retry]')!.addEventListener('click', () => {
+      errEl.hidden = true
+      saveAndOpen(deck).catch(() => showSaveFail(deck))
+    })
+  }
+
   const run = () => {
     controller = new AbortController()
     errEl.hidden = true
@@ -265,10 +319,7 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
         const deck = normalizeDeck(spec, { prompt: trimmed, model, theme: opts.theme })
         deck.branding = newDeckBranding(settings)
         if (opts.material?.trim()) deck.material = opts.material.trim().slice(0, MATERIAL_MAX_CHARS)
-        return saveDeck(deck).then(() => {
-          el.remove()
-          navigate(`#/play/${deck.id}`)
-        })
+        return saveAndOpen(deck).catch(() => showSaveFail(deck))
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return

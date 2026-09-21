@@ -1,4 +1,5 @@
-import { getDeck, saveDeck } from '../store/db'
+import { getDeck } from '../store/db'
+import { persistDeck } from '../lib/persist'
 import { getSampleDeck } from '../sample'
 import { mountSlidePreview } from '../render/preview'
 import { regenerateSlide } from '../llm/edit'
@@ -264,7 +265,9 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
 
     if (btn.dataset.save !== undefined) {
       deck.updatedAt = Date.now()
-      saveDeck(deck).then(() => {
+      // On failure persistDeck has toasted and the status stays "unsaved".
+      void persistDeck(deck).then((ok) => {
+        if (!ok) return
         setStatus(t('ed.saved'))
         toast(t('ed.saved'))
       })
@@ -272,7 +275,9 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     }
     if (btn.dataset.play !== undefined) {
       deck.updatedAt = Date.now()
-      saveDeck(deck).then(() => navigate(`#/play/${deck.id}`))
+      void persistDeck(deck).then((ok) => {
+        if (ok) navigate(`#/play/${deck.id}`)
+      })
       return
     }
     if (btn.dataset.addSlide !== undefined) {

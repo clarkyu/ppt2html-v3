@@ -18,6 +18,12 @@ function db(): Promise<IDBPDatabase<DeckDB>> {
         const store = database.createObjectStore('decks', { keyPath: 'id' })
         store.createIndex('by-updated', 'updatedAt')
       },
+    }).catch((err: unknown) => {
+      // A transient open failure (blocked upgrade, private-mode quirk) must not
+      // be memoized — it used to poison every later read and write for the
+      // lifetime of the page.
+      dbPromise = null
+      throw err
     })
   }
   return dbPromise

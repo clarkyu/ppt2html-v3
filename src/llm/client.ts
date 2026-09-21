@@ -331,6 +331,9 @@ async function doFetch(url: string, init: RequestInit): Promise<Response> {
     return await fetch(url, init)
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e
+    // Being offline is a different problem from "the endpoint rejected us" —
+    // don't send the user off to re-enter keys or find a VPN.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error(t('err.offline'))
     throw new Error(t('err.network'))
   }
 }
