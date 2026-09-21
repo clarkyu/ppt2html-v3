@@ -776,6 +776,8 @@ const DICT: Record<string, Entry> = {
   'ed.rewriting': { zh: 'AI 重写中…', en: 'Rewriting…' },
   'ed.rewritten': { zh: '已重写这一页', en: 'Slide rewritten' },
   'ed.rewriteFailed': { zh: '重写失败：', en: 'Rewrite failed: ' },
+  'ed.pageGone': { zh: '这一页已被删除，AI 结果已丢弃', en: 'That page was deleted — the AI result was discarded' },
+  'ed.f.imgBullets': { zh: '要点（无正文时显示）', en: 'Bullets (shown when body is empty)' },
   'ed.aiRewrite': { zh: 'AI 重写本页', en: 'AI rewrite' },
   'ed.bgDisabled': { zh: '已在「设置」里关闭了背景图', en: 'Backgrounds are turned off in Settings' },
   'ed.noImage': { zh: '没找到合适的图片，换个说法或稍后再试', en: 'No suitable image found — try different wording or later' },

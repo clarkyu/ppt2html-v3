@@ -7,7 +7,8 @@ import { searchImageCandidates, confirmCandidate, queryForSlide, type ImageCandi
 import { genImageConfigured } from '../images/genai'
 import { abstractBg, resolveAbstractStyle } from '../images/abstract'
 import { loadSettings, isConfigured } from '../llm/settings'
-import { navigate } from '../router'
+import { navigate, setLeaveGuard, setLangHandler } from '../router'
+import { applyCustomTheme } from '../render/customTheme'
 import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
@@ -42,19 +43,22 @@ const themeLabel = (name: ThemeName): string => t(`theme.${name}`)
 /** Deck content editor: every page shown with a live preview and editable fields. */
 export function renderDeckEditor(view: HTMLElement, id: string): () => void {
   const cleanups: Array<() => void> = []
+  let disposed = false
 
-  view.innerHTML = `
-    <div class="section-head">
-      <h2>${t('ed.title')}</h2>
-      <a href="#/library">${t('ed.backToLibrary')}</a>
-    </div>
-    <div data-root><div class="empty"><p>${t('common.loading')}</p></div></div>`
+  view.innerHTML = `<div class="section-head"></div><div data-root><div class="empty"><p>${t('common.loading')}</p></div></div>`
+  const renderHead = (): void => {
+    view.querySelector('.section-head')!.innerHTML = `<h2>${t('ed.title')}</h2><a href="#/library">${t('ed.backToLibrary')}</a>`
+  }
+  renderHead()
   const root = view.querySelector<HTMLElement>('[data-root]')!
 
   const isSample = id === 'sample'
   const load = isSample ? Promise.resolve(getSampleDeck()) : getDeck(id)
   load
     .then((loaded) => {
+      // Navigated away before the deck arrived: mounting now would register
+      // listeners/observers into a cleanup list nobody will run again.
+      if (disposed) return
       if (!loaded) {
         root.innerHTML = `<div class="empty"><h3>${t('viewer.notFound')}</h3><p>${t('viewer.notFoundHint')}</p></div>`
         return
@@ -63,25 +67,51 @@ export function renderDeckEditor(view: HTMLElement, id: string): () => void {
       const deck: Deck = isSample
         ? { ...structuredClone(loaded), id: crypto.randomUUID(), createdAt: Date.now(), updatedAt: Date.now() }
         : structuredClone(loaded)
-      mountEditor(root, deck, cleanups)
+      mountEditor(root, deck, cleanups, renderHead)
     })
     .catch(() => {
-      root.innerHTML = `<div class="empty"><h3>${t('viewer.loadError')}</h3></div>`
+      if (!disposed) root.innerHTML = `<div class="empty"><h3>${t('viewer.loadError')}</h3></div>`
     })
 
-  return () => cleanups.forEach((fn) => fn())
+  return () => {
+    disposed = true
+    cleanups.forEach((fn) => fn())
+  }
 }
 
 /* ------------------------------ mount ------------------------------ */
 
-function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>): void {
+function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>, renderHead: () => void): void {
   const previewCleanups = new Map<HTMLElement, () => void>()
   cleanups.push(() => previewCleanups.forEach((fn) => fn()))
+  // In-flight AI/image requests die with the screen — a result landing on a
+  // deck the user already left used to mutate a detached copy.
+  const aborter = new AbortController()
+  cleanups.push(() => aborter.abort())
+  const signal = aborter.signal
+  const isAbort = (e: unknown): boolean => e instanceof DOMException && e.name === 'AbortError'
+
+  // Previews mount lazily as their card scrolls near the viewport: a 40-page
+  // deck with multi-MB data-URL backgrounds took seconds to serialize every
+  // preview at once, on every structural edit.
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const en of entries) {
+        if (!en.isIntersecting) continue
+        io.unobserve(en.target)
+        mountPreview(en.target as HTMLElement)
+      }
+    },
+    { rootMargin: '600px 0px' },
+  )
+  cleanups.push(() => io.disconnect())
+  const watch = (card: HTMLElement): void => io.observe(card)
 
   const render = () => {
     // Tear down old preview observers before replacing the DOM.
     previewCleanups.forEach((fn) => fn())
     previewCleanups.clear()
+    io.disconnect()
 
     root.innerHTML = `
       <div class="ed-meta card">
@@ -112,7 +142,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
         <button class="btn btn--primary" data-save>${icons.save} ${t('common.save')}</button>
       </div>`
 
-    root.querySelectorAll<HTMLElement>('[data-card]').forEach((card) => mountPreview(card))
+    root.querySelectorAll<HTMLElement>('[data-card]').forEach(watch)
   }
 
   const mountPreview = (card: HTMLElement) => {
@@ -126,9 +156,41 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
 
   const refreshPreview = (card: HTMLElement) => mountPreview(card)
 
+  const cardAt = (i: number): HTMLElement | null => root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)
+  /** Re-render ONE card in place (fields changed, layout changed, bg changed). */
+  const replaceCard = (card: HTMLElement, i: number): HTMLElement => {
+    const box = card.querySelector<HTMLElement>('[data-preview]')
+    if (box) {
+      previewCleanups.get(box)?.()
+      previewCleanups.delete(box)
+    }
+    io.unobserve(card)
+    card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
+    const fresh = cardAt(i)!
+    mountPreview(fresh)
+    return fresh
+  }
+  /** After a move/delete/add: page numbers, data-i and the arrow states follow
+   * the DOM order — no card is rebuilt, so previews keep their observers. */
+  const renumber = (): void => {
+    const cards = root.querySelectorAll<HTMLElement>('[data-card]')
+    cards.forEach((c, k) => {
+      c.dataset.i = String(k)
+      const n = c.querySelector<HTMLElement>('.slide-card__n')
+      if (n) n.textContent = String(k + 1)
+      const up = c.querySelector<HTMLButtonElement>('[data-up]')
+      const down = c.querySelector<HTMLButtonElement>('[data-down]')
+      if (up) up.disabled = k === 0
+      if (down) down.disabled = k === cards.length - 1
+    })
+  }
+  /** Where a slide captured before an await lives NOW (-1 if it was deleted). */
+  const indexOf = (slide: Slide): number => deck.slides.indexOf(slide)
+
   // Candidate picker: the six thumbnails for "change background" — pick one
-  // instead of blind-swapping to whatever came first.
-  const showBgPicker = (card: HTMLElement, i: number, candidates: ImageCandidate[]) => {
+  // instead of blind-swapping to whatever came first. The slide is tracked by
+  // identity: the user may have reordered/deleted pages while the search ran.
+  const showBgPicker = (card: HTMLElement, target: Slide, candidates: ImageCandidate[]) => {
     card.querySelector('.ed-pick')?.remove()
     const pick = document.createElement('div')
     pick.className = 'ed-pick'
@@ -149,10 +211,15 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       if (!th) return
       const chosen = candidates[Number(th.dataset.pick)]
       if (!chosen) return
-      deck.slides[i].bg = confirmCandidate(chosen, loadSettings())
-      deck.slides[i].bgOff = undefined
-      card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
-      mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+      const j = indexOf(target)
+      if (j < 0) {
+        pick.remove()
+        toast(t('ed.pageGone'))
+        return
+      }
+      target.bg = confirmCandidate(chosen, loadSettings())
+      target.bgOff = undefined
+      replaceCard(cardAt(j) ?? card, j)
       setStatus(t('ed.unsaved'))
       toast(t('ed.bgChanged'))
     })
@@ -165,7 +232,10 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     if (el) el.textContent = text
   }
 
-  // Unsaved edits shouldn't be droppable by an accidental close/back.
+  // Unsaved edits shouldn't be droppable by an accidental close/back: the
+  // router asks the guard before any hash navigation (app-bar links, browser
+  // back, navigate()), beforeunload covers closing the tab, and a language
+  // switch re-renders from the in-memory deck instead of remounting.
   const onBeforeUnload = (e: BeforeUnloadEvent) => {
     if (dirty) {
       e.preventDefault()
@@ -174,13 +244,20 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
   }
   window.addEventListener('beforeunload', onBeforeUnload)
   cleanups.push(() => window.removeEventListener('beforeunload', onBeforeUnload))
-  const backLink = root.parentElement?.querySelector<HTMLAnchorElement>('a[href="#/library"]')
-  backLink?.addEventListener('click', (e) => {
-    if (dirty && !confirm(t('ed.leaveConfirm'))) e.preventDefault()
+  setLeaveGuard(() => !dirty || confirm(t('ed.leaveConfirm')))
+  setLangHandler(() => {
+    renderHead()
+    render()
+    if (dirty) setStatus(t('ed.unsaved'))
+  })
+  cleanups.push(() => {
+    setLeaveGuard(null)
+    setLangHandler(null)
   })
 
-  // One-level undo for the last AI rewrite.
-  let lastRewrite: { i: number; slide: Slide } | null = null
+  // One-level undo for the last AI rewrite, keyed by slide identity (indices
+  // shift under reorders/deletes).
+  let lastRewrite: { slide: Slide; before: Slide } | null = null
 
   render()
 
@@ -206,7 +283,9 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       setStatus(t('ed.unsaved'))
       return
     }
-    if (card && target.closest('[data-field]')) {
+    // [data-f] = the comparison-card / timeline-step sub-fields, which used to
+    // be ignored here (edits silently lost on Save).
+    if (card && target.closest('[data-field],[data-f]')) {
       const i = Number(card.dataset.i)
       deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       refreshPreview(card)
@@ -238,10 +317,25 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       return
     }
     if (target.matches('[data-meta="theme"]')) {
+      const prevTheme = deck.theme
       deck.theme = (target as HTMLSelectElement).value as ThemeName
       // Picking a built-in theme here drops any custom "我的风格" palette.
       deck.customTheme = undefined
-      render() // re-render all previews with the new theme
+      // Retheme the mounted previews in place (class swap + cleared custom
+      // vars); unmounted ones pick up deck.theme when they scroll in.
+      root.querySelectorAll<HTMLElement>('[data-preview] .player').forEach((p) => {
+        p.classList.remove(`theme-${prevTheme}`)
+        p.classList.add(`theme-${deck.theme}`)
+        applyCustomTheme(p, undefined)
+      })
+      setStatus(t('ed.unsaved'))
+      return
+    }
+    if (target.matches('[data-f="tone"]')) {
+      const card = target.closest<HTMLElement>('[data-card]')!
+      const i = Number(card.dataset.i)
+      deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
+      refreshPreview(card)
       setStatus(t('ed.unsaved'))
       return
     }
@@ -251,8 +345,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       const layout = (target as HTMLSelectElement).value as SlideLayout
       deck.slides[i] = { ...collectSlide(card, deck.slides[i].layout, deck.slides[i]), layout }
       // Re-render just this card so its fields match the new layout.
-      card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
-      mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+      replaceCard(card, i)
       setStatus(t('ed.unsaved'))
     }
   })
@@ -276,13 +369,21 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     if (btn.dataset.play !== undefined) {
       deck.updatedAt = Date.now()
       void persistDeck(deck).then((ok) => {
-        if (ok) navigate(`#/play/${deck.id}`)
+        if (!ok) return
+        setStatus(t('ed.saved')) // clean → the leave guard lets the navigation through
+        navigate(`#/play/${deck.id}`)
       })
       return
     }
     if (btn.dataset.addSlide !== undefined) {
       deck.slides.push({ layout: 'bullets', title: t('ed.newSlide'), bullets: [t('ed.newBullet')] })
-      render()
+      const list = root.querySelector<HTMLElement>('[data-list]')!
+      const n = deck.slides.length - 1
+      list.insertAdjacentHTML('beforeend', renderCard(deck.slides[n], n, deck.slides.length))
+      const fresh = cardAt(n)!
+      mountPreview(fresh)
+      renumber()
+      fresh.scrollIntoView({ block: 'nearest' })
       setStatus(t('ed.unsaved'))
       return
     }
@@ -292,8 +393,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
     if (btn.dataset.regenSlide !== undefined) {
       const settings = loadSettings()
       if (!isConfigured(settings)) {
-        toast(t('err.noKey'))
-        navigate('#/settings')
+        toast(t('err.noKey')) // stay put — navigating away would discard the edits
         return
       }
       const instruction = card.querySelector<HTMLInputElement>('[data-instruct]')?.value.trim() ?? ''
@@ -301,18 +401,24 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
         toast(t('ed.writeInstruction'))
         return
       }
-      // Persist current edits on this card before regenerating.
+      // Persist current edits on this card before regenerating, then track the
+      // slide by IDENTITY: pages may be reordered or deleted while we wait, and
+      // writing back by the captured index used to overwrite the wrong page.
       deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
-      const before = structuredClone(deck.slides[i])
+      const target = deck.slides[i]
+      const before = structuredClone(target)
       btn.setAttribute('disabled', '')
       btn.textContent = t('ed.rewriting')
-      regenerateSlide(deck, i, instruction, settings)
+      regenerateSlide(deck, i, instruction, settings, signal)
         .then((slide) => {
-          deck.slides[i] = slide
-          lastRewrite = { i, slide: before }
-          card.outerHTML = renderCard(slide, i, deck.slides.length)
-          const fresh = root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!
-          mountPreview(fresh)
+          const j = indexOf(target)
+          if (j < 0) {
+            toast(t('ed.pageGone'))
+            return
+          }
+          deck.slides[j] = slide
+          lastRewrite = { slide, before }
+          const fresh = replaceCard(cardAt(j)!, j)
           fresh
             .querySelector('[data-regen-slide]')
             ?.insertAdjacentHTML(
@@ -323,19 +429,23 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
           toast(t('ed.rewritten'))
         })
         .catch((err: unknown) => {
+          if (isAbort(err)) return
           toast(t('ed.rewriteFailed') + (err instanceof Error ? err.message : String(err)))
-          btn.removeAttribute('disabled')
-          btn.textContent = t('ed.aiRewrite')
+          const j = indexOf(target)
+          const live = j >= 0 ? cardAt(j)?.querySelector<HTMLButtonElement>('[data-regen-slide]') : null
+          if (live) {
+            live.removeAttribute('disabled')
+            live.textContent = t('ed.aiRewrite')
+          }
         })
       return
     }
 
     if (btn.dataset.undoRewrite !== undefined) {
-      if (lastRewrite && lastRewrite.i === i) {
-        deck.slides[i] = lastRewrite.slide
+      if (lastRewrite && deck.slides[i] === lastRewrite.slide) {
+        deck.slides[i] = lastRewrite.before
         lastRewrite = null
-        card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
-        mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+        replaceCard(card, i)
         setStatus(t('ed.unsaved'))
         toast(t('ed.rewriteUndone'))
       }
@@ -349,8 +459,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       // just search a new background for this "empty" slide on next playback.
       slide.bgOff = true
       deck.slides[i] = slide
-      card.outerHTML = renderCard(slide, i, deck.slides.length)
-      mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+      replaceCard(card, i)
       setStatus(t('ed.unsaved'))
       return
     }
@@ -372,26 +481,32 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
         const seed = `${queryForSlide(deck.slides[i], deck)}#${i}#${Date.now()}`
         deck.slides[i].bg = abstractBg(seed, deck.theme, style)
         deck.slides[i].bgOff = undefined
-        card.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
-        mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+        replaceCard(card, i)
         setStatus(t('ed.unsaved'))
         toast(t('ed.bgChanged'))
         return
       }
 
+      const target = deck.slides[i]
       const used = new Set<string>()
-      for (const s of deck.slides) if (s.bg?.url && s !== deck.slides[i]) used.add(s.bg.url)
+      for (const s of deck.slides) if (s.bg?.url && s !== target) used.add(s.bg.url)
       btn.setAttribute('disabled', '')
-      searchImageCandidates(queryForSlide(deck.slides[i], deck), settings, { exclude: used })
+      searchImageCandidates(queryForSlide(target, deck), settings, { exclude: used, signal })
         .then((candidates) => {
           btn.removeAttribute('disabled')
           if (!candidates.length) {
             toast(t('ed.noImage'))
             return
           }
-          showBgPicker(card, i, candidates.slice(0, 6))
+          const j = indexOf(target)
+          if (j < 0) {
+            toast(t('ed.pageGone'))
+            return
+          }
+          showBgPicker(cardAt(j) ?? card, target, candidates.slice(0, 6))
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          if (isAbort(err)) return
           toast(t('ed.bgFailed'))
           btn.removeAttribute('disabled')
         })
@@ -409,35 +524,46 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
       deck.slides[i] = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       const editedQuery = card.querySelector<HTMLInputElement>('[data-img-query]')?.value.trim()
       deck.slides[i].imageQuery = editedQuery || undefined
+      const target = deck.slides[i]
       btn.setAttribute('disabled', '')
       toast(t('ed.genImgStart'))
       import('../images/genai')
-        .then(({ generateSlideImage }) => generateSlideImage(deck.slides[i], deck, settings))
+        .then(({ generateSlideImage }) => generateSlideImage(target, deck, settings, signal))
         .then((bg) => {
-          deck.slides[i].bg = bg
-          deck.slides[i].bgOff = undefined
-          const cur = root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)
-          if (cur) {
-            cur.outerHTML = renderCard(deck.slides[i], i, deck.slides.length)
-            mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+          const j = indexOf(target)
+          if (j < 0) {
+            toast(t('ed.pageGone'))
+            return
           }
+          target.bg = bg
+          target.bgOff = undefined
+          const cur = cardAt(j)
+          if (cur) replaceCard(cur, j)
           setStatus(t('ed.unsaved'))
           toast(t('ed.genImgDone'))
         })
-        .catch((e) => {
+        .catch((e: unknown) => {
+          if (isAbort(e)) return
           toast((e as Error)?.message || t('ed.genImgFailed'))
-          root.querySelector(`[data-card][data-i="${i}"] [data-bg-gen]`)?.removeAttribute('disabled')
+          const j = indexOf(target)
+          if (j >= 0) cardAt(j)?.querySelector('[data-bg-gen]')?.removeAttribute('disabled')
         })
       return
     }
 
+    // Structural edits move/remove DOM nodes and renumber — never rebuild every
+    // card (and re-serialize every multi-MB background) for one click.
     if (btn.dataset.up !== undefined && i > 0) {
       ;[deck.slides[i - 1], deck.slides[i]] = [deck.slides[i], deck.slides[i - 1]]
-      render()
+      const prev = card.previousElementSibling
+      if (prev) card.parentElement!.insertBefore(card, prev)
+      renumber()
       setStatus(t('ed.unsaved'))
     } else if (btn.dataset.down !== undefined && i < deck.slides.length - 1) {
       ;[deck.slides[i + 1], deck.slides[i]] = [deck.slides[i], deck.slides[i + 1]]
-      render()
+      const next = card.nextElementSibling
+      if (next) card.parentElement!.insertBefore(next, card)
+      renumber()
       setStatus(t('ed.unsaved'))
     } else if (btn.dataset.del !== undefined) {
       if (deck.slides.length <= 1) {
@@ -445,21 +571,26 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>)
         return
       }
       deck.slides.splice(i, 1)
-      render()
+      const box = card.querySelector<HTMLElement>('[data-preview]')
+      if (box) {
+        previewCleanups.get(box)?.()
+        previewCleanups.delete(box)
+      }
+      io.unobserve(card)
+      card.remove()
+      renumber()
       setStatus(t('ed.unsaved'))
     } else if (btn.dataset.addItem !== undefined) {
       const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       ;(slide.items ??= []).push({ heading: t('ed.newCard'), points: [''] })
       deck.slides[i] = slide
-      card.outerHTML = renderCard(slide, i, deck.slides.length)
-      mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+      replaceCard(card, i)
       setStatus(t('ed.unsaved'))
     } else if (btn.dataset.addStep !== undefined) {
       const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
       ;(slide.steps ??= []).push({ label: t('ed.newStep'), text: '' })
       deck.slides[i] = slide
-      card.outerHTML = renderCard(slide, i, deck.slides.length)
-      mountPreview(root.querySelector<HTMLElement>(`[data-card][data-i="${i}"]`)!)
+      replaceCard(card, i)
       setStatus(t('ed.unsaved'))
     } else if (btn.dataset.delSub !== undefined) {
       const sub = btn.closest<HTMLElement>('[data-item],[data-step]')
@@ -544,7 +675,9 @@ function coreFields(s: Slide): string {
     case 'quote':
       return area('text', t('ed.f.quote'), s.text, 3) + text('author', t('ed.f.author'), s.author)
     case 'image-text':
-      return text('title', t('ed.f.pageTitle'), s.title) + area('body', t('ed.f.body'), s.body, 5)
+      // The renderer shows `body` when present, else `bullets` (the outline
+      // path pads pages that way) — expose both so neither is lost on Save.
+      return text('title', t('ed.f.pageTitle'), s.title) + area('body', t('ed.f.body'), s.body, 5) + lines('bullets', t('ed.f.imgBullets'), s.bullets)
     case 'code':
       return text('title', t('ed.f.pageTitle'), s.title) + text('language', t('ed.f.language'), s.language) + area('code', t('ed.f.code'), s.code, 6, true)
     case 'two-col':
@@ -609,8 +742,11 @@ function collectSlide(card: HTMLElement, layout: SlideLayout, prev?: Slide): Sli
   const v = (f: string): string => raw(f).trim()
   const und = (f: string): string | undefined => v(f) || undefined
   const list = (f: string): string[] => raw(f).split('\n').map((x) => x.trim()).filter(Boolean)
-  // Carry over fields that have no form input, so edits don't drop them.
-  const s: Slide = { layout, bg: prev?.bg, bgOff: prev?.bgOff, imageQuery: prev?.imageQuery }
+  // CARRY-OVER by default: start from everything the slide already has and let
+  // the form controls of THIS layout overwrite their fields. Anything without a
+  // control (eyebrow on content pages, two-col column body, per-layout extras)
+  // survives a keystroke — listing carried fields by hand kept missing some.
+  const s: Slide = { ...prev, layout }
 
   switch (layout) {
     case 'cover':
@@ -652,6 +788,9 @@ function collectSlide(card: HTMLElement, layout: SlideLayout, prev?: Slide): Sli
     case 'image-text':
       s.title = und('title')
       s.body = und('body')
+      s.bullets = list('bullets')
+      s.bulletIcons =
+        prev?.bulletIcons && prev.bulletIcons.length === s.bullets.length ? prev.bulletIcons : undefined
       break
     case 'code':
       s.title = und('title')
@@ -660,8 +799,9 @@ function collectSlide(card: HTMLElement, layout: SlideLayout, prev?: Slide): Sli
       break
     case 'two-col':
       s.title = und('title')
-      s.left = { heading: und('left.heading'), bullets: list('left.bullets') }
-      s.right = { heading: und('right.heading'), bullets: list('right.bullets') }
+      // Column.body has no control yet — keep it (layouts.ts renders it).
+      s.left = { ...prev?.left, heading: und('left.heading'), bullets: list('left.bullets') }
+      s.right = { ...prev?.right, heading: und('right.heading'), bullets: list('right.bullets') }
       break
     case 'comparison':
       s.title = und('title')

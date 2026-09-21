@@ -1,6 +1,6 @@
 import './styles/app.css'
 import { registerSW } from 'virtual:pwa-register'
-import { parseRoute, type Route } from './router'
+import { parseRoute, canLeave, setLeaveGuard, setLangHandler, getLangHandler, type Route } from './router'
 import { icons } from './lib/icons'
 import { escapeHtml } from './lib/markdown'
 import { showSwUpdateBanner } from './lib/swUpdate'
@@ -54,6 +54,9 @@ let current: Route | null = null
 function mount(route: Route): void {
   cleanup?.()
   cleanup = null
+  // A screen's guard/handler never outlives it.
+  setLeaveGuard(null)
+  setLangHandler(null)
   current = route
 
   renderAppbar(route)
@@ -101,8 +104,34 @@ function mount(route: Route): void {
 // Listeners first, then the initial mount: a route that throws during the
 // first mount used to abort this module before `hashchange` was wired, so no
 // later navigation could recover the page.
-const handle = () => mount(parseRoute(location.hash))
+let currentHash = location.hash
+let reverting = false
+const handle = () => {
+  if (reverting) {
+    // The hashchange fired by our own revert below — the screen stays as is.
+    reverting = false
+    return
+  }
+  const next = location.hash
+  if (next !== currentHash && !canLeave()) {
+    reverting = true
+    location.hash = currentHash
+    return
+  }
+  currentHash = next
+  mount(parseRoute(next))
+}
 window.addEventListener('hashchange', handle)
-// A language switch re-renders the current screen (and the app bar) in place.
-window.addEventListener('langchange', () => mount(current ?? parseRoute(location.hash)))
+// A language switch re-renders the current screen (and the app bar). A screen
+// that registered an in-place handler keeps its state (an edited deck); the
+// rest are remounted.
+window.addEventListener('langchange', () => {
+  const inPlace = getLangHandler()
+  if (inPlace && current) {
+    renderAppbar(current)
+    inPlace()
+  } else {
+    mount(current ?? parseRoute(location.hash))
+  }
+})
 handle()
