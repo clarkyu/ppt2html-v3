@@ -80,8 +80,10 @@ export async function populateDeckImages(
   opts: {
     signal?: AbortSignal
     onProgress?: (done: number, total: number) => void
-    /** Called as soon as each slide's image resolves (index into deck.slides). */
-    onImage?: (slideIndex: number, bg: SlideBg) => void
+    /** Called as soon as each slide's image resolves. `slideIndex` is the
+     * index at START time; `slide` is the object, so callers can resolve the
+     * live index after a structural edit (deck.slides.indexOf(slide)). */
+    onImage?: (slideIndex: number, bg: SlideBg, slide: Slide) => void
   } = {},
 ): Promise<void> {
   if (!settings.images.enabled) return
@@ -101,7 +103,7 @@ export async function populateDeckImages(
       if (opts.signal?.aborted) return
       const bg = abstractBg(`${queryForSlide(slide, deck)}#${index}`, deck.theme, style)
       slide.bg = bg
-      opts.onImage?.(index, bg)
+      opts.onImage?.(index, bg, slide)
       opts.onProgress?.(i + 1, total)
     })
     return
@@ -129,7 +131,7 @@ export async function populateDeckImages(
       if (bg) {
         slide.bg = bg
         used.add(bg.url)
-        opts.onImage?.(index, bg)
+        opts.onImage?.(index, bg, slide)
       }
       done++
       opts.onProgress?.(done, total)

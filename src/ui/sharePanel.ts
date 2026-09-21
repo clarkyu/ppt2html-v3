@@ -33,7 +33,9 @@ export function openSharePanel(host: HTMLElement, deck: Deck): () => void {
     </div>`
   host.appendChild(wrap)
   let cardObjUrl = ''
+  let closed = false
   const close = (): void => {
+    closed = true
     if (cardObjUrl) URL.revokeObjectURL(cardObjUrl)
     wrap.remove()
   }
@@ -98,6 +100,9 @@ export function openSharePanel(host: HTMLElement, deck: Deck): () => void {
         try {
           const { buildShareCard, cardFilename } = await import('../lib/shareCard')
           cardBlob = await buildShareCard(deck, url)
+          // Dismissed while the card was drawing: don't create an object URL
+          // nobody will revoke, don't touch the removed DOM.
+          if (closed) return
           filename = cardFilename(deck)
           cardObjUrl = URL.createObjectURL(cardBlob)
           visualEl.innerHTML = `
@@ -124,6 +129,7 @@ export function openSharePanel(host: HTMLElement, deck: Deck): () => void {
       }
     })
     .catch(() => {
+      if (closed) return // the user already left; no toast for a stale failure
       close()
       toast(t('share.failed'))
     })

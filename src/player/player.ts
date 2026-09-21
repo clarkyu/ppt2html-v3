@@ -19,7 +19,8 @@ export interface PlayerHandle {
   next: () => void
   prev: () => void
   getIndices: () => { h: number; v: number }
-  onSlideChange: (cb: (index: number, total: number) => void) => void
+  /** Subscribe to slide changes (also fires on ready). Returns an unsubscribe. */
+  onSlideChange: (cb: (index: number, total: number) => void) => () => void
   /** Patch (or create) the background image of the slide at `index`, live. */
   setSlideBackground: (index: number, bg: SlideBg) => void
   /** Toggle click-to-reveal fragment stepping (persisted preference). */
@@ -120,10 +121,22 @@ export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
 
   void reveal.initialize()
 
+  // Every listener registered through onSlideChange, so destroy() can detach
+  // them: reveal.destroy() alone left them bound to the detached element.
+  const listeners: Array<{ ev: string; fn: () => void }> = []
+  const off = (l: { ev: string; fn: () => void }): void => {
+    try {
+      reveal.off(l.ev, l.fn)
+    } catch {
+      /* reveal may already be torn down */
+    }
+  }
+
   return {
     reveal,
     root,
     destroy: () => {
+      listeners.splice(0).forEach(off)
       try {
         reveal.destroy()
       } catch {
@@ -140,8 +153,21 @@ export function mountPlayer(container: HTMLElement, deck: Deck): PlayerHandle {
     },
     onSlideChange: (cb) => {
       const emit = () => cb(reveal.getSlidePastCount() + 1, reveal.getTotalSlides())
-      reveal.on('slidechanged', emit)
-      reveal.on('ready', emit)
+      const mine = [
+        { ev: 'slidechanged', fn: emit },
+        { ev: 'ready', fn: emit },
+      ]
+      for (const l of mine) {
+        reveal.on(l.ev, l.fn)
+        listeners.push(l)
+      }
+      return () => {
+        for (const l of mine) {
+          const at = listeners.indexOf(l)
+          if (at >= 0) listeners.splice(at, 1)
+          off(l)
+        }
+      }
     },
     setSlideBackground: (index, bg) => {
       const css = bgCssUrl(bg.url)

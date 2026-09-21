@@ -125,7 +125,7 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
         // Distinguish "the AI found nothing to change" from "everything the
         // AI planned was disallowed" — blaming the instruction for the
         // latter sends the user down the wrong path.
-        status.textContent = res.ignored ? t('ge.allIgnored') : t('ge.noOps')
+        status.textContent = res.ignored ? t('ge.allIgnored') : res.invalid ? t('ge.allInvalid') : t('ge.noOps')
         return
       }
       planEl.hidden = false
@@ -194,6 +194,14 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
         lastErr = (err as Error)?.message || ''
         skipped++
       }
+    }
+    // Torn down with the viewer (route change mid-run): the deck on screen is
+    // gone — never persist a half-applied plan or remount into a detached
+    // node. (The rewrites already applied were persisted per page; the undo
+    // snapshot dies with the panel, so this is strictly "stop touching".)
+    if (!wrap.isConnected) {
+      running = false
+      return
     }
     // Phase 2: drops + moves + inserts in one local recompose, then remount.
     // On abort the structural ops are NOT applied — but applied relayouts

@@ -21,6 +21,9 @@ import slidesCss from '../render/slides.css?raw'
 export interface PresenterHandle {
   /** Refresh to the given 1-based slide number. */
   update: (num: number) => void
+  /** Re-read the (mutated) deck — pages, theme, backgrounds — and optionally
+   * rebind to a new player after a remount; stays on the current page. */
+  refresh: (player?: PlayerHandle) => void
   close: () => void
   closed: () => boolean
   focus: () => void
@@ -127,17 +130,27 @@ export function openPresenter(deck: Deck, player: PlayerHandle): PresenterHandle
   win.document.close()
 
   const doc = win.document
-  const total = deck.slides.length
+  // The player handle is swappable: a structural edit remounts the deck and
+  // this window must drive the NEW player, not the destroyed one.
+  let current = player
+  const total = (): number => deck.slides.length
 
-  // Hidden source of all rendered slides, to clone the current/next previews from.
+  // Hidden source of all rendered slides, to clone the current/next previews
+  // from. Rebuilt by refresh() so in-player edits (rewrite, drop/add, restyle,
+  // lazy backgrounds) show up here instead of a frozen snapshot.
   const src = doc.createElement('div')
   src.className = 'reveal deck'
   src.style.display = 'none'
-  src.innerHTML = `<div class="slides">${renderDeckSlides(deck)}</div>`
   doc.body.appendChild(src)
-  const sections = Array.prototype.slice.call(
-    src.querySelectorAll('.slides > section'),
-  ) as HTMLElement[]
+  let sections: HTMLElement[] = []
+  const rebuild = (): void => {
+    src.innerHTML = `<div class="slides">${renderDeckSlides(deck)}</div>`
+    sections = Array.prototype.slice.call(src.querySelectorAll('.slides > section')) as HTMLElement[]
+    doc.documentElement.className = `player theme-${deck.theme}`
+    if (deck.customTheme) doc.documentElement.setAttribute('style', customThemeStyleAttr(deck.customTheme))
+    else doc.documentElement.removeAttribute('style')
+  }
+  rebuild()
 
   const curBox = doc.querySelector<HTMLElement>('[data-cur]')
   const nextBox = doc.querySelector<HTMLElement>('[data-next]')
@@ -178,7 +191,8 @@ export function openPresenter(deck: Deck, player: PlayerHandle): PresenterHandle
   let cur = 1
   const update = (num: number) => {
     if (win.closed) return
-    cur = Math.max(1, Math.min(total, num))
+    const n = total()
+    cur = Math.max(1, Math.min(n, num))
     mountPreview(curBox, sections[cur - 1])
     mountPreview(nextBox, sections[cur])
     const note = deck.slides[cur - 1]?.note?.trim()
@@ -186,37 +200,42 @@ export function openPresenter(deck: Deck, player: PlayerHandle): PresenterHandle
       notesEl.textContent = note || t('presenter.noNote')
       notesEl.classList.toggle('empty', !note)
     }
-    const nextTitle = cur < total ? deck.slides[cur]?.title?.trim() : ''
+    const nextTitle = cur < n ? deck.slides[cur]?.title?.trim() : ''
     if (nextTitleEl) {
       nextTitleEl.innerHTML = nextTitle
         ? `${escapeHtml(t('presenter.upNext'))} <b>${escapeHtml(nextTitle)}</b>`
         : escapeHtml(t('presenter.atEnd'))
     }
-    if (countEl) countEl.textContent = `${cur} / ${total}`
+    if (countEl) countEl.textContent = `${cur} / ${n}`
   }
 
-  // Timer + clock, ticked from the main window (cleared when it closes / unmounts).
+  // Timer + clock, ticked from the main window; the interval dies with the
+  // popup (manual close included), not only on explicit close().
   let startedAt = Date.now()
+  let timerInt = 0
   const tick = () => {
-    if (win.closed) return
+    if (win.closed) {
+      window.clearInterval(timerInt)
+      return
+    }
     if (timerEl) timerEl.textContent = fmt(Date.now() - startedAt)
     if (clockEl) clockEl.textContent = new Date().toLocaleTimeString()
   }
-  const timerInt = window.setInterval(tick, 1000)
+  timerInt = window.setInterval(tick, 1000)
 
   doc.querySelector('[data-reset]')?.addEventListener('click', () => {
     startedAt = Date.now()
     tick()
   })
-  doc.querySelector('[data-prev]')?.addEventListener('click', () => player.prev())
-  doc.querySelector('[data-next-btn]')?.addEventListener('click', () => player.next())
+  doc.querySelector('[data-prev]')?.addEventListener('click', () => current.prev())
+  doc.querySelector('[data-next-btn]')?.addEventListener('click', () => current.next())
   doc.addEventListener('keydown', (e: KeyboardEvent) => {
     const k = e.key
     if (k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || k === ' ') {
-      player.next()
+      current.next()
       e.preventDefault()
     } else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp') {
-      player.prev()
+      current.prev()
       e.preventDefault()
     }
   })
@@ -237,6 +256,12 @@ export function openPresenter(deck: Deck, player: PlayerHandle): PresenterHandle
 
   return {
     update,
+    refresh: (next) => {
+      if (win.closed) return
+      if (next) current = next
+      rebuild()
+      update(cur)
+    },
     close: () => {
       window.clearInterval(timerInt)
       if (!win.closed) win.close()

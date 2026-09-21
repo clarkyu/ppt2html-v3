@@ -74,11 +74,15 @@ export function startNarration(deck: Deck, player: PlayerHandle, hooks: NarrateH
     }
   }, 12000)
 
+  let offSlide: () => void = () => {}
+  let offVoices: () => void = () => {}
   const stop = (): void => {
     if (!live) return
     live = false
     window.clearInterval(keepalive)
     window.clearTimeout(watchdog)
+    offSlide()
+    offVoices()
     synth.cancel()
   }
 
@@ -131,7 +135,8 @@ export function startNarration(deck: Deck, player: PlayerHandle, hooks: NarrateH
   }
 
   // Manual navigation re-anchors the narration to whatever page is shown.
-  player.onSlideChange((num) => {
+  // (Unsubscribed on stop — each start used to leave its listener behind.)
+  offSlide = player.onSlideChange((num) => {
     if (!live) return
     if (num === expected) return
     expected = num
@@ -146,6 +151,7 @@ export function startNarration(deck: Deck, player: PlayerHandle, hooks: NarrateH
       if (live) speakSlide(player.getIndices().h)
     }
     synth.addEventListener?.('voiceschanged', once)
+    offVoices = () => synth.removeEventListener?.('voiceschanged', once)
   }
 
   expected = player.getIndices().h + 1

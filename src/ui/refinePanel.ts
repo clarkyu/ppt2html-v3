@@ -29,6 +29,7 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
   const found = deckIssues(deck)
   const before = structuredClone(deck.slides)
   let controller: AbortController | null = null
+  let running = false
 
   const wrap = document.createElement('div')
   wrap.className = 'sharepanel refinepanel'
@@ -64,8 +65,18 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
     controller?.abort()
     wrap.remove()
   }
+  // While a batch runs the panel must stay open (it owns the undo snapshot):
+  // backdrop taps are inert and Cancel only ABORTS — the loop then reports
+  // what already landed and offers undo. Closing used to leave the pages
+  // rewritten so far on disk with no way back.
   wrap.addEventListener('click', (e) => {
-    if (e.target === wrap || (e.target as HTMLElement).closest('[data-rf-close]')) close()
+    const onClose = !!(e.target as HTMLElement).closest('[data-rf-close]')
+    if (e.target !== wrap && !onClose) return
+    if (running) {
+      if (onClose) controller?.abort()
+      return
+    }
+    close()
   })
   if (!found.length) return close
 
@@ -76,28 +87,35 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
 
   const run = async (): Promise<void> => {
     controller = new AbortController()
+    const signal = controller.signal
+    running = true
     goBtn.disabled = true
     status.hidden = false
     let done = 0
     let skipped = 0
+    const halted = (): boolean => signal.aborted || !wrap.isConnected
     for (const f of found) {
-      if (controller.signal.aborted || !wrap.isConnected) return
+      if (halted()) break
       status.textContent = t('refine.busy')
         .replace('{i}', String(done + skipped + 1))
         .replace('{n}', String(found.length))
       try {
-        const next = await regenerateSlide(deck, f.index, refineInstruction(f.issues), settings, controller.signal)
-        if (!wrap.isConnected) return
+        const next = await regenerateSlide(deck, f.index, refineInstruction(f.issues), settings, signal)
+        if (halted()) break
         hooks.apply(f.index, next)
         done++
       } catch (err) {
-        if ((err as DOMException)?.name === 'AbortError') return
+        if ((err as DOMException)?.name === 'AbortError') break
         skipped++ // one stubborn page must not sink the batch
       }
     }
-    status.textContent = t('refine.done').replace('{x}', String(done)).replace('{y}', String(skipped))
+    running = false
+    if (!wrap.isConnected) return
+    status.textContent = signal.aborted
+      ? t('refine.aborted').replace('{k}', String(done))
+      : t('refine.done').replace('{x}', String(done)).replace('{y}', String(skipped))
     goBtn.hidden = true
-    undoBtn.hidden = false
+    undoBtn.hidden = done === 0
     closeBtn.textContent = t('common.gotIt')
   }
   goBtn.addEventListener('click', () => void run())

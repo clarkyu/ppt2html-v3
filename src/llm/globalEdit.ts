@@ -73,8 +73,20 @@ function digest(deck: Deck): string {
 
 export interface GlobalEditPlan {
   ops: GlobalEditOp[]
-  /** Ops the model proposed but validation refused (cover/end protection etc.) — surfaced so an empty plan isn't misread as "nothing to change". */
+  /** Ops the model proposed but the deck's PROTECTION rules refused (cover/end,
+   * duplicate page, bad target) — surfaced so an empty plan isn't misread as
+   * "nothing to change". */
   ignored: number
+  /** Ops dropped for being malformed (no page, unknown action, no instruction). */
+  invalid: number
+}
+
+/** Page numbers arrive as numbers — or, from lenient/thinking models, as
+ * numeric strings ("3"); both count. */
+function asPageNumber(v: unknown): number {
+  if (typeof v === 'number') return Math.round(v)
+  if (typeof v === 'string' && /^\s*\d+\s*$/.test(v)) return Number(v)
+  return NaN
 }
 
 /** Ask the model for a per-page edit plan; invalid ops are filtered locally. */
@@ -101,17 +113,18 @@ export async function planGlobalEdit(
   const seen = new Set<number>()
   const ops: GlobalEditOp[] = []
   let ignored = 0
+  let invalid = 0
   for (const item of parsed.ops) {
     if (!item || typeof item !== 'object') continue
     const o = item as Record<string, unknown>
-    const page = typeof o.page === 'number' ? Math.round(o.page) : NaN
+    const page = asPageNumber(o.page)
     const action = (typeof o.action === 'string' ? o.action : 'rewrite') as GlobalEditAction
     const instr = typeof o.instruction === 'string' ? o.instruction.trim() : ''
     if (
       !Number.isInteger(page) || page < 1 || page > n ||
       !['rewrite', 'drop', 'move', 'add', 'relayout'].includes(action)
     ) {
-      ignored++
+      invalid++
       continue
     }
     const isEdge = page === 1 || page === n
@@ -121,7 +134,7 @@ export async function planGlobalEdit(
       // last content page instead of refused — the recompose clamps the
       // insert before the end page anyway.
       if (!instr || n < 2) {
-        ignored++
+        invalid++
         continue
       }
       ops.push({ page: Math.min(page, n - 1), action, instruction: instr })
@@ -130,7 +143,7 @@ export async function planGlobalEdit(
       continue
     } else if (action === 'rewrite') {
       if (!instr) {
-        ignored++
+        invalid++
         continue
       }
       ops.push({ page, action, instruction: instr })
@@ -150,7 +163,7 @@ export async function planGlobalEdit(
       ops.push({ page, action, layout: layout as SlideLayout, instruction: instr || undefined })
       seen.add(page)
     } else {
-      const to = typeof o.to === 'number' ? Math.round(o.to) : NaN
+      const to = asPageNumber(o.to)
       if (!Number.isInteger(to) || to < 2 || to > n - 1 || to === page) {
         ignored++
         continue
@@ -160,7 +173,7 @@ export async function planGlobalEdit(
     }
     if (ops.length >= 20) break
   }
-  return { ops: ops.sort((a, b) => a.page - b.page), ignored }
+  return { ops: ops.sort((a, b) => a.page - b.page), ignored, invalid }
 }
 
 /**

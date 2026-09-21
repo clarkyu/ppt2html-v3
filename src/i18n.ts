@@ -480,6 +480,7 @@ const DICT: Record<string, Entry> = {
   'refine.go': { zh: '开始精修 {n} 页', en: 'Refine {n} page(s)' },
   'refine.busy': { zh: '正在精修第 {i}/{n} 页…（已改完的页即时生效）', en: 'Refining page {i}/{n}… (finished pages apply live)' },
   'refine.done': { zh: '完成：改写 {x} 页，跳过 {y} 页（失败的页保持原样）。', en: 'Done: {x} rewritten, {y} skipped (failures keep the original).' },
+  'refine.aborted': { zh: '已中止：{k} 页已改写（可全部撤销），其余未动。', en: 'Stopped: {k} page(s) rewritten (undo available); the rest were left as is.' },
   'refine.undoAll': { zh: '全部撤销', en: 'Undo all' },
   'ge.button': { zh: '整册 AI 修改（一句话指令，先出计划再执行）', en: 'Whole-deck AI edit (plan first, then apply)' },
   'ge.title': { zh: '整册 AI 修改', en: 'Whole-deck AI edit' },
@@ -505,6 +506,7 @@ const DICT: Record<string, Entry> = {
     zh: '（另有 {n} 项操作不被允许，已忽略：封面/结束页受保护）',
     en: ' ({n} disallowed op(s) ignored — cover/end pages are protected)',
   },
+  'ge.allInvalid': { zh: '模型返回的计划格式无法识别——请重新计划。', en: 'The plan came back malformed — please re-plan.' },
   'ge.allIgnored': {
     zh: '计划里的操作都不被允许（封面/结束页不可删除/移动/换版式）——换个说法试试。',
     en: 'Every planned op was disallowed (cover/end pages can’t be dropped, moved or re-laid-out) — try rephrasing.',
@@ -553,6 +555,10 @@ const DICT: Record<string, Entry> = {
   'viewer.genNotesDone': {
     zh: '演讲稿已写好并保存——备注面板、演讲者视图和 PPTX 导出里都能看到。',
     en: 'Speaker script ready and saved — see it in the notes panel, presenter view and PPTX export.',
+  },
+  'viewer.genNotesPartial': {
+    zh: '演讲稿已保存，但有 {n} 页模型没有返回——再点一次可补写这些页。',
+    en: 'Script saved, but {n} page(s) came back unscripted — run again to fill them in.',
   },
   'viewer.genNotesFailed': {
     zh: '演讲稿生成失败，已写好的页面已保存，请重试。',

@@ -37,6 +37,16 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   let timerInt = 0
   let rehInterval = 0
   const imgAbort = new AbortController()
+  // Set by the cleanup: anything async that lands afterwards (deck load, wake
+  // lock grant, a panel's LLM result) must not touch the torn-down view.
+  let disposed = false
+  // The speaker-script pass gets its own controller so a structural edit can
+  // stop it (it indexes into the slide array by page number).
+  let notesAbort: AbortController | null = null
+  // Close handles of the overlay panels (rewrite / refine / whole-deck edit /
+  // share): torn down with the view so their in-flight work is aborted.
+  const panels = new Set<() => void>()
+  let presTimer = 0
   // Ephemeral decks (built-in sample, URL-shared) must never write to the library.
   const persistable = id !== 'sample' && !shareData
 
@@ -48,6 +58,10 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
     navigator.wakeLock
       ?.request('screen')
       .then((s) => {
+        if (disposed) {
+          s.release().catch(() => {}) // granted after we left — don't keep the screen awake on Home
+          return
+        }
         wakeLock = s
       })
       .catch(() => {})
@@ -228,7 +242,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   window.addEventListener('keydown', onKey)
   view.querySelector('[data-full]')!.addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen()
-    else viewerEl.requestFullscreen?.()
+    else viewerEl.requestFullscreen?.()?.catch(() => {})
   })
 
   // Elapsed-time clock in the bar. Click to reset — handy when rehearsing.
@@ -287,6 +301,10 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
       : getDeck(id)
   load
     .then((deck) => {
+      // Left before the deck arrived: mounting now would create a Reveal on a
+      // detached node that nothing destroys (its document keydown handler
+      // then eats Arrow/Space app-wide).
+      if (disposed) return
       if (!deck) {
         mount.innerHTML = `<div class="empty" style="color:#fff"><h3>${t('viewer.notFound')}</h3><p>${t('viewer.notFoundHint')}</p></div>`
         return
@@ -327,7 +345,16 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         player!.onSlideChange(cb)
       }
       const remountPlayer = (posOverride?: number): void => {
+        // Never rebuild into a torn-down view (a ghost Reveal would keep
+        // eating keys app-wide).
+        if (disposed || !mount.isConnected) return
         const pos = Math.min(posOverride ?? curNum, deck.slides.length)
+        // The narrator holds the OLD handle (and may be mid-utterance on a
+        // page that no longer exists): stop it. The presenter is rebound below.
+        if (narrator?.active()) {
+          narrator.stop()
+          narrateStopped(t('viewer.narrateOff'))
+        }
         player?.destroy()
         player = mountPlayer(mount, deck)
         for (const cb of slideChangeCbs) player.onSlideChange(cb)
@@ -339,6 +366,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           }
         }
         setNote(deck.slides[Math.min(pos, deck.slides.length) - 1]?.note)
+        presenter?.refresh(player)
       }
       const stepBtn = view.querySelector<HTMLButtonElement>('[data-step]')!
       stepBtn.classList.toggle('active', player.stepMode())
@@ -510,13 +538,14 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             label = t('style.mine')
           }
           if (persistable) void persistDeck(deck)
+          presenter?.refresh()
           toast(t('style.applied').replace('{name}', label))
         })
       })
 
       // Share: the deck packed into a copyable URL (+ QR when it fits one).
       view.querySelector('[data-share]')!.addEventListener('click', () => {
-        openSharePanel(viewerEl, deck)
+        panels.add(openSharePanel(viewerEl, deck))
       })
       // Remember the playback position per deck (session-scoped): a refresh or
       // an accidental back no longer dumps the presenter to slide 1.
@@ -567,7 +596,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           fitSlide(sec)
         }
         setNote(deck.slides[curNum - 1]?.note)
-        presenter?.update(curNum)
+        presenter?.refresh() // the presenter's previews/notes are a snapshot otherwise
         if (persistable) void persistDeck(deck)
       }
       const rewriteBtn = view.querySelector<HTMLButtonElement>('[data-rewrite]')!
@@ -575,13 +604,13 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
       if (persistable) {
         rewriteBtn.hidden = false
         rewriteBtn.addEventListener('click', () => {
-          openRewritePanel(viewerEl, deck, curNum - 1, { apply: applyRewrite })
+          panels.add(openRewritePanel(viewerEl, deck, curNum - 1, { apply: applyRewrite }))
         })
         // Whole-deck refine pass: mechanical checks pick the pages, the model
         // fixes only those — same in-place apply as the single-page rewrite.
         refineBtn.hidden = false
         refineBtn.addEventListener('click', () => {
-          openRefinePanel(viewerEl, deck, { apply: applyRewrite })
+          panels.add(openRefinePanel(viewerEl, deck, { apply: applyRewrite }))
         })
         // Whole-deck conversational edit: one instruction → visible per-page
         // plan → confirmed batch rewrite. In-place apply for rewrites; drops
@@ -592,6 +621,10 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         // page 8" showing a different slide reads as a jump. (Undo passes
         // clones, so identity misses there and the number fallback applies.)
         const applyStructure = (slides: Slide[]): void => {
+          if (disposed) return
+          // A running speaker-script pass indexes into the OLD array — stop it
+          // rather than let a batch land on shifted (or vanished) pages.
+          notesAbort?.abort()
           const idx = slides.indexOf(deck.slides[curNum - 1])
           deck.slides = slides
           if (persistable) void persistDeck(deck)
@@ -600,35 +633,45 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         const geditBtn = view.querySelector<HTMLButtonElement>('[data-gedit]')!
         geditBtn.hidden = false
         geditBtn.addEventListener('click', () => {
-          openGlobalEditPanel(viewerEl, deck, { apply: applyRewrite, applyStructure })
+          panels.add(openGlobalEditPanel(viewerEl, deck, { apply: applyRewrite, applyStructure }))
         })
       }
 
       // Full speaker script (逐字稿): a post-pass over the finished deck, batch
       // by batch — each batch is saved as it lands, so failures keep progress.
       const genBtn = view.querySelector<HTMLButtonElement>('[data-notes-gen]')!
+      // The script pass writes notes by page number, so the AI edit tools that
+      // could reshape the deck stay disabled while it runs (and applyStructure
+      // aborts it if a panel opened earlier still fires).
+      const aiBtns = [rewriteBtn, refineBtn, view.querySelector<HTMLButtonElement>('[data-gedit]')!]
       genBtn.addEventListener('click', () => {
         if (!loadedDeck || genBtn.disabled) return
         const hasLong = loadedDeck.slides.some((s) => (s.note ?? '').trim().length > 80)
         if (hasLong && !window.confirm(t('viewer.genNotesConfirm'))) return
         genBtn.disabled = true
+        aiBtns.forEach((b) => (b.disabled = true))
+        notesAbort?.abort()
+        const run = new AbortController()
+        notesAbort = run
         toast(t('viewer.genNotesStart'))
         const total = loadedDeck.slides.length
         genBtn.innerHTML = `${icons.mic} <b>0/${total}</b>`
         import('../llm/notes')
           .then(({ generateSpeakerNotes }) =>
             generateSpeakerNotes(loadedDeck!, loadSettings(), {
-              signal: imgAbort.signal,
-              onProgress: (done) => {
-                genBtn.innerHTML = `${icons.mic} <b>${done}/${total}</b>`
+              signal: run.signal,
+              onProgress: (done, n) => {
+                genBtn.innerHTML = `${icons.mic} <b>${done}/${n}</b>`
                 if (persistable) void persistDeck(loadedDeck!)
                 setNote(loadedDeck!.slides[curNum - 1]?.note)
-                presenter?.update(curNum)
+                presenter?.refresh()
               },
             }),
           )
-          .then(() => {
-            toast(t('viewer.genNotesDone'))
+          .then(({ missing }) => {
+            // A reply that skipped pages is re-requested inside; whatever is
+            // still missing is said out loud instead of a blanket "done".
+            toast(missing.length ? t('viewer.genNotesPartial').replace('{n}', String(missing.length)) : t('viewer.genNotesDone'))
             // Surface the result right away.
             if (!notesOn) notesBtn.click()
             setNote(loadedDeck!.slides[curNum - 1]?.note)
@@ -638,8 +681,10 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             toast((e as Error)?.message || t('viewer.genNotesFailed'))
           })
           .finally(() => {
+            if (notesAbort === run) notesAbort = null
             genBtn.disabled = false
             genBtn.innerHTML = icons.mic
+            aiBtns.forEach((b) => (b.disabled = false))
           })
       })
 
@@ -655,11 +700,20 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           window.clearTimeout(saveTimer)
           saveTimer = window.setTimeout(() => void persistDeck(deck), 800)
         }
+        const presenterRefreshSoon = (): void => {
+          window.clearTimeout(presTimer)
+          presTimer = window.setTimeout(() => presenter?.refresh(), 300)
+        }
         void populateDeckImages(deck, settings, {
           signal: imgAbort.signal,
-          onImage: (index, bg) => {
-            player?.setSlideBackground(index, bg)
+          onImage: (_index, bg, slide) => {
+            // Resolve the LIVE index by identity: a structural edit or undo may
+            // have moved, replaced or dropped this page since the search began.
+            const j = deck.slides.indexOf(slide)
+            if (j < 0) return
+            player?.setSlideBackground(j, bg)
             scheduleSave()
+            presenterRefreshSoon()
           },
         })
           .then(() => {
@@ -675,6 +729,11 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
     })
 
   return () => {
+    disposed = true
+    panels.forEach((fn) => fn()) // aborts in-flight rewrite/refine/global-edit/share work
+    panels.clear()
+    notesAbort?.abort()
+    window.clearTimeout(presTimer)
     window.clearTimeout(hideTimer)
     window.clearInterval(timerInt)
     window.clearInterval(rehInterval)
