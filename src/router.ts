@@ -32,6 +32,30 @@ export function parseRoute(hash: string): Route {
   return { name: 'home' }
 }
 
+/**
+ * Leave guard: a screen holding unsaved state registers one; main.ts asks it
+ * before every hash navigation (app-bar links, browser back, navigate()) and
+ * stays put when it refuses. Only `beforeunload` used to stand between an
+ * edited deck and the Library link.
+ */
+let leaveGuard: (() => boolean) | null = null
+export function setLeaveGuard(fn: (() => boolean) | null): void {
+  leaveGuard = fn
+}
+export function canLeave(): boolean {
+  return leaveGuard ? leaveGuard() : true
+}
+
+/** A screen may re-render itself in place on a language switch instead of
+ * being remounted (which would drop its in-memory state). */
+let langHandler: (() => void) | null = null
+export function setLangHandler(fn: (() => void) | null): void {
+  langHandler = fn
+}
+export function getLangHandler(): (() => void) | null {
+  return langHandler
+}
+
 export function navigate(to: string): void {
   if (location.hash === to) {
     window.dispatchEvent(new HashChangeEvent('hashchange'))

@@ -37,11 +37,14 @@ export async function generateSlideImage(
 ): Promise<SlideBg> {
   const cfg = settings.imageGen
   const model = cfg.model.trim() || 'dall-e-3'
+  // Landscape size by model family: gpt-image-* accepts 1024x1024 / 1536x1024 /
+  // 1024x1536 / auto and returned HTTP 400 for the dall-e-3 size on every call.
+  const size = /^gpt-image/i.test(model) ? '1536x1024' : /^dall-e-3/i.test(model) ? '1792x1024' : '1024x1024'
   const body: Record<string, unknown> = {
     model,
     prompt: genImagePrompt(slide, deck),
     n: 1,
-    size: '1792x1024',
+    size,
   }
   // gpt-image-* models reject `response_format` (they always return b64).
   if (!/^gpt-image/i.test(model)) body.response_format = 'b64_json'
@@ -64,11 +67,18 @@ export async function generateSlideImage(
   // Some providers only return a URL — fetch it into a data URL so the image
   // outlives the provider's short-lived link (best-effort; CORS permitting).
   if (item?.url) {
-    const img = await fetch(item.url, { signal }).then((r) => (r.ok ? r.blob() : Promise.reject(new Error('fetch'))))
+    const failed = new Error(t('ed.genImgFailed'))
+    const img = await fetch(item.url, { signal })
+      .then((r) => (r.ok ? r.blob() : Promise.reject(failed)))
+      .catch((e: unknown) => {
+        // A raw "Failed to fetch" must not reach the toast; aborts pass through.
+        if (e instanceof DOMException && e.name === 'AbortError') throw e
+        throw failed
+      })
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const r = new FileReader()
       r.onload = () => resolve(String(r.result))
-      r.onerror = () => reject(new Error('read'))
+      r.onerror = () => reject(failed)
       r.readAsDataURL(img)
     })
     return { url: dataUrl, source: 'ai', credit: `AI · ${model}` }
