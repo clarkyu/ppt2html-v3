@@ -5,7 +5,7 @@
 
 import { TEMPLATES, instantiateTemplate } from '../templates'
 import { mountThumb } from '../render/preview'
-import { saveDeck } from '../store/db'
+import { persistDeck } from '../lib/persist'
 import { navigate } from '../router'
 import { escapeHtml } from '../lib/markdown'
 import { toast } from '../lib/toast'
@@ -44,7 +44,8 @@ export function renderTemplates(view: HTMLElement): () => void {
     cleanups.push(mountThumb(card.querySelector<HTMLElement>('.thumb')!, instantiateTemplate(tpl, 'tpl-preview')))
     card.querySelector('[data-use]')!.addEventListener('click', () => {
       const deck = instantiateTemplate(tpl)
-      void saveDeck(deck).then(() => {
+      void persistDeck(deck).then((ok) => {
+        if (!ok) return
         toast(t('tpl.created').replace('{name}', name))
         navigate(`#/edit/${deck.id}`)
       })

@@ -139,9 +139,25 @@ export function renderLibrary(view: HTMLElement): () => void {
     restoreFileEl.value = ''
     if (!file) return
     try {
-      const decks = await parseBackupFile(file)
-      const n = await restoreDecks(decks)
-      toast(t('lib.restoreDone').replace('{n}', String(n)))
+      let decks = await parseBackupFile(file)
+      // Never silently roll back a deck edited AFTER the backup was taken:
+      // ask, and on "cancel" restore everything else.
+      const newer = decks.filter((d) => {
+        const cur = all.find((x) => x.id === d.id)
+        return !!cur && cur.updatedAt > d.updatedAt
+      })
+      let skipped = 0
+      if (newer.length && !confirm(t('lib.restoreOverwrite').replace('{n}', String(newer.length)))) {
+        const ids = new Set(newer.map((d) => d.id))
+        decks = decks.filter((d) => !ids.has(d.id))
+        skipped = newer.length
+      }
+      const n = decks.length ? await restoreDecks(decks) : 0
+      toast(
+        skipped
+          ? t('lib.restoreDoneSkipped').replace('{n}', String(n)).replace('{s}', String(skipped))
+          : t('lib.restoreDone').replace('{n}', String(n)),
+      )
       await reload()
     } catch {
       toast(t('lib.restoreFailed'))

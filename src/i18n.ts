@@ -137,6 +137,15 @@ const DICT: Record<string, Entry> = {
     en: 'The model service errored — try again shortly.',
   },
   'err.noJson': { zh: '模型没有返回有效的 JSON', en: 'The model did not return valid JSON' },
+  'err.offline': { zh: '当前离线，请联网后重试。', en: 'You are offline — reconnect and retry.' },
+  'err.viewCrashed': { zh: '这个页面打不开', en: 'This screen failed to open' },
+  'db.saveFailed': {
+    zh: '保存失败：浏览器存储空间不足或被限制，这次修改没有存下来',
+    en: 'Save failed: browser storage is full or restricted — this change was not stored',
+  },
+  'sw.updateReady': { zh: '新版本已就绪', en: 'A new version is ready' },
+  'sw.reload': { zh: '刷新更新', en: 'Reload to update' },
+  'sw.later': { zh: '稍后', en: 'Later' },
   'err.network': {
     zh: '请求未能完成(浏览器只报了网络 / CORS 错误)。常见两种原因:① API Key 无效或账户无额度——密钥被拒时,若对方的错误响应缺少 CORS 头,浏览器会把真正的 401 藏起来、只显示网络/CORS 错误,请到「设置」核对 Key、确认账户已绑支付/有余额;② 你的网络无法直连该服务(如 api.openai.com 在中国大陆常需代理/VPN,或被浏览器插件/防火墙拦截)。可先用免 Key、可直连的 DeepSeek,或核对 Key 后重试。',
     en: 'The request didn’t complete (the browser only reports a network/CORS error). Two common causes: (1) an invalid API key or no account balance — when a key is rejected and the error response lacks CORS headers, the browser hides the real 401 and shows only a network/CORS error, so check your key and billing in Settings; (2) your network can’t reach the endpoint directly (e.g. api.openai.com often needs a proxy/VPN in mainland China, or is blocked by an extension/firewall). Try the built-in DeepSeek (no key) or fix the key and retry.',
@@ -152,6 +161,12 @@ const DICT: Record<string, Entry> = {
   'gen.quickNote': { zh: '「{topic}」 · 快速模式,页面实时揭幕 ↓', en: '“{topic}” · quick mode, pages appear live ↓' },
   'gen.segmentFailed': { zh: '第 {i} 段生成失败', en: 'Segment {i} failed' },
   'gen.retrySegment': { zh: '重试这一段（已生成的不重来）', en: 'Retry this segment (keeps finished pages)' },
+  'gen.saveFailed': { zh: '课件已生成，但存入本地课件库失败', en: 'The deck was generated but could not be saved to your library' },
+  'gen.saveFailedHint': {
+    zh: '通常是浏览器存储空间不足或站点数据被限制。清理空间后点「重新保存」——不会重新生成，也不再计费。',
+    en: 'Usually the browser’s storage is full or site data is restricted. Free some space and tap “Save again” — nothing is regenerated or billed.',
+  },
+  'gen.retrySave': { zh: '重新保存', en: 'Save again' },
   'gen.backToOutline': { zh: '返回大纲', en: 'Back to outline' },
 
   // Home
@@ -198,6 +213,10 @@ const DICT: Record<string, Entry> = {
   'home.materialUnsupported': { zh: '暂只支持 txt / md / pdf / docx 文件。', en: 'Only txt / md / pdf / docx files are supported.' },
   'home.materialEmptyFile': { zh: '这个文件里没有提取到文字。', en: 'No text could be extracted from this file.' },
   'home.materialParseFailed': { zh: '文件解析失败——可以打开文件复制文字后粘贴过来。', en: 'Parsing failed — open the file and paste the text instead.' },
+  'home.materialNeedsNetwork': {
+    zh: '解析 PDF / Word 需要联网一次下载解析器——请联网后重试，或复制文字粘贴过来。',
+    en: 'Parsing PDF / Word needs a one-time download of the parser — reconnect and retry, or paste the text instead.',
+  },
   'home.materialHint': {
     zh: '最多 8000 字。文件在本机解析，素材只随本次生成发送给你配置的模型，不会上传到任何服务器。',
     en: 'Up to 8000 characters. Files are parsed on-device; material goes only to your configured model — never uploaded to a server.',
@@ -266,6 +285,11 @@ const DICT: Record<string, Entry> = {
   'lib.backupDone': { zh: '已备份 {n} 份课件', en: 'Backed up {n} decks' },
   'lib.restoreDone': { zh: '已恢复 {n} 份课件', en: 'Restored {n} decks' },
   'lib.restoreFailed': { zh: '恢复失败:不是有效的备份文件', en: 'Restore failed: not a valid backup file' },
+  'lib.restoreOverwrite': {
+    zh: '备份里有 {n} 份课件比你库里的版本更旧，恢复会覆盖你之后的修改。要覆盖吗？（取消 = 跳过这些，只恢复其余的）',
+    en: '{n} deck(s) in the backup are older than the copies in your library; restoring would overwrite your later edits. Overwrite? (Cancel skips them and restores the rest.)',
+  },
+  'lib.restoreDoneSkipped': { zh: '已恢复 {n} 份课件，跳过 {s} 份更新的', en: 'Restored {n} decks, skipped {s} newer' },
 
   // Guided create wizard
   'guided.pickModel': { zh: '选择生成模型', en: 'Choose a model' },

@@ -902,6 +902,16 @@ body.playing .appbar { display: none; }
 }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 10px); } }
 
+/* "New version ready" bar — stays until the user chooses (see lib/swUpdate.ts). */
+.sw-update {
+  position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+  z-index: 201; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  max-width: calc(100% - 32px); padding: 10px 14px 10px 18px; border-radius: 12px;
+  background: #1a2036; border: 1px solid var(--border-strong);
+  color: var(--text-strong); font-size: 14px; box-shadow: var(--shadow);
+  animation: toast-in 0.2s ease;
+}
+
 @media (max-width: 560px) {
   .composer__actions { margin-left: 0; width: 100%; }
   .composer__actions .btn { flex: 1; }
