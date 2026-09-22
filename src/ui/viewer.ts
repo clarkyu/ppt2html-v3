@@ -3,7 +3,7 @@ import { persistDeck } from '../lib/persist'
 import { getSampleDeck } from '../sample'
 import { mountPlayer, type PlayerHandle } from '../player/player'
 import { populateDeckImages } from '../images/search'
-import { loadSettings } from '../llm/settings'
+import { isConfigured, loadSettings } from '../llm/settings'
 import { navigate } from '../router'
 import { icons } from '../lib/icons'
 import { t } from '../i18n'
@@ -11,7 +11,10 @@ import { toast } from '../lib/toast'
 import { downloadStandalone } from '../export/standalone'
 import { openPresenter, type PresenterHandle } from '../player/presenter'
 import { startNarration, type NarratorHandle } from '../player/narrate'
-import { deckBudget, fmtClock } from '../player/rehearse'
+import { deckBudget, fmtClock, formatElapsed } from '../player/rehearse'
+import { dialogize } from '../lib/overlay'
+import { decodeDeckFromHash } from '../lib/share'
+import { deckIsChinese } from '../lib/lang'
 import { openStylePicker } from './stylePicker'
 import { openSharePanel } from './sharePanel'
 import { openRewritePanel } from './rewritePanel'
@@ -37,6 +40,16 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   let timerInt = 0
   let rehInterval = 0
   const imgAbort = new AbortController()
+  // Set by the cleanup: anything async that lands afterwards (deck load, wake
+  // lock grant, a panel's LLM result) must not touch the torn-down view.
+  let disposed = false
+  // The speaker-script pass gets its own controller so a structural edit can
+  // stop it (it indexes into the slide array by page number).
+  let notesAbort: AbortController | null = null
+  // Close handles of the overlay panels (rewrite / refine / whole-deck edit /
+  // share): torn down with the view so their in-flight work is aborted.
+  const panels = new Set<() => void>()
+  let presTimer = 0
   // Ephemeral decks (built-in sample, URL-shared) must never write to the library.
   const persistable = id !== 'sample' && !shareData
 
@@ -48,6 +61,10 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
     navigator.wakeLock
       ?.request('screen')
       .then((s) => {
+        if (disposed) {
+          s.release().catch(() => {}) // granted after we left — don't keep the screen awake on Home
+          return
+        }
         wakeLock = s
       })
       .catch(() => {})
@@ -63,29 +80,29 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
       <div class="viewer__bar show">
         <button class="btn btn--sm" data-back>${icons.back} ${t('common.back')}</button>
         <div class="viewer__title" data-title></div>
-        <span class="viewer__timer" data-timer title="${t('viewer.timerTitle')}">${icons.clock}<b>00:00</b></span>
-        <button class="btn btn--sm viewer__more" data-more title="${t('viewer.more')}">⋯</button>
+        <button type="button" class="viewer__timer" data-timer title="${t('viewer.timerTitle')}"><span aria-hidden="true">${icons.clock}</span><b>00:00</b></button>
+        <button class="btn btn--sm viewer__more" data-more title="${t('viewer.more')}" aria-label="${t('viewer.more')}">⋯</button>
         <div class="viewer__tools" data-tools>
-          <button class="btn btn--sm" data-step title="${t('viewer.stepMode')}">${icons.steps}</button>
-          <button class="btn btn--sm" data-narrate title="${t('viewer.narrate')}">${icons.speaker}</button>
-          <button class="btn btn--sm" data-rehearse title="${t('reh.button')}">${icons.stopwatch}</button>
-          <button class="btn btn--sm" data-notes title="${t('viewer.notes')}">${icons.note}</button>
-          <button class="btn btn--sm" data-notes-gen title="${t('viewer.genNotes')}">${icons.mic}</button>
-          <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}">${icons.presenter}</button>
-          <button class="btn btn--sm" data-overview title="${t('viewer.overview')}">${icons.grid}</button>
-          <button class="btn btn--sm" data-rewrite title="${t('rw.button')}" hidden>${icons.sparkles}</button>
-          <button class="btn btn--sm" data-refine title="${t('refine.button')}" hidden>${icons.wand}</button>
-          <button class="btn btn--sm" data-gedit title="${t('ge.button')}" hidden>${icons.deckMagic}</button>
-          <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
-          <button class="btn btn--sm" data-print title="${t('viewer.print')}">${icons.print}</button>
-          <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}">${icons.download}</button>
-          <button class="btn btn--sm" data-pptx title="${t('viewer.exportPptx')}">${icons.pptx}</button>
-          <button class="btn btn--sm" data-style title="${t('style.button')}">${icons.palette}</button>
-          <button class="btn btn--sm" data-share title="${t('share.button')}">${icons.share}</button>
-          <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}">${icons.expand}</button>
-          <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}">${icons.keyboard}</button>
           <button class="btn btn--primary btn--sm" data-save-shared hidden>${icons.save} ${t('share.saveCopy')}</button>
           <button class="btn btn--primary btn--sm" data-make-own hidden>${icons.sparkles} ${t('share.makeOwn')}</button>
+          <button class="btn btn--sm" data-step title="${t('viewer.stepMode')}" aria-label="${t('viewer.stepMode')}">${icons.steps}</button>
+          <button class="btn btn--sm" data-narrate title="${t('viewer.narrate')}" aria-label="${t('viewer.narrate')}">${icons.speaker}</button>
+          <button class="btn btn--sm" data-rehearse title="${t('reh.button')}" aria-label="${t('reh.button')}">${icons.stopwatch}</button>
+          <button class="btn btn--sm" data-notes title="${t('viewer.notes')}" aria-label="${t('viewer.notes')}">${icons.note}</button>
+          <button class="btn btn--sm" data-notes-gen title="${t('viewer.genNotes')}" aria-label="${t('viewer.genNotes')}">${icons.mic}</button>
+          <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}" aria-label="${t('viewer.presenter')}">${icons.presenter}</button>
+          <button class="btn btn--sm" data-overview title="${t('viewer.overview')}" aria-label="${t('viewer.overview')}">${icons.grid}</button>
+          <button class="btn btn--sm" data-rewrite title="${t('rw.button')}" aria-label="${t('rw.button')}" hidden>${icons.sparkles}</button>
+          <button class="btn btn--sm" data-refine title="${t('refine.button')}" aria-label="${t('refine.button')}" hidden>${icons.wand}</button>
+          <button class="btn btn--sm" data-gedit title="${t('ge.button')}" aria-label="${t('ge.button')}" hidden>${icons.deckMagic}</button>
+          <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" aria-label="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
+          <button class="btn btn--sm" data-print title="${t('viewer.print')}" aria-label="${t('viewer.print')}">${icons.print}</button>
+          <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}" aria-label="${t('viewer.exportHtml')}">${icons.download}</button>
+          <button class="btn btn--sm" data-pptx title="${t('viewer.exportPptx')}" aria-label="${t('viewer.exportPptx')}">${icons.pptx}</button>
+          <button class="btn btn--sm" data-style title="${t('style.button')}" aria-label="${t('style.button')}">${icons.palette}</button>
+          <button class="btn btn--sm" data-share title="${t('share.button')}" aria-label="${t('share.button')}">${icons.share}</button>
+          <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}" aria-label="${t('viewer.fullscreen')}">${icons.expand}</button>
+          <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}" aria-label="${t('viewer.shortcuts')}">${icons.keyboard}</button>
         </div>
       </div>
       <div class="viewer__notes" data-notes-panel hidden></div>
@@ -128,6 +145,11 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   // Auto-hide the top bar; reveal handles cursor hiding for the deck itself.
   // Also nudge on tap (pointerdown) so touch users — who fire no mousemove —
   // can bring the bar back to reach 返回 / 总览 after it hides.
+  // Toggle buttons expose their state, not just a CSS class.
+  const pressed = (btn: HTMLElement, on: boolean): void => {
+    btn.classList.toggle('active', on)
+    btn.setAttribute('aria-pressed', String(on))
+  }
   const nudgeBar = () => {
     bar.classList.add('show')
     window.clearTimeout(hideTimer)
@@ -135,6 +157,9 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   }
   viewerEl.addEventListener('mousemove', nudgeBar)
   viewerEl.addEventListener('pointerdown', nudgeBar)
+  // Tab landing on a bar button shows the bar (it used to stay invisible and
+  // pointer-events:none with focus inside it).
+  bar.addEventListener('focusin', nudgeBar)
   nudgeBar()
 
   // Narrow screens tuck the secondary tools behind a "⋯" menu; any tool click
@@ -145,12 +170,39 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
     toolsEl.classList.toggle('open')
   })
   toolsEl.addEventListener('click', () => toolsEl.classList.remove('open'))
+  // Compact ("⋯") mode is decided by measuring, not by a width query: how many
+  // tools a deck shows varies (owner vs recipient, AI buttons), so a fixed
+  // breakpoint clipped share / export / help on landscape phones and 1024px
+  // desktops. Measure with the tools inline, then tuck them away if the bar
+  // overflows. Re-run on resize and whenever a tool is shown or hidden.
+  const relayoutBar = (): void => {
+    viewerEl.classList.remove('viewer--compact')
+    const overflow = bar.scrollWidth > bar.clientWidth + 1
+    viewerEl.classList.toggle('viewer--compact', overflow)
+    if (!overflow) toolsEl.classList.remove('open')
+  }
+  relayoutBar()
+  window.addEventListener('resize', relayoutBar)
+  const toolsObserver = new MutationObserver(relayoutBar)
+  toolsObserver.observe(toolsEl, { attributes: true, attributeFilter: ['hidden'], subtree: true })
 
   // Portrait phones show a "rotate to landscape" nudge (a 16:9 deck is tiny in
-  // portrait). It's playable either way; dismissing hides it for the session.
-  view.querySelector('[data-rotate-dismiss]')!.addEventListener('click', () =>
-    viewerEl.classList.add('rotate-dismissed'),
-  )
+  // portrait). It's playable either way; dismissing hides it for the session
+  // (sessionStorage — it used to come back on every deck opened).
+  const ROTATE_KEY = 'ppt2html.rotateHintDismissed'
+  try {
+    if (sessionStorage.getItem(ROTATE_KEY) === '1') viewerEl.classList.add('rotate-dismissed')
+  } catch {
+    /* storage unavailable — the hint simply shows */
+  }
+  view.querySelector('[data-rotate-dismiss]')!.addEventListener('click', () => {
+    viewerEl.classList.add('rotate-dismissed')
+    try {
+      sessionStorage.setItem(ROTATE_KEY, '1')
+    } catch {
+      /* best-effort */
+    }
+  })
 
   view.querySelector('[data-back]')!.addEventListener('click', goBack)
   view.querySelector('[data-overview]')!.addEventListener('click', () => player?.toggleOverview())
@@ -168,12 +220,17 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
     // off so the player's own 1280×720 page layout applies; cleared afterprint.
     document.documentElement.classList.add('print-pdf')
     mount.querySelectorAll<HTMLElement>('.reveal .slides > section').forEach((sec) => {
-      const prev = { display: sec.style.display, visibility: sec.style.visibility }
+      // reveal marks unvisited pages with the `hidden` ATTRIBUTE, and the
+      // app's global [hidden]{display:none!important} beats the inline
+      // display below — those pages measured 0×0 and fitSlide was a no-op.
+      const prev = { display: sec.style.display, visibility: sec.style.visibility, hidden: sec.hasAttribute('hidden') }
+      sec.removeAttribute('hidden')
       sec.style.display = 'block'
       sec.style.visibility = 'hidden'
       fitSlide(sec)
       sec.style.display = prev.display
       sec.style.visibility = prev.visibility
+      if (prev.hidden) sec.setAttribute('hidden', '')
     })
   }
   const afterPrint = () => document.documentElement.classList.remove('print-pdf')
@@ -228,21 +285,14 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   window.addEventListener('keydown', onKey)
   view.querySelector('[data-full]')!.addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen()
-    else viewerEl.requestFullscreen?.()
+    else viewerEl.requestFullscreen?.()?.catch(() => {})
   })
 
   // Elapsed-time clock in the bar. Click to reset — handy when rehearsing.
   const timerEl = view.querySelector<HTMLElement>('[data-timer]')!
   const timerOut = timerEl.querySelector('b')!
   let startedAt = Date.now()
-  const fmt = (ms: number) => {
-    const s = Math.max(0, Math.floor(ms / 1000))
-    const hh = Math.floor(s / 3600)
-    const mm = Math.floor((s % 3600) / 60)
-    const ss = s % 60
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return hh ? `${hh}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`
-  }
+  const fmt = formatElapsed
   const tick = () => (timerOut.textContent = fmt(Date.now() - startedAt))
   timerInt = window.setInterval(tick, 1000)
   timerEl.addEventListener('click', () => {
@@ -268,12 +318,21 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   notesBtn.addEventListener('click', () => {
     notesOn = !notesOn
     notesPanel.hidden = !notesOn
-    notesBtn.classList.toggle('active', notesOn)
+    pressed(notesBtn, notesOn)
   })
 
   // Keyboard-shortcuts help overlay.
   const helpPanel = view.querySelector<HTMLElement>('[data-help-panel]')!
-  const toggleHelp = (show: boolean) => (helpPanel.hidden = !show)
+  let releaseHelp: (() => void) | null = null
+  const toggleHelp = (show: boolean): void => {
+    if (show === !helpPanel.hidden) return
+    helpPanel.hidden = !show
+    if (show) releaseHelp = dialogize(helpPanel, () => toggleHelp(false))
+    else {
+      releaseHelp?.()
+      releaseHelp = null
+    }
+  }
   view.querySelector('[data-help]')!.addEventListener('click', () => toggleHelp(!!helpPanel.hidden))
   view.querySelector('[data-help-close]')!.addEventListener('click', () => toggleHelp(false))
   helpPanel.addEventListener('click', (e) => {
@@ -281,12 +340,16 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   })
 
   const load = shareData
-    ? import('../lib/share').then(({ decodeDeckFromHash }) => decodeDeckFromHash(shareData))
+    ? decodeDeckFromHash(shareData)
     : id === 'sample'
       ? Promise.resolve(getSampleDeck())
       : getDeck(id)
   load
     .then((deck) => {
+      // Left before the deck arrived: mounting now would create a Reveal on a
+      // detached node that nothing destroys (its document keydown handler
+      // then eats Arrow/Space app-wide).
+      if (disposed) return
       if (!deck) {
         mount.innerHTML = `<div class="empty" style="color:#fff"><h3>${t('viewer.notFound')}</h3><p>${t('viewer.notFoundHint')}</p></div>`
         return
@@ -327,7 +390,16 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         player!.onSlideChange(cb)
       }
       const remountPlayer = (posOverride?: number): void => {
+        // Never rebuild into a torn-down view (a ghost Reveal would keep
+        // eating keys app-wide).
+        if (disposed || !mount.isConnected) return
         const pos = Math.min(posOverride ?? curNum, deck.slides.length)
+        // The narrator holds the OLD handle (and may be mid-utterance on a
+        // page that no longer exists): stop it. The presenter is rebound below.
+        if (narrator?.active()) {
+          narrator.stop()
+          narrateStopped(t('viewer.narrateOff'))
+        }
         player?.destroy()
         player = mountPlayer(mount, deck)
         for (const cb of slideChangeCbs) player.onSlideChange(cb)
@@ -339,13 +411,14 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           }
         }
         setNote(deck.slides[Math.min(pos, deck.slides.length) - 1]?.note)
+        presenter?.refresh(player)
       }
       const stepBtn = view.querySelector<HTMLButtonElement>('[data-step]')!
-      stepBtn.classList.toggle('active', player.stepMode())
+      pressed(stepBtn, player.stepMode())
       stepBtn.addEventListener('click', () => {
         const on = !player!.stepMode()
         player!.setStepMode(on)
-        stepBtn.classList.toggle('active', on)
+        pressed(stepBtn, on)
         toast(on ? t('viewer.stepOn') : t('viewer.stepOff'))
       })
 
@@ -354,7 +427,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
       const narrateBtn = view.querySelector<HTMLButtonElement>('[data-narrate]')!
       const narrateStopped = (msg: string): void => {
         narrator = null
-        narrateBtn.classList.remove('active')
+        pressed(narrateBtn, false)
         toast(msg)
       }
       narrateBtn.addEventListener('click', () => {
@@ -370,7 +443,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           toast(t('viewer.narrateNoTts'))
           return
         }
-        narrateBtn.classList.add('active')
+        pressed(narrateBtn, true)
         toast(t('viewer.narrateOn'))
       })
 
@@ -421,9 +494,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         wrap.innerHTML = `
           <div class="rehearse-summary__card">
             <h3>${t('reh.summaryTitle')}</h3>
-            <p class="rehearse-summary__total">${t('reh.summaryTotal')
-              .replace('{a}', fmtClock(totalSpent))
-              .replace('{b}', fmtClock(rehTotal))}</p>
+            <p class="rehearse-summary__total">${t('reh.summaryTotal', { a: fmtClock(totalSpent), b: fmtClock(rehTotal) })}</p>
             <div class="rehearse-summary__rows">
               ${rows
                 .map((r) => {
@@ -441,8 +512,13 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             <button class="btn btn--sm" data-reh-close>${t('common.gotIt')}</button>
           </div>`
         viewerEl.appendChild(wrap)
+        const dismiss = (): void => {
+          wrap.remove()
+          release()
+        }
+        const release = dialogize(wrap, dismiss)
         wrap.addEventListener('click', (e) => {
-          if (e.target === wrap || (e.target as HTMLElement).closest('[data-reh-close]')) wrap.remove()
+          if (e.target === wrap || (e.target as HTMLElement).closest('[data-reh-close]')) dismiss()
         })
       }
 
@@ -452,7 +528,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           rehearsing = false
           window.clearInterval(rehInterval)
           rehHud.hidden = true
-          rehBtn.classList.remove('active')
+          pressed(rehBtn, false)
           rehSummary()
           return
         }
@@ -464,12 +540,12 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         rehStart = Date.now()
         rehearsing = true
         rehHud.hidden = false
-        rehBtn.classList.add('active')
+        pressed(rehBtn, true)
         // Rehearsing means reading the script — surface it.
         if (!notesOn) notesBtn.click()
         rehPaint()
         rehInterval = window.setInterval(rehPaint, 500)
-        toast(t('reh.on').replace('{t}', fmtClock(rehTotal)))
+        toast(t('reh.on', { t: fmtClock(rehTotal) }))
       })
 
       // One-click restyle: swap the theme (built-in class OR a custom inline
@@ -510,18 +586,21 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             label = t('style.mine')
           }
           if (persistable) void persistDeck(deck)
-          toast(t('style.applied').replace('{name}', label))
+          presenter?.refresh()
+          toast(t('style.applied', { name: label }))
         })
       })
 
       // Share: the deck packed into a copyable URL (+ QR when it fits one).
       view.querySelector('[data-share]')!.addEventListener('click', () => {
-        openSharePanel(viewerEl, deck)
+        panels.add(openSharePanel(viewerEl, deck))
       })
       // Remember the playback position per deck (session-scoped): a refresh or
-      // an accidental back no longer dumps the presenter to slide 1.
+      // an accidental back no longer dumps the presenter to slide 1. Only for
+      // decks with an identity of their own: every share link used to share
+      // the id 'shared', so opening a second link resumed the first one's page.
       const posKey = `ppt2html.pos.${id}`
-      let posRestored = false
+      let posRestored = !persistable
       let curNum = 1
       onSlide((num) => {
         curNum = num
@@ -533,10 +612,12 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             return
           }
         }
-        try {
-          sessionStorage.setItem(posKey, String(num))
-        } catch {
-          /* best-effort */
+        if (persistable) {
+          try {
+            sessionStorage.setItem(posKey, String(num))
+          } catch {
+            /* best-effort */
+          }
         }
         setNote(deck.slides[num - 1]?.note)
         presenter?.update(num)
@@ -551,7 +632,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         const sec = mount.querySelectorAll<HTMLElement>('.reveal .slides > section')[i]
         const sEl = sec?.querySelector('.s')
         if (sec && sEl) {
-          sEl.outerHTML = renderSlideInner(next)
+          sEl.outerHTML = renderSlideInner(next, { zh: deckIsChinese(deck) })
           sec.querySelector('aside.notes')?.remove()
           if (next.note) {
             const aside = document.createElement('aside')
@@ -567,7 +648,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           fitSlide(sec)
         }
         setNote(deck.slides[curNum - 1]?.note)
-        presenter?.update(curNum)
+        presenter?.refresh() // the presenter's previews/notes are a snapshot otherwise
         if (persistable) void persistDeck(deck)
       }
       const rewriteBtn = view.querySelector<HTMLButtonElement>('[data-rewrite]')!
@@ -575,13 +656,13 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
       if (persistable) {
         rewriteBtn.hidden = false
         rewriteBtn.addEventListener('click', () => {
-          openRewritePanel(viewerEl, deck, curNum - 1, { apply: applyRewrite })
+          panels.add(openRewritePanel(viewerEl, deck, curNum - 1, { apply: applyRewrite }))
         })
         // Whole-deck refine pass: mechanical checks pick the pages, the model
         // fixes only those — same in-place apply as the single-page rewrite.
         refineBtn.hidden = false
         refineBtn.addEventListener('click', () => {
-          openRefinePanel(viewerEl, deck, { apply: applyRewrite })
+          panels.add(openRefinePanel(viewerEl, deck, { apply: applyRewrite }))
         })
         // Whole-deck conversational edit: one instruction → visible per-page
         // plan → confirmed batch rewrite. In-place apply for rewrites; drops
@@ -592,6 +673,10 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         // page 8" showing a different slide reads as a jump. (Undo passes
         // clones, so identity misses there and the number fallback applies.)
         const applyStructure = (slides: Slide[]): void => {
+          if (disposed) return
+          // A running speaker-script pass indexes into the OLD array — stop it
+          // rather than let a batch land on shifted (or vanished) pages.
+          notesAbort?.abort()
           const idx = slides.indexOf(deck.slides[curNum - 1])
           deck.slides = slides
           if (persistable) void persistDeck(deck)
@@ -600,35 +685,52 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         const geditBtn = view.querySelector<HTMLButtonElement>('[data-gedit]')!
         geditBtn.hidden = false
         geditBtn.addEventListener('click', () => {
-          openGlobalEditPanel(viewerEl, deck, { apply: applyRewrite, applyStructure })
+          panels.add(openGlobalEditPanel(viewerEl, deck, { apply: applyRewrite, applyStructure }))
         })
       }
 
       // Full speaker script (逐字稿): a post-pass over the finished deck, batch
       // by batch — each batch is saved as it lands, so failures keep progress.
       const genBtn = view.querySelector<HTMLButtonElement>('[data-notes-gen]')!
+      // The script pass writes notes by page number, so the AI edit tools that
+      // could reshape the deck stay disabled while it runs (and applyStructure
+      // aborts it if a panel opened earlier still fires).
+      const aiBtns = [rewriteBtn, refineBtn, view.querySelector<HTMLButtonElement>('[data-gedit]')!]
       genBtn.addEventListener('click', () => {
         if (!loadedDeck || genBtn.disabled) return
+        // Same gate as every other AI entry point: an unconfigured user gets
+        // "add a key in Settings", not a 401 dressed up as "invalid key".
+        if (!isConfigured(loadSettings())) {
+          toast(t('err.noKey'))
+          navigate('#/settings')
+          return
+        }
         const hasLong = loadedDeck.slides.some((s) => (s.note ?? '').trim().length > 80)
         if (hasLong && !window.confirm(t('viewer.genNotesConfirm'))) return
         genBtn.disabled = true
+        aiBtns.forEach((b) => (b.disabled = true))
+        notesAbort?.abort()
+        const run = new AbortController()
+        notesAbort = run
         toast(t('viewer.genNotesStart'))
         const total = loadedDeck.slides.length
         genBtn.innerHTML = `${icons.mic} <b>0/${total}</b>`
         import('../llm/notes')
           .then(({ generateSpeakerNotes }) =>
             generateSpeakerNotes(loadedDeck!, loadSettings(), {
-              signal: imgAbort.signal,
-              onProgress: (done) => {
-                genBtn.innerHTML = `${icons.mic} <b>${done}/${total}</b>`
+              signal: run.signal,
+              onProgress: (done, n) => {
+                genBtn.innerHTML = `${icons.mic} <b>${done}/${n}</b>`
                 if (persistable) void persistDeck(loadedDeck!)
                 setNote(loadedDeck!.slides[curNum - 1]?.note)
-                presenter?.update(curNum)
+                presenter?.refresh()
               },
             }),
           )
-          .then(() => {
-            toast(t('viewer.genNotesDone'))
+          .then(({ missing }) => {
+            // A reply that skipped pages is re-requested inside; whatever is
+            // still missing is said out loud instead of a blanket "done".
+            toast(missing.length ? t('viewer.genNotesPartial', { n: String(missing.length) }) : t('viewer.genNotesDone'))
             // Surface the result right away.
             if (!notesOn) notesBtn.click()
             setNote(loadedDeck!.slides[curNum - 1]?.note)
@@ -638,8 +740,10 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             toast((e as Error)?.message || t('viewer.genNotesFailed'))
           })
           .finally(() => {
+            if (notesAbort === run) notesAbort = null
             genBtn.disabled = false
             genBtn.innerHTML = icons.mic
+            aiBtns.forEach((b) => (b.disabled = false))
           })
       })
 
@@ -655,11 +759,23 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           window.clearTimeout(saveTimer)
           saveTimer = window.setTimeout(() => void persistDeck(deck), 800)
         }
+        const presenterRefreshSoon = (): void => {
+          window.clearTimeout(presTimer)
+          presTimer = window.setTimeout(() => presenter?.refresh(), 300)
+        }
         void populateDeckImages(deck, settings, {
           signal: imgAbort.signal,
-          onImage: (index, bg) => {
-            player?.setSlideBackground(index, bg)
+          onImage: (_index, bg, slide) => {
+            // Resolve the LIVE index by identity: a structural edit or undo may
+            // have moved, replaced or dropped this page since the search began.
+            const j = deck.slides.indexOf(slide)
+            if (j < 0) return
+            player?.setSlideBackground(j, bg)
             scheduleSave()
+            presenterRefreshSoon()
+          },
+          onTransient: (n) => {
+            if (!disposed) toast(t('viewer.photosUnavailable', { n: String(n) }))
           },
         })
           .then(() => {
@@ -675,10 +791,17 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
     })
 
   return () => {
+    disposed = true
+    panels.forEach((fn) => fn()) // aborts in-flight rewrite/refine/global-edit/share work
+    panels.clear()
+    notesAbort?.abort()
+    window.clearTimeout(presTimer)
     window.clearTimeout(hideTimer)
     window.clearInterval(timerInt)
     window.clearInterval(rehInterval)
     window.removeEventListener('keydown', onKey)
+    window.removeEventListener('resize', relayoutBar)
+    toolsObserver.disconnect()
     window.removeEventListener('beforeprint', fitAllForPrint)
     window.removeEventListener('afterprint', afterPrint)
     afterPrint()

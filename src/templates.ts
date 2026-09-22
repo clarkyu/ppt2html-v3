@@ -9,6 +9,7 @@
 
 import type { Deck, DeckSpec } from './types'
 import { normalizeDeck } from './render/normalize'
+import { getLang } from './i18n'
 
 export interface DeckTemplate {
   slug: string
@@ -20,7 +21,7 @@ export interface DeckTemplate {
 /** A fresh Deck from a template (random id unless overridden for previews). */
 export function instantiateTemplate(tpl: DeckTemplate, id?: string): Deck {
   return normalizeDeck(structuredClone(tpl.spec), {
-    prompt: tpl.name.zh,
+    prompt: tpl.name[getLang()],
     id: id ?? crypto.randomUUID(),
   })
 }

@@ -5,7 +5,11 @@ import { mountThumb } from '../render/preview'
 import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
 import { toast } from '../lib/toast'
-import { t } from '../i18n'
+import { deckToMaterial } from '../lib/deckMaterial'
+import { startGuidedGeneration } from './guided'
+import { normalizeDeck } from '../render/normalize'
+import { t, tn, pages } from '../i18n'
+import { dialogize } from '../lib/overlay'
 import { buildBackup, backupFilename, downloadText, parseBackupFile, restoreDecks } from '../lib/backup'
 import type { Deck } from '../types'
 
@@ -39,7 +43,7 @@ function offerRestyle(host: HTMLElement, deck: Deck): void {
   wrap.className = 'sharepanel sharepanel--fixed'
   wrap.innerHTML = `
     <div class="sharepanel__card">
-      <h3>${t('imp.doneTitle').replace('{n}', String(deck.slides.length))}</h3>
+      <h3>${tn('imp.doneTitle', deck.slides.length)}</h3>
       <p class="sharepanel__hint">${t('imp.choiceHint')}</p>
       <div class="sharepanel__actions">
         <button class="btn btn--primary btn--sm" data-imp-rebuild>${icons.deckMagic} ${t('imp.rebuild')}</button>
@@ -47,25 +51,32 @@ function offerRestyle(host: HTMLElement, deck: Deck): void {
       </div>
     </div>`
   host.appendChild(wrap)
+  const dismiss = (): void => {
+    wrap.remove()
+    release()
+  }
+  const release = dialogize(wrap, dismiss)
   wrap.addEventListener('click', (e) => {
     const el = e.target as HTMLElement
-    if (e.target === wrap) wrap.remove() // dismiss = stay in the library
+    if (e.target === wrap) dismiss() // dismiss = stay in the library
     else if (el.closest('[data-imp-edit]')) {
-      wrap.remove()
+      dismiss()
       navigate(`#/edit/${deck.id}`)
     } else if (el.closest('[data-imp-rebuild]')) {
-      wrap.remove()
-      void Promise.all([import('../lib/deckMaterial'), import('./guided')]).then(
-        ([{ deckToMaterial }, { startGuidedGeneration }]) => {
-          startGuidedGeneration(deck.title, { material: deckToMaterial(deck) })
-        },
-      )
+      dismiss()
+      const mat = deckToMaterial(deck)
+      if (mat.truncated) toast(t('imp.materialTrimmed'))
+      startGuidedGeneration(deck.title, { material: mat.text })
     }
   })
 }
 
 export function renderLibrary(view: HTMLElement): () => void {
   const thumbCleanups: Array<() => void> = []
+  // Cleared by the cleanup below: a PPTX import or a restore that finishes
+  // after the user has navigated away must not append its dialog onto — or
+  // re-render into — whatever screen is mounted now.
+  let alive = true
   let all: Deck[] = []
   let query = ''
   let sort: SortKey = 'updated'
@@ -106,7 +117,7 @@ export function renderLibrary(view: HTMLElement): () => void {
     }
     const backup = await buildBackup(Date.now())
     downloadText(backupFilename(Date.now()), JSON.stringify(backup, null, 2))
-    toast(t('lib.backupDone').replace('{n}', String(backup.decks.length)))
+    toast(tn('lib.backupDone', backup.decks.length))
   })
   view.querySelector('[data-restore]')!.addEventListener('click', () => restoreFileEl.click())
 
@@ -123,11 +134,17 @@ export function renderLibrary(view: HTMLElement): () => void {
     try {
       const { importPptx } = await import('../import/pptx')
       const spec = await importPptx(await file.arrayBuffer(), file.name)
-      const { normalizeDeck } = await import('../render/normalize')
-      const deck = normalizeDeck(spec, { prompt: file.name, id: crypto.randomUUID() })
+      // No prompt for an import: the local file name is nobody else's business
+      // (it used to ride inside share links as deck.prompt).
+      const deck = normalizeDeck(spec, { prompt: '', id: crypto.randomUUID() })
       await saveDeck(deck)
-      toast(t('imp.done').replace('{n}', String(deck.slides.length)))
-      offerRestyle(view, deck)
+      toast(
+        t('imp.done', { n: String(deck.slides.length) }) +
+          (spec.skippedVisuals ? ` ${t('imp.skippedVisuals', { n: String(spec.skippedVisuals) })}` : ''),
+      )
+      // The deck is saved either way; the follow-up choice belongs to the
+      // library screen only.
+      if (alive) offerRestyle(view, deck)
     } catch (e) {
       toast((e as Error)?.message || t('imp.failed'))
     } finally {
@@ -147,7 +164,7 @@ export function renderLibrary(view: HTMLElement): () => void {
         return !!cur && cur.updatedAt > d.updatedAt
       })
       let skipped = 0
-      if (newer.length && !confirm(t('lib.restoreOverwrite').replace('{n}', String(newer.length)))) {
+      if (newer.length && !confirm(t('lib.restoreOverwrite', { n: String(newer.length) }))) {
         const ids = new Set(newer.map((d) => d.id))
         decks = decks.filter((d) => !ids.has(d.id))
         skipped = newer.length
@@ -155,8 +172,8 @@ export function renderLibrary(view: HTMLElement): () => void {
       const n = decks.length ? await restoreDecks(decks) : 0
       toast(
         skipped
-          ? t('lib.restoreDoneSkipped').replace('{n}', String(n)).replace('{s}', String(skipped))
-          : t('lib.restoreDone').replace('{n}', String(n)),
+          ? t('lib.restoreDoneSkipped', { n: String(n), s: String(skipped) })
+          : tn('lib.restoreDone', n),
       )
       await reload()
     } catch {
@@ -190,23 +207,29 @@ export function renderLibrary(view: HTMLElement): () => void {
     for (const deck of decks) {
       const card = document.createElement('div')
       card.className = 'deck-card'
+      // The playable part is a real link: a click-only <div> left keyboard and
+      // screen-reader users with no way to open a deck.
       card.innerHTML = `
-        <div class="thumb"></div>
-        <div class="deck-card__body">
-          <div class="deck-card__title">${escapeHtml(deck.title)}</div>
+        <a class="deck-card__link" href="#/play/${deck.id}">
+          <div class="thumb"></div>
+          <div class="deck-card__body">
+            <div class="deck-card__title">${escapeHtml(deck.title)}</div>
+          </div>
+        </a>
+        <div class="deck-card__body deck-card__body--foot">
           <div class="deck-card__meta">
-            <span>${deck.slides.length} ${t('unit.pages')} · ${formatDate(deck.createdAt)}</span>
+            <span>${pages(deck.slides.length)} · ${formatDate(deck.createdAt)}</span>
             <div class="deck-card__actions">
-              <button class="icon-btn" data-edit title="${t('lib.action.edit')}">${icons.edit}</button>
-              <button class="icon-btn" data-rename title="${t('lib.action.rename')}">${icons.rename}</button>
-              <button class="icon-btn" data-copy title="${t('lib.action.copy')}">${icons.copy}</button>
-              <button class="icon-btn" data-del title="${t('lib.action.delete')}">${icons.trash}</button>
+              <button class="icon-btn" data-edit title="${t('lib.action.edit')}" aria-label="${t('lib.action.edit')}">${icons.edit}</button>
+              <button class="icon-btn" data-rename title="${t('lib.action.rename')}" aria-label="${t('lib.action.rename')}">${icons.rename}</button>
+              <button class="icon-btn" data-copy title="${t('lib.action.copy')}" aria-label="${t('lib.action.copy')}">${icons.copy}</button>
+              <button class="icon-btn" data-del title="${t('lib.action.delete')}" aria-label="${t('lib.action.delete')}">${icons.trash}</button>
             </div>
           </div>
         </div>`
 
       card.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).closest('.deck-card__actions')) return
+        if ((e.target as HTMLElement).closest('.deck-card__actions, a')) return
         navigate(`#/play/${deck.id}`)
       })
       card.querySelector('[data-edit]')!.addEventListener('click', (e) => {
@@ -227,13 +250,13 @@ export function renderLibrary(view: HTMLElement): () => void {
       })
       card.querySelector('[data-copy]')!.addEventListener('click', async (e) => {
         e.stopPropagation()
-        const copy = await duplicateDeck(deck.id)
+        const copy = await duplicateDeck(deck.id, t('lib.copySuffix'))
         toast(copy ? t('lib.copied') : t('lib.copyFailed'))
         await reload()
       })
       card.querySelector('[data-del]')!.addEventListener('click', async (e) => {
         e.stopPropagation()
-        if (!confirm(t('lib.deleteConfirm').replace('{title}', deck.title))) return
+        if (!confirm(t('lib.deleteConfirm', { title: deck.title }))) return
         await deleteDeck(deck.id)
         toast(t('lib.deleted'))
         await reload()
@@ -252,7 +275,10 @@ export function renderLibrary(view: HTMLElement): () => void {
   }
 
   const reload = async () => {
-    all = await listDecks()
+    if (!alive) return
+    const decks = await listDecks()
+    if (!alive) return
+    all = decks
     render()
   }
 
@@ -269,5 +295,8 @@ export function renderLibrary(view: HTMLElement): () => void {
     body.innerHTML = `<div class="empty"><h3>${t('lib.readError')}</h3><p>${t('lib.readErrorHint')}</p></div>`
   })
 
-  return () => thumbCleanups.forEach((fn) => fn())
+  return () => {
+    alive = false
+    thumbCleanups.forEach((fn) => fn())
+  }
 }

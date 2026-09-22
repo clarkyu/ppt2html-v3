@@ -1,7 +1,7 @@
 import type { Deck, Branding } from '../types'
 import { renderSlideInner, slideBgHtml, slideCreditHtml } from './layouts'
-import { escapeHtml } from '../lib/markdown'
-import { deckIsCjk } from '../lib/lang'
+import { escapeHtml, mdPlain } from '../lib/markdown'
+import { deckIsChinese, deckText } from '../lib/lang'
 
 function validLogo(u?: string): string {
   const s = (u ?? '').trim()
@@ -27,7 +27,8 @@ export function renderDeckSlides(deck: Deck): string {
   let sectionTitle = ''
   // Baked-in labels follow the deck's language (an English deck must not get
   // a Chinese "环节" corner label).
-  const partWord = deckIsCjk(deck) ? '环节' : 'Part'
+  const zh = deckIsChinese(deck)
+  const partWord = deckText(zh, 'part')
 
   const logo = validLogo(deck.branding?.logo)
   const logoHtml = logo ? `<img class="deck-slide__logo" src="${escapeHtml(logo)}" alt="">` : ''
@@ -36,7 +37,7 @@ export function renderDeckSlides(deck: Deck): string {
   // "what we covered" so the last slide isn't just "谢谢观看".
   const chapterTitles = deck.slides
     .filter((s) => s.layout === 'section')
-    .map((s) => (s.title ?? '').trim())
+    .map((s) => mdPlain(s.title))
     .filter(Boolean)
     .slice(0, 4)
   const recapHtml =
@@ -48,7 +49,7 @@ export function renderDeckSlides(deck: Deck): string {
     .map((slide, i) => {
       if (slide.layout === 'section') {
         sectionNum += 1
-        sectionTitle = (slide.title ?? '').trim()
+        sectionTitle = mdPlain(slide.title) // rendered as text, not Markdown
       }
       const note = slide.note ? `<aside class="notes">${escapeHtml(slide.note)}</aside>` : ''
 
@@ -80,7 +81,7 @@ export function renderDeckSlides(deck: Deck): string {
         `<section data-layout="${escapeHtml(slide.layout)}" class="deck-slide"${transition}>` +
         slideBgHtml(slide) +
         ghostHtml +
-        renderSlideInner(slide) +
+        renderSlideInner(slide, { zh }) +
         logoHtml +
         sectionHtml +
         pageHtml +

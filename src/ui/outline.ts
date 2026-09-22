@@ -1,13 +1,16 @@
-import { generatePartPages, assembleOutline } from '../llm/outline'
+import { generatePartPages, assembleOutline, normalizeOutline } from '../llm/outline'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { generateAndPlay } from './generating'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
+import { removeWithUndo } from '../lib/dom'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
-import { liveTitles, renderLive } from '../lib/live'
+import { liveTitles, renderLive, renderThinking } from '../lib/live'
 import { saveDraft } from '../lib/draft'
-import { t } from '../i18n'
+import { openOverlay } from '../lib/overlay'
+import { t, pages } from '../i18n'
+import { deckText, hasHan } from '../lib/lang'
 import {
   LAYOUTS,
   type GenerateOptions,
@@ -87,15 +90,21 @@ export function startPageOutline(
     return
   }
 
-  const el = document.createElement('div')
-  el.className = 'overlay'
-  el.innerHTML = `<div class="outline card"><div data-body></div></div>`
-  document.body.appendChild(el)
+  // Torn down by a route change (back button, app-bar link): keep what the
+  // user has on screen in the draft first — the same exit the Cancel button
+  // offers, minus the confirm.
+  const ov = openOverlay(`<div class="outline card"><div data-body></div></div>`, () => {
+    snapshotCurrent()
+    persist()
+    close()
+    window.dispatchEvent(new CustomEvent('draftchange'))
+  })
+  const el = ov.el
   const body = el.querySelector<HTMLElement>('[data-body]')!
   const close = () => {
     controller.abort()
     prefetch?.controller.abort()
-    el.remove()
+    ov.dispose()
   }
   let controller = new AbortController()
 
@@ -120,12 +129,28 @@ export function startPageOutline(
     saveDraft({ topic: trimmed, opts, structure, results: Array.from(results, (g) => g ?? null), step: current })
   }
 
-  // Exit deliberately: progress stays in the draft, resumable from Home.
+  /** Fold whatever is being edited right now into `results` / `structure`:
+   * the overview's rows + title / subtitle / theme, or a step editor's rows.
+   * (Leaving from a step editor used to drop that step's unsaved edits.) */
+  const snapshotCurrent = () => {
+    if (body.querySelector('[data-ov]')) {
+      syncOverviewIntoResults()
+    } else if (body.querySelector('[data-list]') && !body.querySelector('[data-live]')) {
+      const rows = collectRows(body)
+      if (rows.length) results[current] = rows
+    }
+  }
+
+  // Exit deliberately: progress stays in the draft, resumable from Home —
+  // and Home's draft card appears right away, not on its next render.
   const confirmExit = () => {
     if (!confirm(t('outline.exitConfirm'))) return
+    snapshotCurrent()
     persist()
     close()
+    window.dispatchEvent(new CustomEvent('draftchange'))
   }
+  ov.escape = confirmExit
 
   /* ------------------------- next-part prefetch ------------------------- */
   // While the user reviews a part, the NEXT part is generated in the
@@ -146,11 +171,14 @@ export function startPageOutline(
       .filter((g): g is OutlineSlide[] => Array.isArray(g))
       .flat()
 
+  // Set by "back" from a streaming view: the user just walked away from
+  // exactly the request a prefetch would now re-issue.
+  let suppressPrefetchFor = -1
+
   const startPrefetch = (stepIdx: number, shownSlides: OutlineSlide[]) => {
     const nxt = stepIdx + 1
     const st = steps[nxt]
     if (!st || st.kind !== 'part' || results[nxt]) return
-    prefetch?.controller.abort()
     const step = steps[stepIdx]
     const ctx = [
       ...results
@@ -159,10 +187,20 @@ export function startPageOutline(
         .flat(),
       ...(step.kind === 'part' ? shownSlides : []),
     ]
+    const sig = JSON.stringify(ctx)
+    // Still valid for the same next step and context (the user came back to
+    // this step without editing)? Keep it — aborting and re-issuing it was
+    // a second billed request for the same answer.
+    if (prefetch && prefetch.step === nxt && prefetch.sig === sig && !prefetch.controller.signal.aborted) return
+    if (suppressPrefetchFor === nxt) {
+      suppressPrefetchFor = -1
+      return
+    }
+    prefetch?.controller.abort()
     const pc = new AbortController()
     prefetch = {
       step: nxt,
-      sig: JSON.stringify(ctx),
+      sig,
       controller: pc,
       promise: generatePartPages(trimmed, opts, structure, st.index, loadSettings(), { signal: pc.signal }, undefined, ctx),
     }
@@ -173,7 +211,9 @@ export function startPageOutline(
   const coverSlides = (): OutlineSlide[] => [
     { layout: 'cover', title: structure.title, brief: structure.subtitle },
   ]
-  const endSlides = (): OutlineSlide[] => [{ layout: 'end', title: t('deck.thanks') }]
+  // Deck-content strings follow the deck's language, never the UI's.
+  const deckZh = (): boolean => hasHan(structure.title) || hasHan(trimmed)
+  const endSlides = (): OutlineSlide[] => [{ layout: 'end', title: deckText(deckZh(), 'thanks') }]
 
   /* ----------------------------- streaming a part ----------------------------- */
 
@@ -194,7 +234,11 @@ export function startPageOutline(
       structure,
       sIndex,
       loadSettings(),
-      { signal: controller.signal, onToken: (full) => renderLive(liveEl, liveTitles(full)) },
+      {
+        signal: controller.signal,
+        onToken: (full) => renderLive(liveEl, liveTitles(full)),
+        onReasoning: (n) => renderThinking(liveEl, n),
+      },
       instruction,
       confirmedFor(sIndex),
     )
@@ -209,18 +253,20 @@ export function startPageOutline(
   const showStreaming = (i: number, partTitle: string, pages: number) => {
     body.innerHTML = `
       <div class="wizard__head">
-        <div class="wizard__crumb">${t('outline.crumb').replace('{i}', String(i + 1)).replace('{n}', String(stepCount()))}</div>
-        <h2>${t('outline.detailing').replace('{title}', escapeHtml(partTitle))}</h2>
-        <p>${t('outline.detailingSub').replace('{pages}', String(pages))}</p>
+        <div class="wizard__crumb">${t('outline.crumb', { i: String(i + 1), n: String(stepCount()) })}</div>
+        <h2>${t('outline.detailing', { title: escapeHtml(partTitle) })}</h2>
+        <p>${t('outline.detailingSub', { pages: String(pages) })}</p>
       </div>
-      <ol class="gen-live" data-live><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
+      <ol class="gen-live" data-live role="status" aria-live="polite"><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
       <div class="outline__actions">
         <button class="btn btn--ghost" data-back>${t('outline.backStep')}</button>
       </div>`
     // Backing out of a stream returns to the previous step — it must not nuke
-    // the wizard (confirmed parts live in `results`).
+    // the wizard (confirmed parts live in `results`), and the previous step
+    // must not quietly restart the very request just abandoned.
     body.querySelector('[data-back]')!.addEventListener('click', () => {
       controller.abort()
+      suppressPrefetchFor = i
       runStep(Math.max(0, i - 1))
     })
   }
@@ -228,7 +274,7 @@ export function startPageOutline(
   const showStepError = (i: number, msg: string) => {
     body.innerHTML = `
       <div class="gen" style="padding:8px">
-        <h2 class="gen__error">${t('outline.partFailed')}</h2>
+        <h2 class="gen__error" role="alert">${t('outline.partFailed')}</h2>
         <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>
         <div class="gen__actions">
           <button class="btn btn--ghost" data-back>${t('outline.backStep')}</button>
@@ -274,13 +320,13 @@ export function startPageOutline(
 
   const stepMeta = (i: number): { title: string; sub: string; canRegen: boolean } => {
     const step = steps[i]
-    const nth = t('outline.stepNth').replace('{i}', String(i + 1)).replace('{n}', String(stepCount()))
+    const nth = t('outline.stepNth', { i: String(i + 1), n: String(stepCount()) })
     if (step.kind === 'cover') return { title: t('outline.coverTitle'), sub: `${t('outline.coverSub')} · ${nth}`, canRegen: false }
     if (step.kind === 'end') return { title: t('outline.endTitle'), sub: `${t('outline.endSub')} · ${nth}`, canRegen: false }
     const sec = structure.sections[step.index]
     return {
-      title: t('outline.partN').replace('{n}', String(step.index + 1)).replace('{title}', sec.title),
-      sub: `${t('outline.partSub').replace('{pages}', String(sec.pages ?? 3))} · ${nth}`,
+      title: t('outline.partN', { n: String(step.index + 1), title: sec.title }),
+      sub: `${t('outline.partSub', { pages: String(sec.pages ?? 3) })} · ${nth}`,
       canRegen: true,
     }
   }
@@ -290,7 +336,7 @@ export function startPageOutline(
     const last = i === steps.length - 1
     body.innerHTML = `
       <div class="wizard__head">
-        <div class="wizard__crumb">${t('outline.crumb').replace('{i}', String(i + 1)).replace('{n}', String(stepCount()))}</div>
+        <div class="wizard__crumb">${t('outline.crumb', { i: String(i + 1), n: String(stepCount()) })}</div>
         <h2>${escapeHtml(meta.title)}</h2>
         <p>${escapeHtml(meta.sub)}</p>
       </div>
@@ -339,11 +385,24 @@ export function startPageOutline(
   const groupLabel = (step: Step): string => {
     if (step.kind === 'cover') return t('layout.cover')
     if (step.kind === 'end') return t('outline.endTitle')
-    return t('outline.partN').replace('{n}', String(step.index + 1)).replace('{title}', structure.sections[step.index].title)
+    return t('outline.partN', { n: String(step.index + 1), title: structure.sections[step.index].title })
+  }
+
+  // The overview's deck title / subtitle / theme live in `structure` once
+  // typed — every re-render (add / delete part, go-edit, back) and every
+  // draft save used to revert them to the model's values.
+  const syncOverviewMeta = () => {
+    const titleEl = body.querySelector<HTMLInputElement>('[data-deck-title]')
+    if (!titleEl) return
+    structure.title = titleEl.value.trim() || structure.title
+    structure.subtitle = body.querySelector<HTMLInputElement>('[data-deck-subtitle]')?.value.trim() || undefined
+    const th = body.querySelector<HTMLElement>('[data-theme].active')?.dataset.theme as ThemeName | undefined
+    if (th) structure.theme = th
   }
 
   // Sync any edits made in the overview back into the per-step results.
   const syncOverviewIntoResults = () => {
+    syncOverviewMeta()
     body.querySelectorAll<HTMLElement>('.ov-group').forEach((g, i) => {
       results[i] = collectRows(g)
     })
@@ -351,7 +410,7 @@ export function startPageOutline(
 
   const showOverview = () => {
     const groups = steps.map((step, i) => ({ label: groupLabel(step), kind: step.kind, slides: results[i] ?? [] }))
-    const title = assembleOutline(structure, results.map((r) => r ?? [])).title
+    const title = structure.title || assembleOutline(structure, results.map((r) => r ?? [])).title
     body.innerHTML = renderOverview(structure, title, groups)
     wireOverview(body, {
       onCancel: confirmExit,
@@ -377,15 +436,18 @@ export function startPageOutline(
       },
       onAddPart: () => {
         syncOverviewIntoResults()
-        structure.sections.push({ title: t('struct.newPart'), pages: 3 })
+        structure.sections.push({ title: deckText(deckZh(), 'newPart'), pages: 3 })
         // Insert the new part's pages just before the 结束 group.
-        results.splice(Math.max(1, results.length - 1), 0, [{ layout: 'section', title: t('struct.newPart') }])
+        results.splice(Math.max(1, results.length - 1), 0, [{ layout: 'section', title: deckText(deckZh(), 'newPart') }])
         steps = buildSteps()
         persist()
         showOverview()
       },
       onGenerate: () => {
-        const edited = collectOutline(body, trimmed)
+        // Through the same normalizer as a model outline: a cover / end row
+        // pinned mid-deck becomes a section divider instead of a second
+        // cover page inside the deck.
+        const edited = normalizeOutline(collectOutline(body, trimmed), trimmed)
         if (!edited.slides.length) {
           toast(t('outline.keepOnePage'))
           return
@@ -425,9 +487,9 @@ function renderRow(s: OutlineSlide): string {
           <select class="ol-row__layout" data-layout title="${escapeHtml(t('outline.pickLayout'))}">${layoutOptions(s.layout)}</select>
           <input class="ol-row__title" data-title value="${escapeHtml(s.title)}" placeholder="${escapeHtml(t('outline.rowTitle'))}">
           <div class="ol-row__ops">
-            <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}">${icons.up}</button>
-            <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}">${icons.down}</button>
-            <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
+            <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}" aria-label="${escapeHtml(t('common.moveUp'))}">${icons.up}</button>
+            <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}" aria-label="${escapeHtml(t('common.moveDown'))}">${icons.down}</button>
+            <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}" aria-label="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
           </div>
         </div>
         <input class="ol-row__brief" data-brief value="${escapeHtml(s.brief ?? '')}" placeholder="${escapeHtml(t('outline.rowBrief'))}">
@@ -463,11 +525,11 @@ function renderOverview(structure: Structure, title: string, groups: OvGroup[]):
         (g, i) => `
       <div class="ov-group" data-group="${i}">
         <div class="ov-group__head">
-          <button class="icon-btn ov-group__fold" data-fold title="${escapeHtml(t('outline.foldTitle'))}">${icons.down}</button>
+          <button class="icon-btn ov-group__fold" data-fold title="${escapeHtml(t('outline.foldTitle'))}" aria-label="${escapeHtml(t('outline.foldTitle'))}">${icons.down}</button>
           <span class="ov-group__label">${escapeHtml(g.label)}</span>
-          <span class="ov-group__count">${g.slides.length} ${t('unit.pages')}</span>
+          <span class="ov-group__count">${pages(g.slides.length)}</span>
           <button class="btn btn--ghost btn--sm ov-group__goto" data-goto="${i}">${icons.edit} ${t('outline.goEdit')}</button>
-          ${g.kind === 'part' ? `<button class="icon-btn ov-group__del" data-del-group title="${escapeHtml(t('outline.delPart'))}">${icons.trash}</button>` : ''}
+          ${g.kind === 'part' ? `<button class="icon-btn ov-group__del" data-del-group title="${escapeHtml(t('outline.delPart'))}" aria-label="${escapeHtml(t('outline.delPart'))}">${icons.trash}</button>` : ''}
         </div>
         <div class="ov-group__body">
           <ol class="outline__list" data-list>${g.slides.map(renderRow).join('')}</ol>
@@ -517,8 +579,7 @@ function wireRowList(body: HTMLElement): void {
       list.insertBefore(row.nextElementSibling, row)
       renumber()
     } else if (btn.dataset.del !== undefined) {
-      row.remove()
-      renumber()
+      removeWithUndo(row, t('outline.rowDeleted'), renumber)
     }
   })
 
@@ -563,7 +624,7 @@ function wireOverview(
         if (down) down.disabled = i === rows.length - 1
       })
       const c = group.querySelector<HTMLElement>('.ov-group__count')
-      if (c) c.textContent = `${rows.length} ${t('unit.pages')}`
+      if (c) c.textContent = pages(rows.length)
     })
     const total = body.querySelector<HTMLElement>('[data-count]')
     if (total) total.textContent = String(idx)
@@ -604,8 +665,7 @@ function wireOverview(
       list.insertBefore(row.nextElementSibling, row)
       renumber()
     } else if (btn.dataset.del !== undefined) {
-      row.remove()
-      renumber()
+      removeWithUndo(row, t('outline.rowDeleted'), renumber)
     }
   })
 

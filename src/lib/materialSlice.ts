@@ -5,6 +5,17 @@
 // planning still sees the full material (it must detect an embedded outline);
 // only the per-part and per-segment prompts get sliced.
 
+import { CJK_CLASS, hasCjk } from './lang'
+
+/** `s.slice(0, n)` that never splits a surrogate pair (an emoji or a rare CJK
+ * character on the cut would become a lone surrogate — invalid JSON for the
+ * request body). Every MATERIAL_MAX_CHARS cut goes through here. */
+export function clampChars(s: string, n: number): string {
+  if (s.length <= n) return s
+  const code = s.charCodeAt(n - 1)
+  return s.slice(0, code >= 0xd800 && code <= 0xdbff ? n - 1 : n)
+}
+
 /** Materials longer than this get sliced per part/segment. */
 export const SLICE_THRESHOLD = 3000
 /** Character budget for one sliced prompt payload. */
@@ -37,14 +48,18 @@ function blocks(material: string): string[] {
   return out
 }
 
-/** Query text → lexical grams: CJK bigrams + lowercased latin words (len ≥ 2). */
+/** Query text → lexical grams: CJK bigrams + lowercased words of ANY script
+ * (Cyrillic, Arabic, Devanagari… used to yield no grams at all, so such
+ * material always degraded to its leading 3000 chars). */
 function grams(text: string): Set<string> {
   const out = new Set<string>()
-  const cjk = text.match(/[぀-ヿ㐀-鿿豈-﫿가-힯]+/g) ?? []
+  const cjk = text.match(new RegExp(CJK_CLASS + '+', 'g')) ?? []
   for (const run of cjk) {
     for (let i = 0; i < run.length - 1; i++) out.add(run.slice(i, i + 2))
   }
-  for (const w of text.toLowerCase().match(/[a-z0-9][a-z0-9-]+/g) ?? []) out.add(w)
+  for (const w of text.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}-]+/gu) ?? []) {
+    if (!hasCjk(w)) out.add(w)
+  }
   return out
 }
 
@@ -71,7 +86,7 @@ export function sliceMaterial(material: string, query: string, budget: number = 
     picked.push(b)
     used += b.text.length
   }
-  if (!picked.length) return mat.slice(0, budget)
+  if (!picked.length) return clampChars(mat, budget)
   return picked
     .sort((a, z) => a.order - z.order)
     .map((b) => b.text)

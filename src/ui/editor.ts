@@ -4,8 +4,8 @@ import { getSampleDeck } from '../sample'
 import { mountSlidePreview } from '../render/preview'
 import { regenerateSlide } from '../llm/edit'
 import { searchImageCandidates, confirmCandidate, queryForSlide, type ImageCandidate } from '../images/search'
-import { genImageConfigured } from '../images/genai'
-import { abstractBg, resolveAbstractStyle } from '../images/abstract'
+import { genImageConfigured, generateSlideImage } from '../images/genai'
+import { abstractBgForDeck, resolveAbstractStyle } from '../images/abstract'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { navigate, setLeaveGuard, setLangHandler } from '../router'
 import { applyCustomTheme } from '../render/customTheme'
@@ -13,6 +13,7 @@ import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
 import { t } from '../i18n'
+import { deckIsChinese, deckText } from '../lib/lang'
 import {
   LAYOUTS,
   THEMES,
@@ -128,7 +129,8 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
         <label class="f"><span>Logo</span>
           <span style="display:flex; gap:8px">
             <input class="form-input" data-meta="brand.logo" value="${escapeHtml(deck.branding?.logo ?? '')}" placeholder="${escapeHtml(t('ed.logoPlaceholder'))}" style="flex:1; min-width:0">
-            <label class="btn btn--ghost btn--sm" style="flex:none">${t('settings.upload')}<input type="file" accept="image/*" data-brand-logo-file hidden></label>
+            <button type="button" class="btn btn--ghost btn--sm" style="flex:none" data-brand-logo-btn>${t('settings.upload')}</button>
+            <input type="file" accept="image/*" data-brand-logo-file hidden>
           </span>
         </label>
       </div>
@@ -293,6 +295,12 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
     }
   })
 
+  // A <label> wrapping a hidden file input is mouse-only; the button is
+  // reachable by keyboard and opens the same picker.
+  root.querySelector('[data-brand-logo-btn]')?.addEventListener('click', () => {
+    root.querySelector<HTMLInputElement>('[data-brand-logo-file]')?.click()
+  })
+
   // ---- selects (theme / layout) ----
   root.addEventListener('change', (e) => {
     const target = e.target as HTMLElement
@@ -376,7 +384,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
       return
     }
     if (btn.dataset.addSlide !== undefined) {
-      deck.slides.push({ layout: 'bullets', title: t('ed.newSlide'), bullets: [t('ed.newBullet')] })
+      deck.slides.push({ layout: 'bullets', title: deckText(deckIsChinese(deck), 'newSlide'), bullets: [deckText(deckIsChinese(deck), 'newBullet')] })
       const list = root.querySelector<HTMLElement>('[data-list]')!
       const n = deck.slides.length - 1
       list.insertAdjacentHTML('beforeend', renderCard(deck.slides[n], n, deck.slides.length))
@@ -479,7 +487,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
       if (settings.images.mode === 'abstract') {
         const style = resolveAbstractStyle(settings.images.abstractStyle, deck.id || deck.title || deck.theme)
         const seed = `${queryForSlide(deck.slides[i], deck)}#${i}#${Date.now()}`
-        deck.slides[i].bg = abstractBg(seed, deck.theme, style)
+        deck.slides[i].bg = abstractBgForDeck(seed, deck, style)
         deck.slides[i].bgOff = undefined
         replaceCard(card, i)
         setStatus(t('ed.unsaved'))
@@ -527,8 +535,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
       const target = deck.slides[i]
       btn.setAttribute('disabled', '')
       toast(t('ed.genImgStart'))
-      import('../images/genai')
-        .then(({ generateSlideImage }) => generateSlideImage(target, deck, settings, signal))
+      generateSlideImage(target, deck, settings, signal)
         .then((bg) => {
           const j = indexOf(target)
           if (j < 0) {
@@ -582,13 +589,13 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
       setStatus(t('ed.unsaved'))
     } else if (btn.dataset.addItem !== undefined) {
       const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
-      ;(slide.items ??= []).push({ heading: t('ed.newCard'), points: [''] })
+      ;(slide.items ??= []).push({ heading: deckText(deckIsChinese(deck), 'newCard'), points: [''] })
       deck.slides[i] = slide
       replaceCard(card, i)
       setStatus(t('ed.unsaved'))
     } else if (btn.dataset.addStep !== undefined) {
       const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
-      ;(slide.steps ??= []).push({ label: t('ed.newStep'), text: '' })
+      ;(slide.steps ??= []).push({ label: deckText(deckIsChinese(deck), 'newStep'), text: '' })
       deck.slides[i] = slide
       replaceCard(card, i)
       setStatus(t('ed.unsaved'))
@@ -617,9 +624,9 @@ function renderCard(s: Slide, i: number, total: number): string {
         <span class="slide-card__n">${i + 1}</span>
         <select class="select slide-card__layout" data-layout>${layoutOptions(s.layout)}</select>
         <div class="slide-card__ops">
-          <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}"${i === 0 ? ' disabled' : ''}>${icons.up}</button>
-          <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}"${i === total - 1 ? ' disabled' : ''}>${icons.down}</button>
-          <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
+          <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}" aria-label="${escapeHtml(t('common.moveUp'))}"${i === 0 ? ' disabled' : ''}>${icons.up}</button>
+          <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}" aria-label="${escapeHtml(t('common.moveDown'))}"${i === total - 1 ? ' disabled' : ''}>${icons.down}</button>
+          <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}" aria-label="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
         </div>
       </div>
       <div class="slide-card__body">
@@ -718,7 +725,7 @@ function renderCompareItem(item: CompareItem): string {
         <select class="select" data-f="tone">${tones
           .map(([v, l]) => `<option value="${v}"${(item.tone ?? 'neutral') === v ? ' selected' : ''}>${l}</option>`)
           .join('')}</select>
-        <button class="icon-btn" data-del-sub title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
+        <button class="icon-btn" data-del-sub title="${escapeHtml(t('lib.action.delete'))}" aria-label="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
       </div>
       <textarea class="form-input" data-f="points" rows="3" placeholder="${escapeHtml(t('ed.f.pointsPerLine'))}">${escapeHtml((item.points ?? []).join('\n'))}</textarea>
     </div>`
@@ -729,7 +736,7 @@ function renderStep(step: { label: string; text?: string }): string {
     <div class="f-sub" data-step>
       <div class="f-sub__head">
         <input class="form-input" data-f="label" value="${escapeHtml(step.label ?? '')}" placeholder="${escapeHtml(t('ed.f.stepLabel'))}">
-        <button class="icon-btn" data-del-sub title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
+        <button class="icon-btn" data-del-sub title="${escapeHtml(t('lib.action.delete'))}" aria-label="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
       </div>
       <input class="form-input" data-f="text" value="${escapeHtml(step.text ?? '')}" placeholder="${escapeHtml(t('ed.f.stepText'))}">
     </div>`

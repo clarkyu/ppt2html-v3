@@ -2,7 +2,8 @@
 // Used by both the Settings page and the pre-generation model picker so the
 // user can *choose* a model instead of typing one (custom entry still allowed).
 
-import type { Provider } from './settings'
+import { hostOf, type Provider } from './settings'
+import { getLang } from '../i18n'
 
 export interface ModelPreset {
   label: string
@@ -144,38 +145,48 @@ export const MODEL_PRESETS: ModelPreset[] = [
  * in the picker so newcomers can tell "strongest" from "cheapest / fastest".
  * Models not listed here simply show their id with no tag.
  */
-export const MODEL_NOTES: Record<string, string> = {
+export const MODEL_NOTES: Record<string, { zh: string; en: string }> = {
   // Claude
-  'claude-opus-4-8': '推荐 · 最强',
-  'claude-sonnet-5': '性价比',
-  'claude-haiku-4-5': '最快最省',
-  'claude-fable-5': '最强 · 较贵',
+  'claude-opus-4-8': { zh: '推荐 · 最强', en: 'recommended · strongest' },
+  'claude-sonnet-5': { zh: '性价比', en: 'best value' },
+  'claude-haiku-4-5': { zh: '最快最省', en: 'fastest · cheapest' },
+  'claude-fable-5': { zh: '最强 · 较贵', en: 'strongest · pricier' },
   // OpenAI
-  'gpt-5.5': '推荐 · 最强',
-  'gpt-5.4': '较强',
-  'gpt-5.4-mini': '性价比',
-  'gpt-5.4-nano': '最快最省',
-  'gpt-4o-mini': '便宜',
+  'gpt-5.5': { zh: '推荐 · 最强', en: 'recommended · strongest' },
+  'gpt-5.4': { zh: '较强', en: 'strong' },
+  'gpt-5.4-mini': { zh: '性价比', en: 'best value' },
+  'gpt-5.4-nano': { zh: '最快最省', en: 'fastest · cheapest' },
+  'gpt-4o-mini': { zh: '便宜', en: 'cheap' },
   // Gemini
-  'gemini-3.5-flash': '推荐 · 性价比',
-  'gemini-3.1-pro-preview': '最强 · 预览',
-  'gemini-2.5-flash': '快',
+  'gemini-3.5-flash': { zh: '推荐 · 性价比', en: 'recommended · best value' },
+  'gemini-3.1-pro-preview': { zh: '最强 · 预览', en: 'strongest · preview' },
+  'gemini-2.5-flash': { zh: '快', en: 'fast' },
   // DeepSeek
-  'deepseek-v4-pro': '推荐 · 系统已提供',
-  'deepseek-v4-flash': '更快',
+  'deepseek-v4-pro': { zh: '推荐 · 系统已提供', en: 'recommended · system key available' },
+  'deepseek-v4-flash': { zh: '更快', en: 'faster' },
 }
 
 /** The friendly tag for a model id, if any. */
 export function modelNote(id: string): string {
-  return MODEL_NOTES[id.trim()] ?? ''
+  return MODEL_NOTES[id.trim()]?.[getLang()] ?? ''
 }
 
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host.toLowerCase()
-  } catch {
-    return url.trim().toLowerCase()
-  }
+/**
+ * Known output-token ceilings by host (and optionally model). DeepSeek V4
+ * (0813) allows 384K on the official API; Groq's small models reject anything
+ * above 8192 with HTTP 400. Endpoints not listed get no clamp — the client
+ * retries once without the field if the provider rejects it.
+ */
+const OUTPUT_CAPS: Array<{ host: RegExp; model?: RegExp; cap: number }> = [
+  { host: /deepseek/, cap: 384_000 },
+  { host: /(^|\.)api\.groq\.com$/, model: /8b-instant|gemma/i, cap: 8192 },
+]
+
+/** The output-token ceiling to respect for this endpoint + model, if known. */
+export function outputCap(baseUrl: string, model: string): number | undefined {
+  const host = hostOf(baseUrl)
+  if (!host) return undefined
+  return OUTPUT_CAPS.find((c) => c.host.test(host) && (!c.model || c.model.test(model.trim())))?.cap
 }
 
 /** Best-matching preset for a provider + base URL (matched by host). */

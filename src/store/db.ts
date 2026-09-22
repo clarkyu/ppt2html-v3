@@ -67,14 +67,15 @@ export async function importDecks(decks: Deck[]): Promise<number> {
 }
 
 /** Save a copy of a deck under a new id/title. Returns the new deck. */
-export async function duplicateDeck(id: string): Promise<Deck | undefined> {
+/** `suffix` is the UI-language copy marker (the store itself stays UI-free). */
+export async function duplicateDeck(id: string, suffix = '（副本）'): Promise<Deck | undefined> {
   const src = await getDeck(id)
   if (!src) return undefined
   const now = Date.now()
   const copy: Deck = {
     ...structuredClone(src),
     id: crypto.randomUUID(),
-    title: `${src.title}（副本）`,
+    title: `${src.title}${suffix}`,
     createdAt: now,
     updatedAt: now,
   }

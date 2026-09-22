@@ -7,13 +7,15 @@
 //   2. fitSlide    — after headings are fitted, if the whole content block still
 //      overflows the canvas, uniformly scale it down until it fits.
 
-interface FitTarget {
+export interface FitTarget {
   sel: string
   maxLines: number
   minScale: number
 }
 
-const TARGETS: FitTarget[] = [
+/** Exported so the standalone export's inline player runs the SAME list
+ * (its hand-copied fork had drifted — stats targets were missing). */
+export const TARGETS: FitTarget[] = [
   { sel: '.s-cover__title', maxLines: 3, minScale: 0.45 },
   { sel: '.s-cover__subtitle', maxLines: 2, minScale: 0.6 },
   { sel: '.s-section__title', maxLines: 3, minScale: 0.45 },
@@ -91,10 +93,19 @@ export function fitSlide(root: HTMLElement): void {
   // `.s` vertically centers its content, which makes scrollHeight underreport
   // overflow (content spilling above the top edge isn't counted). Flow from the
   // top while measuring so the full content extent is captured, then restore.
+  // Absolutely-positioned decorations (the cover glow bleeds past the canvas
+  // by design) must not count as content — they used to shrink every cover
+  // to ~0.91 for nothing.
   const prevJustify = s.style.justifyContent
   s.style.justifyContent = 'flex-start'
+  const decos = [...s.querySelectorAll<HTMLElement>('[aria-hidden="true"]')].filter(
+    (d) => getComputedStyle(d).position === 'absolute',
+  )
+  const prevDisplay = decos.map((d) => d.style.display)
+  decos.forEach((d) => (d.style.display = 'none'))
   const contentH = s.scrollHeight
   const contentW = s.scrollWidth
+  decos.forEach((d, i) => (d.style.display = prevDisplay[i]))
   s.style.justifyContent = prevJustify
 
   const scale = Math.min(availH / contentH, availW / contentW, 1)

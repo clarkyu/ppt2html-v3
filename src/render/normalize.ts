@@ -13,10 +13,12 @@ import {
   THEMES,
 } from '../types'
 import { genId } from '../lib/dom'
-import { deckIsCjk } from '../lib/lang'
+import { deckIsChinese, deckText, hasHan } from '../lib/lang'
+import { mdPlain } from '../lib/markdown'
 import { semIconKey } from './semanticIcons'
 import { sanitizeCustomTheme } from './customTheme'
 import { MATERIAL_MAX_CHARS } from '../llm/prompt'
+import { clampChars } from '../lib/materialSlice'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
 const THEME_SET = new Set<string>(THEMES)
@@ -144,11 +146,14 @@ function asSlideBg(v: unknown): SlideBg | undefined {
   if (!url) return undefined
   const source = asString(o.source) ?? 'unknown'
   const link = asString(o.link)
+  const licenseUrl = asString(o.licenseUrl)
   return {
     url,
     source: BG_SOURCES.has(source) ? source : 'unknown',
     credit: asString(o.credit),
     link: link && /^https?:\/\//i.test(link) ? link : undefined,
+    license: asString(o.license)?.slice(0, 40),
+    licenseUrl: licenseUrl && /^https?:\/\//i.test(licenseUrl) ? licenseUrl : undefined,
   }
 }
 
@@ -179,7 +184,10 @@ function coerceLayout(v: unknown, slide: Record<string, unknown>): SlideLayout {
 
 export function normalizeSlide(raw: unknown): Slide | null {
   if (!raw || typeof raw !== 'object') return null
-  const o = raw as Record<string, unknown>
+  // Icons arrive inline ({text, icon}) from the model but as a parallel
+  // `bulletIcons` array from templates, the editor and AI rewrites — fold the
+  // latter in here so no path drops them (inline form wins where both exist).
+  const o = inlineStoredIcons(raw) as Record<string, unknown>
   const layout = coerceLayout(o.layout, o)
 
   const b = asBullets(o.bullets)
@@ -250,8 +258,12 @@ export function normalizeDeck(
     .filter((s): s is Slide => s !== null)
 
   const firstCover = slides.find((s) => s.layout === 'cover')
+  // The deck title is shown as TEXT (library, app bar, exports): a model that
+  // bolded the cover title must not leak `**` into it.
   const title =
-    asString(spec.title) || firstCover?.title || meta.prompt.slice(0, 40) || '未命名课件'
+    mdPlain(asString(spec.title) || firstCover?.title) ||
+    meta.prompt.slice(0, 40) ||
+    deckText(hasHan(meta.prompt) || slides.some((s) => hasHan(s.title)), 'untitledDeck')
 
   // Guarantee a title slide up front and a closing slide (in the deck's own
   // language) — for fresh model output only (`fill` defaults on). A stored
@@ -260,9 +272,15 @@ export function normalizeDeck(
   if (meta.fill !== false) {
     if (!firstCover) {
       slides.unshift({ layout: 'cover', title, subtitle: asString(spec.subtitle) })
+    } else if (slides[0] !== firstCover) {
+      // A cover that the model put second (after a stray section, say) is
+      // still THE cover — bring it to the front rather than accept a deck
+      // that opens on page 2.
+      slides.splice(slides.indexOf(firstCover), 1)
+      slides.unshift(firstCover)
     }
     if (slides.length && slides[slides.length - 1].layout !== 'end') {
-      slides.push({ layout: 'end', title: deckIsCjk({ title, slides }) ? '谢谢观看' : 'Thank You' })
+      slides.push({ layout: 'end', title: deckText(deckIsChinese({ title, slides }), 'thanks') })
     }
   }
 
@@ -315,7 +333,7 @@ export function sanitizeDeck(
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
   if (!Array.isArray(o.slides)) return null
-  const slides = o.slides.slice(0, DECK_MAX_SLIDES).map(inlineStoredIcons)
+  const slides = o.slides.slice(0, DECK_MAX_SLIDES)
   if (!slides.some((s) => normalizeSlide(s))) return null
   const id = opts.id ?? (typeof o.id === 'string' && o.id.trim() ? o.id.trim() : undefined)
   const createdAt = typeof o.createdAt === 'number' && Number.isFinite(o.createdAt) ? o.createdAt : opts.now
@@ -329,6 +347,6 @@ export function sanitizeDeck(
   // deck.material is a local-only contract (share must never carry it); the
   // restore path keeps it so speaker scripts can still quote real facts.
   const material = opts.allowMaterial && typeof o.material === 'string' ? o.material.trim() : ''
-  if (material) deck.material = material.slice(0, MATERIAL_MAX_CHARS)
+  if (material) deck.material = clampChars(material, MATERIAL_MAX_CHARS)
   return deck
 }

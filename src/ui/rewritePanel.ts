@@ -8,6 +8,7 @@ import type { Deck, Slide } from '../types'
 import { regenerateSlide } from '../llm/edit'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { t } from '../i18n'
+import { dialogize } from '../lib/overlay'
 import { toast } from '../lib/toast'
 import { navigate } from '../router'
 import { escapeHtml } from '../lib/markdown'
@@ -35,7 +36,7 @@ export function openRewritePanel(host: HTMLElement, deck: Deck, index: number, h
   wrap.className = 'sharepanel rewritepanel'
   wrap.innerHTML = `
     <div class="sharepanel__card">
-      <h3>${t('rw.title').replace('{n}', String(index + 1))}</h3>
+      <h3>${t('rw.title', { n: String(index + 1) })}</h3>
       <p class="sharepanel__hint">${t('rw.hint')}</p>
       <textarea class="form-input rewritepanel__input" data-rw-input rows="3"
         placeholder="${escapeHtml(t('rw.placeholder'))}"></textarea>
@@ -47,9 +48,11 @@ export function openRewritePanel(host: HTMLElement, deck: Deck, index: number, h
       </div>
     </div>`
   host.appendChild(wrap)
+  const release = dialogize(wrap, () => close())
   const close = (): void => {
     controller?.abort()
     wrap.remove()
+    release()
   }
   wrap.addEventListener('click', (e) => {
     if (e.target === wrap || (e.target as HTMLElement).closest('[data-rw-close]')) close()

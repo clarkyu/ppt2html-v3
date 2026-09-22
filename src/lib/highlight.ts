@@ -21,27 +21,62 @@ const KEYWORDS = new Set(
   ).split(/\s+/),
 )
 
-export function highlightCode(src: string): string {
+/** Languages whose line comments start with `#`. */
+const HASH_LANGS = new Set([
+  'python', 'py', 'ruby', 'rb', 'sh', 'bash', 'zsh', 'shell', 'yaml', 'yml', 'toml', 'r', 'perl', 'pl',
+  'powershell', 'ps1', 'make', 'makefile', 'dockerfile', 'ini', 'conf', 'nginx', 'elixir', 'ex', 'julia', 'jl',
+])
+/** Languages whose line comments start with `--`. */
+const DASH_LANGS = new Set(['sql', 'mysql', 'postgres', 'postgresql', 'pgsql', 'sqlite', 'lua', 'haskell', 'hs', 'ada', 'vhdl', 'elm'])
+
+interface CommentRules {
+  slash: boolean // `//` and `/* … */`
+  hash: boolean // `#`
+  dash: boolean // `--`
+}
+
+/**
+ * Which comment markers apply. With no language given, keep the old lenient
+ * guess (everything) but only at a line start / after whitespace — that is
+ * what stopped `i--`, `#include`, `#fff` and `this.#field` from being eaten.
+ */
+function rulesFor(language?: string): CommentRules {
+  const l = (language ?? '').trim().toLowerCase()
+  if (!l) return { slash: true, hash: true, dash: true }
+  if (HASH_LANGS.has(l)) return { slash: false, hash: true, dash: false }
+  if (DASH_LANGS.has(l)) return { slash: false, hash: false, dash: true }
+  return { slash: true, hash: false, dash: false }
+}
+
+export function highlightCode(src: string, language?: string): string {
+  const rules = rulesFor(language)
   let out = ''
   let i = 0
   const push = (cls: string | null, text: string): void => {
     const e = escapeHtml(text)
     out += cls ? `<span class="${cls}">${e}</span>` : e
   }
+  /** `#` / `--` count as comments only where a comment can start: at the
+   * beginning of a line or after whitespace. */
+  const atTokenStart = (): boolean => i === 0 || /\s/.test(src[i - 1])
 
   while (i < src.length) {
     const c = src[i]
     const next = src[i + 1]
 
-    // Comments: // … , /* … */ , # … (python/shell), -- … (sql)
-    if ((c === '/' && next === '/') || c === '#' || (c === '-' && next === '-')) {
+    // Line comments: // (C-family), # (python/shell/…), -- (sql/lua/…)
+    const lineComment =
+      (rules.slash && c === '/' && next === '/') ||
+      (rules.hash && c === '#' && atTokenStart()) ||
+      (rules.dash && c === '-' && next === '-' && atTokenStart())
+    if (lineComment) {
       let j = src.indexOf('\n', i)
       if (j < 0) j = src.length
       push('tok-com', src.slice(i, j))
       i = j
       continue
     }
-    if (c === '/' && next === '*') {
+    if (rules.slash && c === '/' && next === '*') {
       let j = src.indexOf('*/', i + 2)
       j = j < 0 ? src.length : j + 2
       push('tok-com', src.slice(i, j))

@@ -53,6 +53,11 @@ interface Entry {
 const DICT: Record<string, Entry> = {
   // App shell / nav
   'app.name': { zh: '课件生成器', en: 'Deck Maker' },
+  'app.title': { zh: '课件生成器 · 一句话变精美 PPT', en: 'Deck Maker · One line to a polished deck' },
+  'app.description': { zh: '输入一句话，AI 生成精美 HTML 课件，浏览器里像 PPT 一样播放。', en: 'Type one line and AI builds a polished HTML deck that plays like PowerPoint in the browser.' },
+  'common.detail': { zh: '（{d}）', en: ' ({d})' },
+  'common.quoted': { zh: '「{s}」', en: '“{s}”' },
+  'common.colon': { zh: '：', en: ': ' },
   'nav.home': { zh: '首页', en: 'Home' },
   'nav.library': { zh: '我的课件', en: 'My Decks' },
   'nav.settings': { zh: '设置', en: 'Settings' },
@@ -61,19 +66,20 @@ const DICT: Record<string, Entry> = {
 
   // Common
   'common.cancel': { zh: '取消', en: 'Cancel' },
-  'common.confirm': { zh: '确定', en: 'OK' },
   'common.back': { zh: '返回', en: 'Back' },
   'common.save': { zh: '保存', en: 'Save' },
   'common.loading': { zh: '加载中…', en: 'Loading…' },
   'common.gotIt': { zh: '知道了', en: 'Got it' },
+  'common.undo': { zh: '撤销', en: 'Undo' },
+  'outline.rowDeleted': { zh: '已删除这一行', en: 'Row removed' },
   'common.close': { zh: '关闭', en: 'Close' },
   'common.retry': { zh: '重试', en: 'Retry' },
   'common.next': { zh: '下一步 →', en: 'Next →' },
   'common.prevStep': { zh: '← 上一步', en: '← Back' },
-  'common.skip': { zh: '跳过', en: 'Skip' },
   'common.moveUp': { zh: '上移', en: 'Move up' },
   'common.moveDown': { zh: '下移', en: 'Move down' },
   'unit.pages': { zh: '页', en: 'slides' },
+  'unit.page': { zh: '页', en: 'slide' },
   'unit.min': { zh: '分钟', en: 'min' },
 
   // Structure step
@@ -137,6 +143,30 @@ const DICT: Record<string, Entry> = {
     en: 'The model service errored — try again shortly.',
   },
   'err.noJson': { zh: '模型没有返回有效的 JSON', en: 'The model did not return valid JSON' },
+  'err.truncated': {
+    zh: '模型输出被截断（达到输出上限）——请减少页数 / 时长，或换用输出上限更高的模型。',
+    en: 'The model’s output was cut off (output limit reached) — ask for fewer pages, or switch to a model with a higher output limit.',
+  },
+  'err.contentFilter': {
+    zh: '模型拒绝了这次请求（内容策略）——换个说法试试。',
+    en: 'The model declined this request (content policy) — try rephrasing.',
+  },
+  'err.badResponse': {
+    zh: '接口返回的不是模型回复（像是网页或错误页）——请检查设置里的 Base URL。',
+    en: 'The endpoint returned something other than a model reply (a web page?) — check the base URL in Settings.',
+  },
+  'err.http402': {
+    zh: '账户余额不足或需要付费——请检查该服务的账户额度。',
+    en: 'Payment required or balance exhausted — check your account with that provider.',
+  },
+  'err.systemKeyUnavailable': {
+    zh: '内置的 DeepSeek 额度暂时不可用（限流或额度用尽）——稍后再试，或到「设置」填写自己的 API Key。',
+    en: 'The built-in DeepSeek quota is unavailable right now (rate limit or exhausted) — retry later, or add your own API key in Settings.',
+  },
+  'err.badBaseUrl': {
+    zh: '设置里的 Base URL 无法使用——需要形如 https://api.example.com/v1 的完整地址。',
+    en: 'The base URL in Settings can’t be used — enter a full address like https://api.example.com/v1.',
+  },
   'err.offline': { zh: '当前离线，请联网后重试。', en: 'You are offline — reconnect and retry.' },
   'err.viewCrashed': { zh: '这个页面打不开', en: 'This screen failed to open' },
   'db.saveFailed': {
@@ -155,6 +185,15 @@ const DICT: Record<string, Entry> = {
   'gen.title': { zh: '正在生成课件…', en: 'Generating your deck…' },
   'gen.subtitle': { zh: '「{topic}」 · 共 {n} 页', en: '“{topic}” · {n} slides' },
   'gen.connecting': { zh: '正在连接模型…', en: 'Connecting to the model…' },
+  'gen.thinking': { zh: '模型思考中…（已推理 {n} 字）', en: 'Model is thinking… ({n} chars of reasoning so far)' },
+  'settings.baseUrlInvalid': {
+    zh: '请输入完整的接口地址，例如 https://api.example.com/v1',
+    en: 'Enter a full endpoint URL, e.g. https://api.example.com/v1',
+  },
+  'settings.baseUrlInsecure': {
+    zh: '公网地址必须用 https://（API Key 会随请求发送）；本机 / 局域网地址可用 http://',
+    en: 'Public endpoints must use https:// (the API key travels with each request); http:// is fine for localhost / LAN.',
+  },
   'gen.failed': { zh: '生成失败', en: 'Generation failed' },
   'gen.pageProgress': { zh: '已生成 {x} / {n} 页', en: 'Generated {x} / {n} slides' },
   'gen.pageCount': { zh: '已生成 {x} 页…', en: 'Generated {x} slides…' },
@@ -176,6 +215,8 @@ const DICT: Record<string, Entry> = {
   'home.custom': { zh: '逐步定制', en: 'Step-by-step' },
   'home.customHint': { zh: '引导问题 → 结构确认 → 逐环节大纲 → 成片', en: 'Guided questions → structure → per-part outline → deck' },
   'home.draftTitle': { zh: '有未完成的课件草稿', en: 'Unfinished deck draft' },
+  'home.draftBroken': { zh: '这份草稿已损坏，无法继续，已清除。', en: 'This draft is damaged and cannot be resumed — it has been cleared.' },
+  'gen.cancelConfirm': { zh: '正在生成中，确定要取消吗？', en: 'Generation is in progress — cancel it?' },
   'home.draftResume': { zh: '继续制作', en: 'Resume' },
   'home.draftDiscard': { zh: '丢弃', en: 'Discard' },
   'home.titlePre': { zh: '一句话，生成', en: 'One line becomes a ' },
@@ -192,7 +233,6 @@ const DICT: Record<string, Entry> = {
   'home.field.duration': { zh: '分享时长', en: 'Length' },
   'home.field.tone': { zh: '语气', en: 'Tone' },
   'home.sample': { zh: '看示例', en: 'View sample' },
-  'home.generate': { zh: '生成课件', en: 'Generate' },
   'home.examplesLabel': { zh: '试试这些主题：', en: 'Try a topic:' },
   'home.shuffle': { zh: '换一批', en: 'Shuffle' },
   'home.voice': { zh: '语音输入主题（再点一次结束）', en: 'Speak your topic (tap again to stop)' },
@@ -209,7 +249,17 @@ const DICT: Record<string, Entry> = {
   'home.materialUpload': { zh: '从文件导入', en: 'Import a file' },
   'home.materialParsing': { zh: '解析中…', en: 'Parsing…' },
   'home.materialParsed': { zh: '已提取 {n} 字。', en: 'Extracted {n} characters.' },
-  'home.materialTruncated': { zh: '内容较长，已截取前 8000 字。', en: 'Long content — kept the first 8000 characters.' },
+  'home.materialTruncated': { zh: '内容较长，已截取前 {n} 字。', en: 'Long content — kept the first {n} characters.' },
+  'home.materialTooBig': { zh: '文件太大（超过 8 MB）——请只导入需要的部分。', en: 'File too large (over 8 MB) — import just the part you need.' },
+  'home.materialDecodedGbk': {
+    zh: '文件不是 UTF-8 编码，已按 GBK 解码——请检查文字是否正常。',
+    en: 'The file was not UTF-8; decoded as GBK — please check the text reads correctly.',
+  },
+  'imp.materialTrimmed': {
+    zh: '课件较长，重构素材保留了全部标题与要点，讲者备注有所精简。',
+    en: 'Long deck: the rebuild material keeps every title and bullet; speaker notes were trimmed.',
+  },
+  'struct.pagesClamped': { zh: '单个部分最多 {max} 页。', en: 'A part can hold at most {max} pages.' },
   'home.materialUnsupported': { zh: '暂只支持 txt / md / pdf / docx 文件。', en: 'Only txt / md / pdf / docx files are supported.' },
   'home.materialEmptyFile': { zh: '这个文件里没有提取到文字。', en: 'No text could be extracted from this file.' },
   'home.materialParseFailed': { zh: '文件解析失败——可以打开文件复制文字后粘贴过来。', en: 'Parsing failed — open the file and paste the text instead.' },
@@ -283,7 +333,10 @@ const DICT: Record<string, Entry> = {
   'lib.restoreHint': { zh: '从备份文件恢复课件', en: 'Restore decks from a backup file' },
   'lib.backupEmpty': { zh: '还没有课件可备份', en: 'No decks to back up yet' },
   'lib.backupDone': { zh: '已备份 {n} 份课件', en: 'Backed up {n} decks' },
+  'lib.backupDone.one': { zh: '已备份 1 份课件', en: 'Backed up 1 deck' },
   'lib.restoreDone': { zh: '已恢复 {n} 份课件', en: 'Restored {n} decks' },
+  'lib.restoreDone.one': { zh: '已恢复 1 份课件', en: 'Restored 1 deck' },
+  'lib.copySuffix': { zh: '（副本）', en: ' (copy)' },
   'lib.restoreFailed': { zh: '恢复失败:不是有效的备份文件', en: 'Restore failed: not a valid backup file' },
   'lib.restoreOverwrite': {
     zh: '备份里有 {n} 份课件比你库里的版本更旧，恢复会覆盖你之后的修改。要覆盖吗？（取消 = 跳过这些，只恢复其余的）',
@@ -356,6 +409,8 @@ const DICT: Record<string, Entry> = {
   'imp.start': { zh: '正在解析 PPTX…', en: 'Parsing the PPTX…' },
   'imp.done': { zh: '已导入 {n} 页,版式为自动识别——可在编辑器里调整。', en: 'Imported {n} pages (layouts auto-detected) — adjust in the editor.' },
   'imp.doneTitle': { zh: '已导入 {n} 页', en: '{n} slides imported' },
+  'imp.doneTitle.one': { zh: '已导入 1 页', en: '1 slide imported' },
+  'imp.skippedVisuals': { zh: '{n} 处图片 / 图表 / 图形只有画面没有文字,未导入。', en: '{n} picture(s)/chart(s) had no text and were not imported.' },
   'imp.choiceHint': {
     zh: '直接编辑保持原样；「AI 重构」会把这份课件的内容与结构作为素材，重新生成一份更精炼、版式更合理的新课件（原导入件保留在课件库，不受影响）。',
     en: 'Edit keeps it as-is. “AI rebuild” feeds its content & structure to the generator as material and produces a NEW, tighter deck — the imported one stays in your library untouched.',
@@ -365,7 +420,6 @@ const DICT: Record<string, Entry> = {
   'imp.failed': { zh: 'PPTX 导入失败,请确认文件完好。', en: 'PPTX import failed — please check the file.' },
   'imp.notPptx': { zh: '这不是有效的 .pptx 文件。', en: 'Not a valid .pptx file.' },
   'imp.noSlides': { zh: '文件里没有可导入的页面。', en: 'No importable slides in this file.' },
-  'imp.untitledPage': { zh: '未命名页', en: 'Untitled page' },
   'home.templates': { zh: '从模板开始', en: 'Start from a template' },
   'home.templatesHint': {
     zh: '培训 / 汇报 / 发布 / 课堂等场景骨架，选一个直接改',
@@ -377,6 +431,8 @@ const DICT: Record<string, Entry> = {
     en: 'Each template is a polished scenario structure — page flow, writing prompts and speaking notes included. Pick one and replace the placeholders with your content.',
   },
   'tpl.use': { zh: '用这个模板', en: 'Use template' },
+  'tpl.zhContent': { zh: '', en: 'Chinese-language template: the writing prompts inside are in Chinese.' },
+  'home.sampleZh': { zh: '', en: 'The sample deck is in Chinese' },
   'tpl.created': { zh: '已从「{name}」创建课件，开始编辑吧。', en: 'Deck created from “{name}” — start editing.' },
   'viewer.timerTitle': { zh: '已用时间（点击归零）', en: 'Elapsed time (click to reset)' },
   'viewer.notes': { zh: '演讲者备注', en: 'Speaker notes' },
@@ -423,6 +479,7 @@ const DICT: Record<string, Entry> = {
   },
   'style.applied': { zh: '已换装为「{name}」。', en: 'Restyled to “{name}”.' },
   'style.mine': { zh: '我的风格', en: 'My styles' },
+  'style.defaultName': { zh: '我的风格', en: 'My style' },
   'style.new': { zh: '新建风格', en: 'New style' },
   'style.newTitle': { zh: '自定义一套风格', en: 'Create a custom style' },
   'style.name': { zh: '名称', en: 'Name' },
@@ -433,6 +490,7 @@ const DICT: Record<string, Entry> = {
   'style.preview': { zh: '预览', en: 'Preview' },
   'style.saveApply': { zh: '保存并应用', en: 'Save & apply' },
   'style.delete': { zh: '删除这套风格', en: 'Delete this style' },
+  'style.deleteConfirm': { zh: '删除风格「{name}」?此操作不可撤销。', en: 'Delete the style "{name}"? This cannot be undone.' },
   'share.button': { zh: '分享（链接内含课件，无需服务器）', en: 'Share (deck travels inside the link)' },
   'share.title': { zh: '分享这份课件', en: 'Share this deck' },
   'share.hint': {
@@ -442,6 +500,10 @@ const DICT: Record<string, Entry> = {
   'share.building': { zh: '正在生成链接…', en: 'Building the link…' },
   'share.copy': { zh: '复制', en: 'Copy' },
   'share.copied': { zh: '链接已复制。', en: 'Link copied.' },
+  'share.logoOmitted': {
+    zh: '上传的 Logo 不随链接发送（对方看到的是无 Logo 版本）。',
+    en: 'Your uploaded logo is not included in the link (recipients see the deck without it).',
+  },
   'share.tooBigForQr': {
     zh: '内容较多，二维码装不下——请直接复制链接分享。',
     en: 'Too much content for a QR code — copy the link instead.',
@@ -480,6 +542,8 @@ const DICT: Record<string, Entry> = {
   'refine.go': { zh: '开始精修 {n} 页', en: 'Refine {n} page(s)' },
   'refine.busy': { zh: '正在精修第 {i}/{n} 页…（已改完的页即时生效）', en: 'Refining page {i}/{n}… (finished pages apply live)' },
   'refine.done': { zh: '完成：改写 {x} 页，跳过 {y} 页（失败的页保持原样）。', en: 'Done: {x} rewritten, {y} skipped (failures keep the original).' },
+  'refine.pageN': { zh: '第 {n} 页', en: 'Page {n}' },
+  'refine.aborted': { zh: '已中止：{k} 页已改写（可全部撤销），其余未动。', en: 'Stopped: {k} page(s) rewritten (undo available); the rest were left as is.' },
   'refine.undoAll': { zh: '全部撤销', en: 'Undo all' },
   'ge.button': { zh: '整册 AI 修改（一句话指令，先出计划再执行）', en: 'Whole-deck AI edit (plan first, then apply)' },
   'ge.title': { zh: '整册 AI 修改', en: 'Whole-deck AI edit' },
@@ -500,11 +564,13 @@ const DICT: Record<string, Entry> = {
   'ge.actDrop': { zh: '删除这一页', en: 'Drop this page' },
   'ge.actMove': { zh: '移到第 {to} 页', en: 'Move to position {to}' },
   'ge.addHead': { zh: '{a}之后 · 新增一页', en: 'New page after {a}' },
+  'ge.pageRef': { zh: 'P{n}《{t}》', en: 'P{n} “{t}”' },
   'ge.actRelayout': { zh: '换版式为「{layout}」', en: 'Switch layout to “{layout}”' },
   'ge.ignored': {
     zh: '（另有 {n} 项操作不被允许，已忽略：封面/结束页受保护）',
     en: ' ({n} disallowed op(s) ignored — cover/end pages are protected)',
   },
+  'ge.allInvalid': { zh: '模型返回的计划格式无法识别——请重新计划。', en: 'The plan came back malformed — please re-plan.' },
   'ge.allIgnored': {
     zh: '计划里的操作都不被允许（封面/结束页不可删除/移动/换版式）——换个说法试试。',
     en: 'Every planned op was disallowed (cover/end pages can’t be dropped, moved or re-laid-out) — try rephrasing.',
@@ -534,6 +600,14 @@ const DICT: Record<string, Entry> = {
   },
   'viewer.narrateOff': { zh: '语音讲解已停止。', en: 'Narration stopped.' },
   'viewer.narrateEnd': { zh: '讲解完毕——全篇已放映结束。', en: 'Narration finished — the deck played through.' },
+  'viewer.photosUnavailable': {
+    zh: '有 {n} 页配图暂时取不到（离线或图库限流）——下次打开会再试。',
+    en: '{n} page background(s) could not be fetched right now (offline or rate-limited) — they will be retried next time.',
+  },
+  'style.lowContrast': {
+    zh: '强调色与底色对比度只有 {r}:1——细线、色条会看不清，建议换更亮 / 更暗的强调色。',
+    en: 'Accent vs. background contrast is only {r}:1 — rules and bars will be faint; try a lighter / darker accent.',
+  },
   'viewer.narrateNoTts': {
     zh: '当前浏览器不支持语音合成，无法语音讲解。',
     en: 'This browser has no speech synthesis — narration is unavailable.',
@@ -553,6 +627,10 @@ const DICT: Record<string, Entry> = {
   'viewer.genNotesDone': {
     zh: '演讲稿已写好并保存——备注面板、演讲者视图和 PPTX 导出里都能看到。',
     en: 'Speaker script ready and saved — see it in the notes panel, presenter view and PPTX export.',
+  },
+  'viewer.genNotesPartial': {
+    zh: '演讲稿已保存，但有 {n} 页模型没有返回——再点一次可补写这些页。',
+    en: 'Script saved, but {n} page(s) came back unscripted — run again to fill them in.',
   },
   'viewer.genNotesFailed': {
     zh: '演讲稿生成失败，已写好的页面已保存，请重试。',
@@ -580,8 +658,6 @@ const DICT: Record<string, Entry> = {
   'presenter.nextBtn': { zh: '下一页 ›', en: 'Next ›' },
 
   // Deck default text
-  'deck.thanks': { zh: '谢谢观看', en: 'Thank you' },
-  'struct.newPart': { zh: '新部分', en: 'New part' },
 
   // Layout names
   'layout.cover': { zh: '封面', en: 'Cover' },
@@ -752,6 +828,10 @@ const DICT: Record<string, Entry> = {
   'settings.switchedTo': { zh: '已切到 {label}，填好 API Key 后记得保存', en: 'Switched to {label} — add the API key and save' },
   'settings.logoTooBig': { zh: 'Logo 图片太大，请用小于 ~900KB 的图片', en: 'Logo image is too large — use one under ~900KB' },
   'settings.saved': { zh: '设置已保存', en: 'Settings saved' },
+  'settings.saveFailed': {
+    zh: '设置没能保存：浏览器存储不可用（隐私模式或空间已满）——本次可继续使用，但下次打开需要重新填写。',
+    en: 'Settings could not be saved — browser storage is unavailable (private mode or full). They work for this visit only.',
+  },
   'settings.resetDone': { zh: '已恢复默认（未保存）', en: 'Reset to defaults (not yet saved)' },
 
   // Editor
@@ -768,10 +848,6 @@ const DICT: Record<string, Entry> = {
   'ed.play': { zh: '播放', en: 'Play' },
   'ed.unsaved': { zh: '未保存', en: 'Unsaved' },
   'ed.saved': { zh: '已保存', en: 'Saved' },
-  'ed.newSlide': { zh: '新的一页', en: 'New slide' },
-  'ed.newBullet': { zh: '要点一', en: 'Point one' },
-  'ed.newCard': { zh: '新方案', en: 'New option' },
-  'ed.newStep': { zh: '新步骤', en: 'New step' },
   'ed.writeInstruction': { zh: '先写下想怎么改这一页', en: 'Describe how to change this slide first' },
   'ed.rewriting': { zh: 'AI 重写中…', en: 'Rewriting…' },
   'ed.rewritten': { zh: '已重写这一页', en: 'Slide rewritten' },
@@ -851,14 +927,36 @@ const DICT: Record<string, Entry> = {
   'theme.rose': { zh: '玫瑰', en: 'Rose' },
 }
 
-export function t(key: string): string {
-  const e = DICT[key]
-  if (!e) return key
-  return e[lang]
+/**
+ * Fill `{name}` placeholders with a function replacer: every occurrence, and
+ * the value is inserted verbatim — `String.replace(string, string)` used to
+ * interpret `$&` / `$$` / `$'` inside user or model text ("Save $$ on taxes"
+ * came out as "Save $ on taxes") and a value containing `{n}` got a later
+ * placeholder injected into it. Unknown placeholders stay as they are.
+ */
+export function interpolate(s: string, params: Record<string, unknown>): string {
+  return s.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m))
 }
 
-/** Register more entries (per-screen dictionaries live next to their screens is
- * also fine, but we keep them centralized here). */
-export function addEntries(entries: Record<string, Entry>): void {
-  Object.assign(DICT, entries)
+export function t(key: string, params?: Record<string, unknown>): string {
+  const e = DICT[key]
+  const s = e ? e[lang] : key
+  return params ? interpolate(s, params) : s
+}
+
+/** Count-aware lookup: `key.one` (when present) for exactly one, else `key`;
+ * `{n}` is filled from `n`. English needs the singular, Chinese doesn't. */
+export function tn(key: string, n: number, params: Record<string, unknown> = {}): string {
+  const one = `${key}.one`
+  return t(n === 1 && DICT[one] ? one : key, { n, ...params })
+}
+
+/** "3 slides" / "1 slide" / "3 页". */
+export function pages(n: number): string {
+  return `${n} ${n === 1 ? t('unit.page') : t('unit.pages')}`
+}
+
+/** Every dictionary key — for the i18n check script and tests. */
+export function dictKeys(): string[] {
+  return Object.keys(DICT)
 }

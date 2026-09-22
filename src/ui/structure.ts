@@ -1,11 +1,13 @@
-import { generateStructure } from '../llm/outline'
+import { generateStructure, MAX_PART_PAGES } from '../llm/outline'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { startPageOutline } from './outline'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
+import { removeWithUndo } from '../lib/dom'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
-import { liveTitles, renderLive } from '../lib/live'
+import { liveTitles, renderLive, renderThinking } from '../lib/live'
+import { openOverlay } from '../lib/overlay'
 import { t } from '../i18n'
 import type { GenerateOptions, Section, Structure, ThemeName } from '../types'
 
@@ -38,43 +40,53 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
 
   const minutes = opts.durationMinutes
 
-  const el = document.createElement('div')
-  el.className = 'overlay'
-  el.innerHTML = `<div class="outline card"><div data-body></div></div>`
-  document.body.appendChild(el)
-  const body = el.querySelector<HTMLElement>('[data-body]')!
-  const close = () => el.remove()
+  const ov = openOverlay(`<div class="outline card"><div data-body></div></div>`, () => close())
+  const body = ov.el.querySelector<HTMLElement>('[data-body]')!
+  const close = () => {
+    controller.abort()
+    ov.dispose()
+  }
   let controller = new AbortController()
+  // What the last run was asked for, so Retry repeats THAT (the edited
+  // structure + the adjustment instruction), and what was on screen before a
+  // re-plan, so Cancel / Close during one returns there instead of nuking
+  // the editor.
+  let last: { base?: Structure; instruction?: string; pre?: Structure } = {}
 
-  const showLoading = () => {
+  const showLoading = (pre?: Structure) => {
     body.innerHTML = `
       <div class="gen" style="padding:8px">
         <div class="gen__spinner"></div>
         <h2>${t('struct.loading')}</h2>
-        <p>「${escapeHtml(trimmed)}」</p>
-        <ol class="gen-live" data-live><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
+        <p>${t('common.quoted', { s: escapeHtml(trimmed) })}</p>
+        <ol class="gen-live" data-live role="status" aria-live="polite"><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
         <div class="gen__actions"><button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button></div>
       </div>`
-    body.querySelector('[data-cancel]')!.addEventListener('click', () => {
+    const cancel = (): void => {
       controller.abort()
-      close()
-    })
+      if (pre) showEditor(pre)
+      else close()
+    }
+    ov.escape = cancel
+    body.querySelector('[data-cancel]')!.addEventListener('click', cancel)
   }
 
-  const showError = (msg: string) => {
+  const showError = (msg: string, pre?: Structure) => {
     body.innerHTML = `
       <div class="gen" style="padding:8px">
-        <h2 class="gen__error">${t('struct.failed')}</h2>
+        <h2 class="gen__error" role="alert">${t('struct.failed')}</h2>
         <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>
         <div class="gen__actions">
-          <button class="btn btn--ghost" data-cancel>${t('common.close')}</button>
+          <button class="btn btn--ghost" data-cancel>${pre ? t('outline.backStep') : t('common.close')}</button>
           <button class="btn btn--primary" data-retry>${t('common.retry')}</button>
         </div>
       </div>`
-    body.querySelector('[data-cancel]')!.addEventListener('click', close)
+    const back = (): void => (pre ? showEditor(pre) : close())
+    ov.escape = back
+    body.querySelector('[data-cancel]')!.addEventListener('click', back)
     body.querySelector('[data-retry]')!.addEventListener('click', () => {
       controller = new AbortController()
-      run()
+      run(last.base, last.instruction, last.pre)
     })
   }
 
@@ -82,6 +94,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
 
   const showEditor = (structure: Structure) => {
     body.innerHTML = renderEditor(structure, rich)
+    ov.escape = close
     wireEditor(body, minutes, {
       onCancel: close,
       onRegen: () => {
@@ -91,7 +104,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
         const instruction = body.querySelector<HTMLInputElement>('[data-adjust]')?.value.trim() || undefined
         const base = collectStructure(body, trimmed)
         controller = new AbortController()
-        run(base.sections.length ? base : undefined, instruction)
+        run(base.sections.length ? base : undefined, instruction, base)
       },
       onNext: () => {
         const edited = collectStructure(body, trimmed)
@@ -106,14 +119,19 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
     })
   }
 
-  const run = (base?: Structure, instruction?: string) => {
-    showLoading()
+  const run = (base?: Structure, instruction?: string, pre?: Structure) => {
+    last = { base, instruction, pre }
+    showLoading(pre)
     const liveEl = body.querySelector<HTMLElement>('[data-live]')!
     generateStructure(
       trimmed,
       opts,
       loadSettings(),
-      { signal: controller.signal, onToken: (full) => renderLive(liveEl, liveTitles(full)) },
+      {
+        signal: controller.signal,
+        onToken: (full) => renderLive(liveEl, liveTitles(full)),
+        onReasoning: (n) => renderThinking(liveEl, n),
+      },
       base,
       instruction,
     )
@@ -121,7 +139,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
         if (!controller.signal.aborted) showEditor(structure)
       })
       .catch((err: unknown) => {
-        if (!controller.signal.aborted) showError(err instanceof Error ? err.message : String(err))
+        if (!controller.signal.aborted) showError(err instanceof Error ? err.message : String(err), pre)
       })
   }
 
@@ -138,16 +156,16 @@ function renderSecRow(s: Section): string {
         <div class="ol-row__top">
           <input class="ol-row__title" data-title value="${escapeHtml(s.title)}" placeholder="${escapeHtml(t('struct.partTitle'))}">
           <div class="sec-row__budget" title="${escapeHtml(t('struct.partPages'))}">
-            <button class="sec-row__step" data-dec type="button" tabindex="-1">−</button>
-            <input class="sec-row__pages" type="number" min="1" max="15" data-pages value="${s.pages ?? 3}">
-            <button class="sec-row__step" data-inc type="button" tabindex="-1">+</button>
+            <button class="sec-row__step" data-dec type="button" tabindex="-1" aria-hidden="true">−</button>
+            <input class="sec-row__pages" type="number" min="1" max="${MAX_PART_PAGES}" data-pages value="${s.pages ?? 3}">
+            <button class="sec-row__step" data-inc type="button" tabindex="-1" aria-hidden="true">+</button>
             <span class="sec-row__unit">${t('unit.pages')}</span>
             <span class="sec-row__time" data-time></span>
           </div>
           <div class="ol-row__ops">
-            <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}">${icons.up}</button>
-            <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}">${icons.down}</button>
-            <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
+            <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}" aria-label="${escapeHtml(t('common.moveUp'))}">${icons.up}</button>
+            <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}" aria-label="${escapeHtml(t('common.moveDown'))}">${icons.down}</button>
+            <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}" aria-label="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
           </div>
         </div>
         <input class="ol-row__brief" data-brief value="${escapeHtml(s.brief ?? '')}" placeholder="${escapeHtml(t('struct.partBrief'))}">
@@ -240,12 +258,11 @@ function wireEditor(
       list.insertBefore(row.nextElementSibling, row)
       recalc()
     } else if (btn.dataset.del !== undefined) {
-      row.remove()
-      recalc()
+      removeWithUndo(row, t('outline.rowDeleted'), recalc)
     } else if (btn.dataset.inc !== undefined || btn.dataset.dec !== undefined) {
       const input = row.querySelector<HTMLInputElement>('[data-pages]')
       if (input) {
-        const next = Math.min(15, Math.max(1, pagesOf(row) + (btn.dataset.inc !== undefined ? 1 : -1)))
+        const next = Math.min(MAX_PART_PAGES, Math.max(1, pagesOf(row) + (btn.dataset.inc !== undefined ? 1 : -1)))
         input.value = String(next)
         recalc()
       }
@@ -254,6 +271,18 @@ function wireEditor(
 
   list.addEventListener('input', (e) => {
     if ((e.target as HTMLElement).matches('[data-pages]')) recalc()
+  })
+  // A typed value past the cap used to be accepted here and silently cut to
+  // the cap by the page planner — clamp it where the user can see it.
+  list.addEventListener('change', (e) => {
+    const input = e.target as HTMLInputElement
+    if (!input.matches('[data-pages]')) return
+    const v = Number(input.value)
+    if (Number.isFinite(v) && v > MAX_PART_PAGES) {
+      input.value = String(MAX_PART_PAGES)
+      toast(t('struct.pagesClamped', { max: String(MAX_PART_PAGES) }))
+      recalc()
+    }
   })
 
   body.querySelector('[data-add]')!.addEventListener('click', () => {
@@ -288,7 +317,7 @@ function collectStructure(body: HTMLElement, topic: string): Structure {
     const ttl = row.querySelector<HTMLInputElement>('[data-title]')?.value.trim() ?? ''
     const brief = row.querySelector<HTMLInputElement>('[data-brief]')?.value.trim() || undefined
     const pagesRaw = Number(row.querySelector<HTMLInputElement>('[data-pages]')?.value)
-    const pages = Number.isFinite(pagesRaw) && pagesRaw > 0 ? Math.round(pagesRaw) : 3
+    const pages = Number.isFinite(pagesRaw) && pagesRaw > 0 ? Math.min(MAX_PART_PAGES, Math.round(pagesRaw)) : 3
     if (ttl || brief) sections.push({ title: ttl || (brief as string), brief: ttl ? brief : undefined, pages })
   })
 

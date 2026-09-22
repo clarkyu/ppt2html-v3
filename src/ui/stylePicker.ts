@@ -3,11 +3,12 @@
 // deck live — no regeneration, no reload.
 
 import { THEMES, type CustomTheme, type ThemeName } from '../types'
-import { isLightCustom } from '../render/customTheme'
+import { contrastRatio, isLightCustom } from '../render/customTheme'
 import { loadStyles, addStyle, removeStyle } from '../lib/styles'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
 import { t } from '../i18n'
+import { dialogize } from '../lib/overlay'
 
 export type StyleSelection = { kind: 'builtin'; theme: ThemeName } | { kind: 'custom'; theme: CustomTheme }
 
@@ -92,7 +93,11 @@ export function openStylePicker(
   }
   render()
   host.appendChild(wrap)
-  const close = (): void => wrap.remove()
+  const release = dialogize(wrap, () => close())
+  const close = (): void => {
+    wrap.remove()
+    release()
+  }
 
   const openForm = (): void => {
     const seed: CustomTheme = current.custom ?? { bg: '#0b1020', accent: '#8b7cff', accent2: '#22d3ee', serif: false }
@@ -107,6 +112,7 @@ export function openStylePicker(
         <label class="styleform__row styleform__row--check"><input type="checkbox" data-f-serif${seed.serif ? ' checked' : ''}><span>${t('style.serif')}</span></label>
       </div>
       <div class="stylepick__grid"><div class="stylepick__item" data-preview style="${cardStyle(customSwatch(seed))}">${cardInner(customSwatch(seed), t('style.preview'))}</div></div>
+      <p class="stylepick__hint" data-contrast-warn hidden></p>
       <div class="stylepick__actions">
         <button class="btn btn--sm" data-form-cancel>${t('common.cancel')}</button>
         <button class="btn btn--primary btn--sm" data-form-save>${t('style.saveApply')}</button>
@@ -119,11 +125,19 @@ export function openStylePicker(
       serif: card.querySelector<HTMLInputElement>('[data-f-serif]')!.checked,
     })
     const preview = card.querySelector<HTMLElement>('[data-preview]')!
+    const warn = card.querySelector<HTMLElement>('[data-contrast-warn]')!
     const repaint = (): void => {
-      const sw = customSwatch(read())
+      const ct = read()
+      const sw = customSwatch(ct)
       preview.setAttribute('style', cardStyle(sw))
       preview.innerHTML = cardInner(sw, t('style.preview'))
+      // The derivation nudges accent TEXT to ≥3:1, but an accent that barely
+      // shows against the base still makes weak rules, bars and gradients.
+      const worst = Math.min(contrastRatio(ct.bg, ct.accent), contrastRatio(ct.bg, ct.accent2))
+      warn.hidden = worst >= 3
+      if (!warn.hidden) warn.textContent = t('style.lowContrast', { r: worst.toFixed(1) })
     }
+    repaint()
     card.querySelectorAll('input').forEach((el) => el.addEventListener('input', repaint))
     card.querySelector('[data-form-cancel]')!.addEventListener('click', () => {
       render()
@@ -145,7 +159,12 @@ export function openStylePicker(
     }
     const del = target.closest<HTMLElement>('[data-del]')
     if (del) {
-      removeStyle(del.dataset.del!)
+      // A palette is gone for good once removed — ask first (the control is
+      // now always visible on touch, so a stray tap is a real risk).
+      const id = del.dataset.del!
+      const name = loadStyles().find((s) => s.id === id)?.name ?? ''
+      if (!confirm(t('style.deleteConfirm', { name: name }))) return
+      removeStyle(id)
       render()
       return
     }

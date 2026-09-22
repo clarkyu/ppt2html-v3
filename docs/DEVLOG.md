@@ -3,6 +3,110 @@
 按 PR 逆序记录每次落地的内容与关键决策,供后续会话/协作者快速恢复上下文。
 项目约定与架构地图见仓库根 `CLAUDE.md`。
 
+## 会话四·全项目审计修复(2026-09,分支 claude/project-review-jt4jb5)
+
+起点:用户要求「以更高的标准和要求,将整个项目重新完整地检查一遍」。32 个审查
+智能体分子系统精读 + 逐条对抗验证,得到 134 条实锤缺陷,报告
+https://claude.ai/artifact/5hFXBwuiYMt7QV2y3Zg7gw ,按「安全/数据 → 常见路径 →
+UX/a11y → i18n → 可维护性」分成 15 批,一批一个草稿 PR。每批的固定节奏:实现 →
+`npm run build` → 写一份 `verify-bNN.mjs` 无头验证(全过才算)→ 跑全部历史
+verify 脚本回归 → 提交。已合并:#76(安全)、#78(B01)、#79(B02);#80(B03)待合并;
+**B04–B15 已作为 12 个独立提交叠在本地分支上**,#80 合并后 `git fetch origin main
+&& git rebase origin/main`,然后**一次只推一个提交**
+(`git push origin <sha>:claude/project-review-jt4jb5`)开草稿 PR,合并再推下一个。
+
+### B04 — LLM 客户端健壮性(verify-b04 35)
+- `llm/errors.ts` LlmError(kind: parse/truncated/filter/model/http/network/offline/config,
+  retryable/transient)、`extractJson.ts`(整体 JSON 优先、锚定围栏、尾逗号修复);
+  client 重写:base URL 校验(`plausibleHostname`——Chromium 接受带空格的主机名)、
+  `outputCap` 按主机/模型(DeepSeek 384K)、max_tokens 400 时去参重试、SSE 尾缓冲
+  刷出、length/content_filter 结束原因转本地化错误、系统 Key 401/402/403/429 专门
+  提示;outline/notes 只重试可重试错误、临时错误退避一次;thinking 流实时显示。
+- 测试用真 `http.createServer` 在 5197 端口分块吐 SSE(含延迟),比 page.route 更像真网。
+
+### B05 — 设置与分享隐私(verify-b05 20)
+- 设置重置从 `freshDefaults()`(含 imageGen)、密钥输入 password;分享 `portable()`
+  剥掉全部 data: logo 与 prompt 并提示;PPTX 导入不带文件名;素材注入统一走
+  `fencedMaterial`(<<<素材开始/结束>>> 围栏,内部标记剥除,clampChars);独立导出
+  剥备注;markdown 链接强制 `target=_blank rel=noopener`,新增 `mdPlain`;
+  openverse 只取商用可改的 CC 许可并显示许可链接。
+
+### B06 — 质量契约单一来源(verify-b06 9,eval --mock 21)
+- `lib/qualityContract.js`(纯 ESM,Node/浏览器共用):LIMITS、`textLen`(中文 1、
+  拉丁 ½、空格 ¼)、`slideIssues` 返回 {code, params} 再 `formatIssue` 本地化;
+  `quality.ts` 变薄包装,`scripts/eval/score.mjs` 直接消费;prompt §8 与之同数。
+- 坑:`hasCaseAnchor` 的 `\s+` 曾跨行匹配到下一条 bullet 的首字母大写。
+
+### B07 — 大纲 / 素材管线(verify-b07 22)
+- 结构规划:MAX_PART_PAGES=15,用户改过的页数按标题钉住不被重规划覆盖;
+  `normalizeOutline` 封面前移/多余封面降级;分段生成丢弃未请求的 cover/end、按标题
+  再按位置对齐、`layoutHasContent` 回退;`deckToMaterial` 分级预算;`extractText`
+  8MB 上限、UTF-8 失败回退 GBK;素材框 `appendMaterial` 统一追加。
+
+### B08 — 向导状态与浮层(verify-b08 28)
+- `lib/overlay.ts` openOverlay(role=dialog/aria-modal/焦点圈禁/Esc/`#app` inert/注册表,
+  main.mount 先 `disposeAllOverlays()`——hash 切换或返回键不再把新页面挂在向导底下);
+  `lib/composer.ts` sessionStorage 保存首页作文框;`loadDraft` 严格形状校验;
+  `lib/live.ts` diff 渲染;structure 的 showLoading/showError 记住上一个视图可返回;
+  outline 快照/预取签名;generating 逐格清理、Esc 需确认;首页提交去重防连按。
+
+### B09 — 渲染保真、打印与导出(verify-b09 33)
+- `normalizeSlide` 折叠并行 bulletIcons、标题 mdPlain、封面前移;`fit.ts` 导出
+  TARGETS 且测量时隐藏绝对定位装饰(封面光晕曾把每张封面缩到 0.91);打印前摘掉
+  reveal 的 `hidden` 属性再 fit;standalone 注入同一份 TARGETS + beforeprint +
+  `<html lang>`;`bgCssUrl` 先 decode 再 encode;高亮器按语言决定 # / -- 注释;
+  `customPalette()` 单一推导(muted ≥4.5、accent 文字 ≥3、`--accent-fg`);
+  搜图区分临时失败(不落盘,提示下次再试)。
+
+### B10 — 播放体验(verify-b10 34)
+- 逐条模式下语音讲解 `configure({fragments:false})`,停时恢复;`speechText` 分隔符
+  按页面脚本;排练先剥标点再数词(400 字中文讲稿 140s→100s);`formatElapsed`/
+  `cjkMatcher`/`CJK_CLASS` 共用;位置记忆只对有身份的课件;keyboardCondition 排除
+  浮层与表单;`.viewer:hover .viewer__bar` → `.viewer__bar:hover`(桌面工具栏真能
+  自动隐藏);**`.player .reveal` 去掉 z-index**——它曾把 reveal 箭头困在自己的层叠
+  上下文里,讲稿条盖住翻页箭头;排练 HUD 移到工具栏下。
+
+### B11 — PPTX 导入 / 导出(verify-b11 33)
+- 导出 `rowPitch()` 按可用高度压缩行距 + fit:shrink,长列表不再溢出 720px;每个文本框
+  `objectName = ppt2html:<版式>:<字段>`(chrome 标记装饰);`plain()`/`runs()` 改用
+  `mdPlain`/`mdPlainKeepBold`,只拆成对标记(`__%` 占位符不再被删)。
+- 导入:`a:br` 软换行、表格每行一条、图片/图表计数 `skippedVisuals`、带标签的自家
+  导出件 12 版式无损回导(代码含缩进);library `alive` 标志——路由切走后不再贴弹层。
+
+### B12 — 移动端布局(verify-b12 30)
+- ≤560 操作行 2×2 网格、顶栏可换行;浮层把 `--fg/--muted/--card-border/--accent`
+  映射到应用 token(它们只在 `.player.theme-*` 里定义,reveal 的 `.reveal-viewport`
+  又把 body 染黑);⋯ 菜单可滚;安全区 env();粗指针 40px 目标;风格删除键常显 +
+  确认;toast 容器堆叠 + 动作按钮,`removeWithUndo` 删行可撤销;**紧凑工具栏改为测量
+  驱动**(`.viewer--compact`:工具内联时 bar 溢出即切换,resize/显隐重算),并把
+  btn--sm 间距收紧让 20 个工具在 1280px 桌面仍内联。
+
+### B13 — 无障碍语义(verify-b13 24)
+- `dialogize(el, onClose)`:分享/换风格/改写/精修/整册/排练小结/快捷键卡片/库导入
+  选择全部成为 role=dialog(标题 labelledby、焦点入内、Tab 圈禁、Esc 在 window 捕获
+  阶段——reveal 再也看不到、释放时焦点回触发按钮);开关按钮 aria-pressed;工具栏
+  焦点即显;`#app` 去掉 aria-live,toast 容器 role=status,生成进度 role=status;
+  课件卡片 `<a href="#/play/id">`;上传改真按钮;设置字段 label[for];
+  `--text-dim` #8c95b4(≥4.7:1);reduced-motion 停循环动画(规则放文件末尾压过同权重)。
+
+### B14 — 国际化(verify-b14 22)
+- `t(key, params)` 函数式插值(`$$ $&` 原样、不二次注入),`tn` 单复数,`pages(n)`;
+  75 处 `.replace('{x}')` 链迁移;`lib/lang.ts` `hasHan`/`isChineseText`(Han:拉丁
+  1:4 多数判定)/`deckIsChinese`/`deckText()`——课件内文案(谢谢观看/章节/环节/
+  新部分/未命名页/编辑器占位)全部从这里取,韩文课件不再得到中文标签;副本后缀、
+  模型标签、默认风格名、澄清兜底、标点粘合、标签页标题/描述、manifest 全部随语言;
+  `scripts/i18n-check.mjs` 字典双向校验(539 键 0 缺 0 冗)。
+
+### B15 — 构建、工具链与文档(verify-b15 15)
+- `npm audit fix`(pdfjs-dist 6.3.289 / dompurify / xmldom);image-size(经
+  pptxgenjs,Node 专用)白名单进 `scripts/audit-check.mjs`;deploy.yml 门禁
+  audit:check → i18n:check → build → eval --mock;4 处无效动态 import 改静态(构建零
+  警告);README 重写。
+- **pdf.js 改用 legacy 构建**:6.3 主线程调用 `Map.prototype.getOrInsertComputed`,
+  Chromium 141 等旧浏览器每页抛未捕获错误(文字仍能提出);legacy 自带 polyfill。
+- 坑:`npm audit fix --omit=dev` 会把 devDependencies 从 node_modules 删掉(vite 都
+  没了),之后要 `npm install` 并重启 dev server。
+
 ## 会话五(2026-09 起,分支 claude/amazing-wozniak-8frd0x)
 
 起点:用户拿真实课题试产品——湖北专升本《大学英语》大纲 + 2025/2026 真题 + 学校

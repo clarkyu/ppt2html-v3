@@ -11,8 +11,10 @@ import type { Deck, Slide } from '../types'
 import type { LlmSettings } from './settings'
 import { streamText } from './client'
 import { extractJson } from './extractJson'
-import { deckIsCjk } from '../lib/lang'
+import { LlmError, backoff, isAbort } from './errors'
+import { deckIsChinese } from '../lib/lang'
 import { sliceMaterial, SLICE_THRESHOLD } from '../lib/materialSlice'
+import { fencedMaterial, MATERIAL_RULE } from './prompt'
 import { t } from '../i18n'
 
 /** Pages per LLM call — big enough to keep flow, small enough to never truncate. */
@@ -76,87 +78,116 @@ function slideDigest(s: Slide, i: number): string {
   return parts.filter(Boolean).join('\n')
 }
 
-function batchPrompt(deck: Deck, from: number, to: number): string {
+/** `pages` are 1-based and may be non-contiguous (a re-request for the pages
+ * a previous reply skipped). */
+function batchPrompt(deck: Deck, pages: number[]): string {
   const overview = deck.slides.map((s, i) => slideBrief(s, i)).join('\n')
-  const details = deck.slides.slice(from, to).map((s, i) => slideDigest(s, from + i)).join('\n\n')
-  const lang = deckIsCjk(deck) ? '中文' : 'English'
+  const picked = pages.filter((p) => deck.slides[p - 1])
+  const details = picked.map((p) => slideDigest(deck.slides[p - 1], p - 1)).join('\n\n')
+  const lang = deckIsChinese(deck) ? '中文' : 'English'
   // Generation material rides along so scripts can quote real facts the
   // slides had no room for. Long material is sliced to this batch's pages.
   let materialBlock = ''
   const mat = deck.material?.trim()
   if (mat) {
-    const query = deck.slides.slice(from, to).map((s) => `${stripMd(s.title)} ${stripMd(s.subtitle)}`).join(' ')
+    const query = picked.map((p) => `${stripMd(deck.slides[p - 1].title)} ${stripMd(deck.slides[p - 1].subtitle)}`).join(' ')
     const scoped = mat.length > SLICE_THRESHOLD ? sliceMaterial(mat, `${query} ${deck.title}`) : mat
-    materialBlock = `\n\n参考素材（生成本课件时用户提供，讲稿展开优先引用其中的事实）：\n"""\n${scoped}\n"""`
+    materialBlock = `\n\n参考素材（生成本课件时用户提供，讲稿展开优先引用其中的事实；分隔标记之间）：\n${fencedMaterial(scoped)}\n${MATERIAL_RULE}`
   }
+  const contiguous = picked.length && picked[picked.length - 1] - picked[0] + 1 === picked.length
+  const which = contiguous && picked.length > 1 ? `第 ${picked[0]} ~ ${picked[picked.length - 1]} 页` : `第 ${picked.join('、')} 页`
   return `课件《${deck.title}》，共 ${deck.slides.length} 页，讲稿语言：${lang}。
 
 全篇页面一览：
 ${overview}
 
-【本次撰写】第 ${from + 1} ~ ${to} 页。这些页的完整内容：
+【本次撰写】${which}（共 ${picked.length} 页，每页都要写）。这些页的完整内容：
 
 ${details}${materialBlock}`
 }
 
-/** Parse one batch's response and write scripts into the deck. Returns pages applied. */
-function applyBatch(deck: Deck, raw: unknown, from: number, to: number): number {
+/** Parse one reply and write scripts into the deck for the pages we asked
+ * for. Returns the set of pages actually scripted (deduped); a page that no
+ * longer exists (the deck shrank under a concurrent structural edit) is
+ * skipped instead of throwing. */
+function applyBatch(deck: Deck, raw: unknown, wanted: Set<number>): Set<number> {
   const notes = (raw as { notes?: unknown })?.notes
   if (!Array.isArray(notes)) throw new Error('no notes array')
-  let applied = 0
+  const applied = new Set<number>()
   for (const item of notes) {
     const page = Number((item as { page?: unknown })?.page)
     const script = (item as { script?: unknown })?.script
-    if (!Number.isInteger(page) || page < from + 1 || page > to) continue
+    if (!Number.isInteger(page) || !wanted.has(page) || applied.has(page)) continue
     if (typeof script !== 'string' || !script.trim()) continue
-    deck.slides[page - 1].note = script.trim()
-    applied++
+    const slide = deck.slides[page - 1]
+    if (!slide) continue
+    slide.note = script.trim()
+    applied.add(page)
   }
-  if (!applied) throw new Error('no scripts in response')
+  if (!applied.size) throw new Error('no scripts in response')
   return applied
+}
+
+export interface SpeakerNotesResult {
+  /** Pages scripted. */
+  done: number
+  /** 1-based pages the model never returned within the retry budget. */
+  missing: number[]
 }
 
 /**
  * Write a full speaker script into `deck.slides[*].note` (mutates the deck).
  * Batches are sequential; each is applied as soon as it parses, so callers can
- * persist incrementally via `onProgress`. Resolves to the number of pages
- * scripted; rejects on an unrecoverable batch (earlier batches stay applied).
+ * persist incrementally via `onProgress`. A reply that scripts only some of
+ * its pages is applied and the rest are re-requested within the retry budget;
+ * whatever is still missing is reported instead of silently accepted. Rejects
+ * on a batch that yields nothing after all attempts (earlier batches stay).
  */
 export async function generateSpeakerNotes(
   deck: Deck,
   settings: LlmSettings,
   handlers: SpeakerNotesHandlers = {},
-): Promise<number> {
-  const total = deck.slides.length
+): Promise<SpeakerNotesResult> {
   let done = 0
-  for (let from = 0; from < total; from += BATCH) {
-    const to = Math.min(from + BATCH, total)
-    const user = batchPrompt(deck, from, to)
-    // Retry covers both JSON-parse failures and shape mismatches (empty answer,
-    // scripts keyed to wrong pages) — a fresh sample almost always recovers.
-    // Transport/HTTP errors keep their (localized) message; parse failures get
-    // a dedicated one so the user never sees an internal string.
+  const missing: number[] = []
+  // Re-read the length every batch: a structural edit may shrink the deck.
+  for (let from = 0; from < deck.slides.length; from += BATCH) {
+    const to = Math.min(from + BATCH, deck.slides.length)
+    const pending = new Set<number>()
+    for (let p = from + 1; p <= to; p++) pending.add(p)
+    // Retry covers JSON-parse failures, shape mismatches and partial replies —
+    // a fresh sample almost always recovers. Transport/HTTP errors keep their
+    // (localized) message; parse failures get a dedicated one.
     let lastErr: unknown
-    let ok = false
-    for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+    let appliedAny = false
+    let transient = 0
+    for (let attempt = 0; attempt < 3 && pending.size; attempt++) {
       if (handlers.signal?.aborted) throw new DOMException('aborted', 'AbortError')
       let text: string
       try {
-        text = await streamText(NOTES_SYSTEM, user, settings, { signal: handlers.signal })
+        text = await streamText(NOTES_SYSTEM, batchPrompt(deck, [...pending]), settings, { signal: handlers.signal })
       } catch (e) {
-        if (e instanceof DOMException && e.name === 'AbortError') throw e
+        if (isAbort(e)) throw e
+        // Only a fresh sample can fix a transient 429/5xx (once, after a short
+        // pause); a bad key, a truncated reply or a dead network fails the
+        // same way thrice — surface it now, earlier batches stay written.
+        if (!(e instanceof LlmError) || !e.transient || ++transient > 1) throw e
         lastErr = e
+        await backoff(1500, handlers.signal)
         continue
       }
       try {
-        done += applyBatch(deck, extractJson(text), from, to)
-        ok = true
+        const got = applyBatch(deck, extractJson(text), pending)
+        got.forEach((p) => pending.delete(p))
+        done += got.size
+        appliedAny = true
       } catch {
         lastErr = new Error(t('err.invalidNotes'))
       }
     }
-    if (!ok) throw lastErr
-    handlers.onProgress?.(Math.min(done, total), total)
+    if (!appliedAny) throw lastErr ?? new Error(t('err.invalidNotes'))
+    missing.push(...pending)
+    handlers.onProgress?.(Math.min(done, deck.slides.length), deck.slides.length)
   }
-  return done
+  return { done, missing }
 }

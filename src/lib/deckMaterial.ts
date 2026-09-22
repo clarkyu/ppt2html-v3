@@ -33,20 +33,56 @@ function slideLines(s: Slide): string[] {
   return out
 }
 
-/** Serialize a deck into numbered-outline material (capped at the prompt limit). */
-export function deckToMaterial(deck: Deck): string {
-  const parts: string[] = []
+export interface DeckMaterial {
+  text: string
+  /** Some detail (notes, then bullets) had to be left out to fit the budget. */
+  truncated: boolean
+}
+
+/** Notes are the first thing to give when the budget is tight. */
+const NOTE_FULL = 120
+const NOTE_SHORT = 60
+
+/**
+ * Serialize a deck into numbered-outline material within the prompt budget.
+ * Budgeted by priority so a large deck keeps its SHAPE end to end: every
+ * section header and page title first, then the bullets / fields of every
+ * page, then notes (trimmed, then dropped) — instead of a hard cut at 8000
+ * chars that silently lost the last third of a long imported deck.
+ */
+export function deckToMaterial(deck: Deck, budget = MATERIAL_MAX_CHARS): DeckMaterial {
+  type Block = { head: string; body: string[]; note?: string }
+  const blocks: Block[] = []
   let sec = 0
   for (const s of deck.slides) {
     if (s.layout === 'cover' || s.layout === 'end') continue
     const title = (s.title ?? '').replace(/\*\*/g, '').trim()
     if (s.layout === 'section') {
       sec++
-      parts.push(`${CN_NUM[sec - 1] ?? sec}、${title}`)
+      blocks.push({ head: `${CN_NUM[sec - 1] ?? sec}、${title}`, body: [] })
       continue
     }
-    const lines = slideLines(s)
-    parts.push([title ? `${title}` : '', ...lines].filter(Boolean).join('\n'))
+    const note = s.note?.trim()
+    blocks.push({ head: title, body: slideLines({ ...s, note: undefined }), note: note || undefined })
   }
-  return parts.join('\n\n').slice(0, MATERIAL_MAX_CHARS)
+  const render = (noteChars: number, withBody: boolean): string =>
+    blocks
+      .map((b) => {
+        const lines = [b.head, ...(withBody ? b.body : [])]
+        if (b.note && noteChars > 0) lines.push(`（备注：${b.note.length > noteChars ? `${b.note.slice(0, noteChars)}…` : b.note}）`)
+        return lines.filter(Boolean).join('\n')
+      })
+      .filter(Boolean)
+      .join('\n\n')
+  // Tiers, most detailed first; the first that fits wins.
+  const tiers: Array<[number, boolean]> = [[NOTE_FULL, true], [NOTE_SHORT, true], [0, true], [0, false]]
+  for (let i = 0; i < tiers.length; i++) {
+    const [noteChars, withBody] = tiers[i]
+    const text = render(noteChars, withBody)
+    if (text.length <= budget) return { text, truncated: i > 0 }
+  }
+  // Even bare headers overflow (hundreds of pages): cut at a block boundary.
+  const heads = render(0, false)
+  const cut = heads.lastIndexOf('\n\n', budget)
+  return { text: heads.slice(0, cut > budget / 2 ? cut : budget), truncated: true }
 }

@@ -1,11 +1,13 @@
 import {
   loadSettings,
   saveSettings,
-  DEFAULT_SETTINGS,
+  freshDefaults,
   hasSystemKey,
   hasSystemImageKey,
   SYSTEM_DEEPSEEK,
   systemKeyApplies,
+  normalizeBaseUrl,
+  baseUrlProblem,
   type LlmSettings,
   type Provider,
 } from '../llm/settings'
@@ -40,20 +42,20 @@ export function renderSettings(view: HTMLElement): () => void {
     <div class="form">
       ${
         hasSystemKey
-          ? `<div class="notice notice--ok">${t('settings.systemNotice').replace('{model}', escapeHtml(SYSTEM_DEEPSEEK.model))}</div>`
+          ? `<div class="notice notice--ok">${t('settings.systemNotice', { model: escapeHtml(SYSTEM_DEEPSEEK.model) })}</div>`
           : ''
       }
       <div class="form-group">
-        <label>${t('settings.presets')}</label>
-        <div class="chips" data-presets>
+        <span class="form-label" id="st-presets-label">${t('settings.presets')}</span>
+        <div class="chips" data-presets role="group" aria-labelledby="st-presets-label">
           ${MODEL_PRESETS.map((p, i) => `<button type="button" class="chip" data-preset="${i}">${p.label}</button>`).join('')}
         </div>
         <div class="hint">${t('settings.presetsHint')}</div>
       </div>
 
       <div class="form-group">
-        <label>${t('settings.provider')}</label>
-        <div class="seg" data-seg>
+        <span class="form-label" id="st-provider-label">${t('settings.provider')}</span>
+        <div class="seg" data-seg role="group" aria-labelledby="st-provider-label">
           <button data-provider="anthropic">Claude</button>
           <button data-provider="openai">${t('guided.openaiCompat')}</button>
         </div>
@@ -61,31 +63,32 @@ export function renderSettings(view: HTMLElement): () => void {
       </div>
 
       <div class="form-group">
-        <label>${t('settings.baseUrl')}</label>
-        <input class="form-input" data-base placeholder="">
+        <label for="st-base">${t('settings.baseUrl')}</label>
+        <input id="st-base" class="form-input" data-base placeholder="" aria-describedby="settings-base-error">
+        <div class="hint" id="settings-base-error" data-base-error role="alert" style="color:var(--neg,#e5484d)" hidden></div>
       </div>
 
       <div class="form-group">
-        <label>${t('settings.apiKey')}</label>
-        <input class="form-input" data-key type="password" placeholder="${escapeHtml(t('settings.apiKeyPlaceholder'))}" autocomplete="off">
+        <label for="st-key">${t('settings.apiKey')}</label>
+        <input id="st-key" class="form-input" data-key type="password" placeholder="${escapeHtml(t('settings.apiKeyPlaceholder'))}" autocomplete="off">
         <div class="hint" data-key-hint>${t('settings.apiKeyHint')}</div>
       </div>
 
       <div class="form-group">
-        <label>${t('guided.model')}</label>
-        <select class="form-input" data-model-select></select>
-        <input class="form-input" data-model-custom placeholder="${escapeHtml(t('settings.customModel'))}" style="display:none">
+        <label for="st-model">${t('guided.model')}</label>
+        <select id="st-model" class="form-input" data-model-select></select>
+        <input class="form-input" data-model-custom aria-label="${escapeHtml(t('settings.customModel'))}" placeholder="${escapeHtml(t('settings.customModel'))}" style="display:none">
         <div class="hint">${t('settings.modelHint')}</div>
       </div>
 
       <div class="form-group">
-        <label>${t('settings.thinkingMode')}</label>
+        <span class="form-label">${t('settings.thinkingMode')}</span>
         <label class="switch"><input type="checkbox" data-thinking><span>${t('settings.thinkingLabel')}</span></label>
         <div class="hint">${t('settings.thinkingHint')}</div>
       </div>
 
       <div class="form-group">
-        <label>${t('settings.bgImages')}</label>
+        <span class="form-label">${t('settings.bgImages')}</span>
         <label class="switch"><input type="checkbox" data-img-enabled><span>${t('settings.bgLabel')}</span></label>
         <div class="seg" data-img-mode style="margin-top:10px">
           <button type="button" data-mode="photo">${t('settings.bgMode.photo')}</button>
@@ -93,37 +96,38 @@ export function renderSettings(view: HTMLElement): () => void {
         </div>
         <div class="hint" data-img-mode-note></div>
         <div data-img-abstract>
-          <label style="margin-top:10px">${t('settings.abstractStyle')}</label>
-          <select class="form-input" data-img-style>
+          <label for="st-abstract" style="margin-top:10px">${t('settings.abstractStyle')}</label>
+          <select id="st-abstract" class="form-input" data-img-style>
             ${ABSTRACT_STYLES.map((s) => `<option value="${s}">${escapeHtml(t('settings.abstractStyle.' + s))}</option>`).join('')}
           </select>
           <div class="hint">${t('settings.abstractStyleHint')}</div>
         </div>
         <div data-img-photo-keys>
           <div class="hint">${(hasSystemImageKey ? t('settings.bgHint.system') : t('settings.bgHint.openverse')) + t('settings.bgHint.tail')}</div>
-          <input class="form-input" data-img-unsplash placeholder="${escapeHtml(t('settings.unsplashPlaceholder'))}" autocomplete="off" style="margin-top:10px">
-          <input class="form-input" data-img-pexels placeholder="${escapeHtml(t('settings.pexelsPlaceholder'))}" autocomplete="off" style="margin-top:8px">
-          <input class="form-input" data-img-pixabay placeholder="${escapeHtml(t('settings.pixabayPlaceholder'))}" autocomplete="off" style="margin-top:8px">
+          <input class="form-input" data-img-unsplash type="password" placeholder="${escapeHtml(t('settings.unsplashPlaceholder'))}" aria-label="${escapeHtml(t('settings.unsplashPlaceholder'))}" autocomplete="off" style="margin-top:10px">
+          <input class="form-input" data-img-pexels type="password" placeholder="${escapeHtml(t('settings.pexelsPlaceholder'))}" aria-label="${escapeHtml(t('settings.pexelsPlaceholder'))}" autocomplete="off" style="margin-top:8px">
+          <input class="form-input" data-img-pixabay type="password" placeholder="${escapeHtml(t('settings.pixabayPlaceholder'))}" aria-label="${escapeHtml(t('settings.pixabayPlaceholder'))}" autocomplete="off" style="margin-top:8px">
           <div class="hint">${t('settings.imgKeyHint')}</div>
         </div>
       </div>
 
       <div class="form-group">
-        <label>${t('settings.imageGen')}</label>
+        <span class="form-label">${t('settings.imageGen')}</span>
         <div class="hint">${t('settings.imageGenHint')}</div>
-        <input class="form-input" data-gen-base placeholder="${escapeHtml(t('settings.imageGenBase'))}" autocomplete="off" style="margin-top:8px">
-        <input class="form-input" data-gen-key placeholder="${escapeHtml(t('settings.imageGenKey'))}" autocomplete="off" style="margin-top:8px">
-        <input class="form-input" data-gen-model placeholder="${escapeHtml(t('settings.imageGenModel'))}" autocomplete="off" style="margin-top:8px">
+        <input class="form-input" data-gen-base placeholder="${escapeHtml(t('settings.imageGenBase'))}" aria-label="${escapeHtml(t('settings.imageGenBase'))}" autocomplete="off" style="margin-top:8px">
+        <input class="form-input" data-gen-key type="password" placeholder="${escapeHtml(t('settings.imageGenKey'))}" aria-label="${escapeHtml(t('settings.imageGenKey'))}" autocomplete="off" style="margin-top:8px">
+        <input class="form-input" data-gen-model placeholder="${escapeHtml(t('settings.imageGenModel'))}" aria-label="${escapeHtml(t('settings.imageGenModel'))}" autocomplete="off" style="margin-top:8px">
       </div>
 
       <div class="form-group">
-        <label>${t('settings.branding')}</label>
+        <span class="form-label">${t('settings.branding')}</span>
         <div class="hint">${t('settings.brandingHint')}</div>
-        <input class="form-input" data-brand-presenter placeholder="${escapeHtml(t('settings.presenter'))}" style="margin-top:8px">
-        <input class="form-input" data-brand-org placeholder="${escapeHtml(t('settings.org'))}" style="margin-top:8px">
+        <input class="form-input" data-brand-presenter placeholder="${escapeHtml(t('settings.presenter'))}" aria-label="${escapeHtml(t('settings.presenter'))}" style="margin-top:8px">
+        <input class="form-input" data-brand-org placeholder="${escapeHtml(t('settings.org'))}" aria-label="${escapeHtml(t('settings.org'))}" style="margin-top:8px">
         <div style="display:flex; gap:8px; align-items:center; margin-top:8px">
-          <input class="form-input" data-brand-logo placeholder="${escapeHtml(t('settings.logoUrl'))}" style="flex:1; min-width:0">
-          <label class="btn btn--ghost btn--sm" style="flex:none">${t('settings.upload')}<input type="file" accept="image/*" data-brand-logo-file hidden></label>
+          <input class="form-input" data-brand-logo placeholder="${escapeHtml(t('settings.logoUrl'))}" aria-label="${escapeHtml(t('settings.logoUrl'))}" style="flex:1; min-width:0">
+          <button type="button" class="btn btn--ghost btn--sm" style="flex:none" data-brand-logo-btn>${t('settings.upload')}</button>
+          <input type="file" accept="image/*" data-brand-logo-file hidden>
         </div>
         <img data-brand-logo-preview alt="" style="display:none; height:36px; margin-top:8px; object-fit:contain; background:var(--surface-2); border-radius:8px; padding:4px 8px">
       </div>
@@ -140,6 +144,7 @@ export function renderSettings(view: HTMLElement): () => void {
   const segBtns = view.querySelectorAll<HTMLButtonElement>('[data-provider]')
   const noteEl = view.querySelector<HTMLElement>('[data-note]')!
   const baseEl = view.querySelector<HTMLInputElement>('[data-base]')!
+  const baseErrEl = view.querySelector<HTMLElement>('[data-base-error]')!
   const keyEl = view.querySelector<HTMLInputElement>('[data-key]')!
   const modelSelect = view.querySelector<HTMLSelectElement>('[data-model-select]')!
   const modelCustom = view.querySelector<HTMLInputElement>('[data-model-custom]')!
@@ -160,6 +165,9 @@ export function renderSettings(view: HTMLElement): () => void {
   const brandOrgEl = view.querySelector<HTMLInputElement>('[data-brand-org]')!
   const brandLogoEl = view.querySelector<HTMLInputElement>('[data-brand-logo]')!
   const brandLogoFileEl = view.querySelector<HTMLInputElement>('[data-brand-logo-file]')!
+  // A <label> wrapping a hidden file input is mouse-only; a real button is
+  // reachable by keyboard.
+  view.querySelector('[data-brand-logo-btn]')!.addEventListener('click', () => brandLogoFileEl.click())
   const brandLogoPreviewEl = view.querySelector<HTMLImageElement>('[data-brand-logo-preview]')!
   const keyHintEl = view.querySelector<HTMLElement>('[data-key-hint]')!
   const DEFAULT_KEY_HINT = keyHintEl.textContent ?? ''
@@ -259,11 +267,12 @@ export function renderSettings(view: HTMLElement): () => void {
     state[p.provider].model = p.models[0]
     customModel = false
     paint()
-    toast(t('settings.switchedTo').replace('{label}', p.label))
+    toast(t('settings.switchedTo', { label: p.label }))
   })
 
   baseEl.addEventListener('input', () => {
     state[state.provider].baseUrl = baseEl.value
+    baseErrEl.hidden = true
     updateKeyHint()
     if (!customModel) rebuildModels()
   })
@@ -326,23 +335,45 @@ export function renderSettings(view: HTMLElement): () => void {
   })
 
   view.querySelector('[data-save]')!.addEventListener('click', () => {
-    // Fall back to placeholder defaults for empty base/model.
     const hint = PROVIDER_HINTS[state.provider]
-    if (!state[state.provider].baseUrl.trim()) state[state.provider].baseUrl = hint.base
-    if (!state[state.provider].model.trim()) state[state.provider].model = hint.model
-    saveSettings(state)
+    const cfg = state[state.provider]
+    // Empty base → the provider default; a missing scheme is added
+    // ("api.example.com/v1" used to become a same-origin POST carrying the
+    // key); what still can't work (not a URL, key over plain http to a public
+    // host) is refused with an inline reason instead of being stored.
+    cfg.baseUrl = normalizeBaseUrl(cfg.baseUrl) || hint.base
+    baseEl.value = cfg.baseUrl
+    const problem = baseUrlProblem(cfg.baseUrl)
+    if (problem) {
+      baseErrEl.textContent = t(problem === 'insecure' ? 'settings.baseUrlInsecure' : 'settings.baseUrlInvalid')
+      baseErrEl.hidden = false
+      baseEl.focus()
+      return
+    }
+    baseErrEl.hidden = true
+    // A blank model means "this endpoint's first choice", not gpt-4o-mini
+    // regardless of where the request goes.
+    if (!cfg.model.trim()) cfg.model = modelChoicesFor(state.provider, cfg.baseUrl, '')[0] ?? hint.model
+    if (!saveSettings(state)) {
+      toast(t('settings.saveFailed'))
+      return
+    }
     customModel = false
     paint()
     toast(t('settings.saved'))
   })
 
   view.querySelector('[data-reset]')!.addEventListener('click', () => {
-    const fresh = structuredClone(DEFAULT_SETTINGS)
-    fresh.provider = state.provider
+    // Every field, from the build's own defaults: on the zero-config build
+    // that is "system DeepSeek, thinking on" (DEFAULT_SETTINGS alone left the
+    // user on an Anthropic tab with no key); the image-gen key resets too.
+    const fresh = freshDefaults()
+    state.provider = fresh.provider
     state.anthropic = fresh.anthropic
     state.openai = fresh.openai
     state.thinking = fresh.thinking
     state.images = fresh.images
+    state.imageGen = fresh.imageGen
     state.branding = fresh.branding
     customModel = false
     paint()

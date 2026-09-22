@@ -5,10 +5,11 @@
 // whole-deck undo. Overlay shell reuses the share panel styles.
 
 import type { Deck, Slide } from '../types'
-import { deckIssues, refineInstruction } from '../lib/quality'
+import { deckIssues, issueText, refineInstruction } from '../lib/quality'
 import { regenerateSlide } from '../llm/edit'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { t } from '../i18n'
+import { dialogize } from '../lib/overlay'
 import { toast } from '../lib/toast'
 import { navigate } from '../router'
 import { escapeHtml } from '../lib/markdown'
@@ -29,6 +30,7 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
   const found = deckIssues(deck)
   const before = structuredClone(deck.slides)
   let controller: AbortController | null = null
+  let running = false
 
   const wrap = document.createElement('div')
   wrap.className = 'sharepanel refinepanel'
@@ -37,7 +39,7 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
       (f) => `
       <li>
         <b>P${f.index + 1} · ${escapeHtml(f.title.slice(0, 24))}</b>
-        <ul>${f.issues.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul>
+        <ul>${f.issues.map((x) => `<li>${escapeHtml(issueText(x))}</li>`).join('')}</ul>
       </li>`,
     )
     .join('')
@@ -46,15 +48,13 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
       <h3>${t('refine.title')}</h3>
       ${
         found.length
-          ? `<p class="sharepanel__hint">${t('refine.found')
-              .replace('{n}', String(found.length))
-              .replace('{m}', String(found.reduce((a, f) => a + f.issues.length, 0)))}</p>
+          ? `<p class="sharepanel__hint">${t('refine.found', { n: String(found.length), m: String(found.reduce((a, f) => a + f.issues.length, 0)) })}</p>
              <ol class="refinepanel__list" data-rf-list>${listHtml}</ol>
              <p class="rewritepanel__status" data-rf-status hidden></p>`
           : `<p class="sharepanel__hint">${t('refine.clean')}</p>`
       }
       <div class="sharepanel__actions">
-        ${found.length ? `<button class="btn btn--primary btn--sm" data-rf-go>${t('refine.go').replace('{n}', String(found.length))}</button>` : ''}
+        ${found.length ? `<button class="btn btn--primary btn--sm" data-rf-go>${t('refine.go', { n: String(found.length) })}</button>` : ''}
         <button class="btn btn--sm" data-rf-undo hidden>${t('refine.undoAll')}</button>
         <button class="btn btn--sm" data-rf-close>${found.length ? t('common.cancel') : t('common.gotIt')}</button>
       </div>
@@ -63,9 +63,24 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
   const close = (): void => {
     controller?.abort()
     wrap.remove()
+    release()
   }
+  // While a batch runs the panel must stay open (it owns the undo snapshot):
+  // backdrop taps are inert and Cancel / Escape only ABORT — the loop then
+  // reports what already landed and offers undo. Closing used to leave the
+  // pages rewritten so far on disk with no way back.
+  const requestClose = (explicit: boolean): void => {
+    if (running) {
+      if (explicit) controller?.abort()
+      return
+    }
+    close()
+  }
+  const release = dialogize(wrap, () => requestClose(true))
   wrap.addEventListener('click', (e) => {
-    if (e.target === wrap || (e.target as HTMLElement).closest('[data-rf-close]')) close()
+    const onClose = !!(e.target as HTMLElement).closest('[data-rf-close]')
+    if (e.target !== wrap && !onClose) return
+    requestClose(onClose)
   })
   if (!found.length) return close
 
@@ -76,28 +91,33 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
 
   const run = async (): Promise<void> => {
     controller = new AbortController()
+    const signal = controller.signal
+    running = true
     goBtn.disabled = true
     status.hidden = false
     let done = 0
     let skipped = 0
+    const halted = (): boolean => signal.aborted || !wrap.isConnected
     for (const f of found) {
-      if (controller.signal.aborted || !wrap.isConnected) return
-      status.textContent = t('refine.busy')
-        .replace('{i}', String(done + skipped + 1))
-        .replace('{n}', String(found.length))
+      if (halted()) break
+      status.textContent = t('refine.busy', { i: String(done + skipped + 1), n: String(found.length) })
       try {
-        const next = await regenerateSlide(deck, f.index, refineInstruction(f.issues), settings, controller.signal)
-        if (!wrap.isConnected) return
+        const next = await regenerateSlide(deck, f.index, refineInstruction(deck, f.issues), settings, signal)
+        if (halted()) break
         hooks.apply(f.index, next)
         done++
       } catch (err) {
-        if ((err as DOMException)?.name === 'AbortError') return
+        if ((err as DOMException)?.name === 'AbortError') break
         skipped++ // one stubborn page must not sink the batch
       }
     }
-    status.textContent = t('refine.done').replace('{x}', String(done)).replace('{y}', String(skipped))
+    running = false
+    if (!wrap.isConnected) return
+    status.textContent = signal.aborted
+      ? t('refine.aborted', { k: String(done) })
+      : t('refine.done', { x: String(done), y: String(skipped) })
     goBtn.hidden = true
-    undoBtn.hidden = false
+    undoBtn.hidden = done === 0
     closeBtn.textContent = t('common.gotIt')
   }
   goBtn.addEventListener('click', () => void run())

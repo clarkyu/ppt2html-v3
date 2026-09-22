@@ -12,9 +12,10 @@ import {
 import type { LlmSettings } from './settings'
 import { streamText, type GenerateHandlers } from './client'
 import { extractJson } from './extractJson'
+import { LlmError, backoff, isAbort } from './errors'
 import { DECK_SCHEMA_GUIDE, contextBlock } from './prompt'
 import { slidesForMinutes } from '../lib/duration'
-import { deckIsCjk } from '../lib/lang'
+import { deckIsChinese, deckText, fallbackSections, hasHan } from '../lib/lang'
 import { sliceMaterial, SLICE_THRESHOLD } from '../lib/materialSlice'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
@@ -30,6 +31,11 @@ function sliceOptsFor(opts: GenerateOptions, query: string): GenerateOptions {
   if (!mat || mat.length <= SLICE_THRESHOLD) return opts
   return { ...opts, material: sliceMaterial(mat, query) }
 }
+
+/** Pages one part may hold — the structure editor's max, allocatePages' cap
+ * and normalizePartSlides' cut are all this one number (they used to be 15 /
+ * unbounded / 14, so a 15-page part silently lost its last page). */
+export const MAX_PART_PAGES = 15
 
 function asStr(v: unknown): string {
   return typeof v === 'string' ? v.trim() : ''
@@ -47,16 +53,23 @@ function coerceTheme(v: unknown, hint?: ThemeName): ThemeName {
 /**
  * Run an LLM call and parse its JSON, retrying a few times on parse failure —
  * models (esp. DeepSeek in thinking mode) occasionally return an empty or
- * non-JSON answer; a retry almost always recovers. Aborts are not retried.
+ * non-JSON answer; a retry almost always recovers. Only what a fresh sample
+ * can fix is retried: malformed JSON, or ONE transient 429/5xx after a short
+ * pause. A bad key, a truncated reply or a dead network used to burn all
+ * three attempts identically (and three times the tokens). Aborts propagate.
  */
 async function genJson(run: () => Promise<string>, attempts = 3): Promise<unknown> {
   let lastErr: unknown
+  let transient = 0
   for (let i = 0; i < attempts; i++) {
     try {
       return extractJson(await run())
     } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') throw e
+      if (isAbort(e)) throw e
+      if (!(e instanceof LlmError) || !e.retryable) throw e
+      if (e.transient && ++transient > 1) throw e
       lastErr = e
+      if (e.transient) await backoff()
     }
   }
   throw lastErr
@@ -103,8 +116,11 @@ export async function generateStructure(
     `请先输出「整体结构」JSON（只列几个部分，不要展开到每一页）。只输出 JSON。`
   // Streamed so thinking-heavy models don't leave the user on a bare spinner.
   const raw = await genJson(() => streamText(STRUCTURE_SYSTEM, user, settings, handlers))
-  return normalizeStructure(raw, topic, opts)
+  return normalizeStructure(raw, topic, opts, current)
 }
+
+/** Loose title match for "is this the same part after a re-plan". */
+const titleKey = (s: string): string => s.replace(/[\s\p{P}]/gu, '').toLowerCase()
 
 /** Distribute `budget` pages across parts by weight, each ≥1, summing exactly. */
 function allocatePages(weights: number[], budget: number): number[] {
@@ -129,7 +145,7 @@ function allocatePages(weights: number[], budget: number): number[] {
   return alloc
 }
 
-function normalizeStructure(raw: unknown, topic: string, opts: GenerateOptions): Structure {
+function normalizeStructure(raw: unknown, topic: string, opts: GenerateOptions, current?: Structure): Structure {
   const o = asObj(raw)
   const rawSecs = Array.isArray(o.sections) ? o.sections : []
 
@@ -146,15 +162,28 @@ function normalizeStructure(raw: unknown, topic: string, opts: GenerateOptions):
     if (sections.length >= 8) break
   }
   if (!sections.length) {
-    sections.push({ title: '背景与概念' }, { title: '核心内容' }, { title: '应用与小结' })
+    for (const title of fallbackSections(hasHan(topic))) sections.push({ title })
     weights.push(1, 1, 1)
   }
 
+  // Re-plan: the user's edited page counts are a decision, not a suggestion.
+  // Parts that survive (same title) keep their count; only new parts are
+  // allocated, from the budget the user's own total implies.
+  const kept = new Map<string, number>()
+  for (const c of current?.sections ?? []) if (c.pages) kept.set(titleKey(c.title), c.pages)
+  const pinned = sections.map((s) => kept.get(titleKey(s.title)))
+  const userTotal = current ? (current.sections ?? []).reduce((n, c) => n + (c.pages ?? 0), 0) : 0
+
   // Allocate a page budget per part (reserving cover + end). Each part ≥2 pages.
   const target = opts.slideCount ?? (opts.durationMinutes ? slidesForMinutes(opts.durationMinutes) : 10)
-  const budget = Math.max(sections.length * 2, target - 2)
-  const alloc = allocatePages(weights, budget)
-  sections.forEach((s, i) => (s.pages = Math.max(2, alloc[i] ?? 2)))
+  const budget = userTotal > 0 ? Math.max(sections.length * 2, userTotal) : Math.max(sections.length * 2, target - 2)
+  const pinnedSum = pinned.reduce<number>((n, p) => n + (p ?? 0), 0)
+  const openIdx = sections.map((_, i) => i).filter((i) => pinned[i] === undefined)
+  const alloc = allocatePages(openIdx.map((i) => weights[i]), Math.max(openIdx.length * 2, budget - pinnedSum))
+  sections.forEach((s, i) => {
+    const p = pinned[i] ?? alloc[openIdx.indexOf(i)] ?? 2
+    s.pages = Math.min(MAX_PART_PAGES, Math.max(2, p))
+  })
 
   const title = asStr(o.title) || topic.slice(0, 40)
   return {
@@ -228,13 +257,13 @@ function normalizePartSlides(raw: unknown, sec?: Section): OutlineSlide[] {
     const brief = asStr(s.brief) || undefined
     if (!title && !brief) continue
     out.push({ layout, title, brief })
-    if (out.length >= 14) break
+    if (out.length >= MAX_PART_PAGES) break
   }
   // Ensure the part opens with its section-divider page.
   if (!out.length || out[0].layout !== 'section') {
     out.unshift({ layout: 'section', title: sec?.title ?? '', brief: sec?.brief })
   }
-  return out
+  return out.slice(0, MAX_PART_PAGES)
 }
 
 /** Concatenate confirmed groups (cover + parts + end) into a final outline. */
@@ -247,7 +276,10 @@ export function assembleOutline(structure: Structure, groups: OutlineSlide[][]):
   )
 }
 
-function normalizeOutline(raw: unknown, topic: string, themeHint?: ThemeName): Outline {
+/** Structural sanity for any outline about to be generated (the wizard's
+ * edited overview included): exactly one cover, first; exactly one end, last;
+ * a cover / end row pinned mid-deck becomes a section divider. */
+export function normalizeOutline(raw: unknown, topic: string, themeHint?: ThemeName): Outline {
   const o = asObj(raw)
   const rawSlides = Array.isArray(o.slides) ? o.slides : []
 
@@ -261,13 +293,20 @@ function normalizeOutline(raw: unknown, topic: string, themeHint?: ThemeName): O
     slides.push({ layout, title, brief })
     if (slides.length >= 60) break
   }
+  // A cover that isn't first (a stray row before it) is still THE cover:
+  // move it up; any further cover / a non-final end becomes a divider.
+  const coverAt = slides.findIndex((s) => s.layout === 'cover')
+  if (coverAt > 0) slides.unshift(...slides.splice(coverAt, 1))
+  slides.forEach((s, i) => {
+    if ((s.layout === 'cover' && i > 0) || (s.layout === 'end' && i < slides.length - 1)) s.layout = 'section'
+  })
 
   const title = asStr(o.title) || slides.find((s) => s.layout === 'cover')?.title || topic.slice(0, 40)
   if (!slides.some((s) => s.layout === 'cover')) {
     slides.unshift({ layout: 'cover', title })
   }
   if (!slides.length || slides[slides.length - 1].layout !== 'end') {
-    slides.push({ layout: 'end', title: deckIsCjk({ title, slides }) ? '谢谢观看' : 'Thank You' })
+    slides.push({ layout: 'end', title: deckText(deckIsChinese({ title, slides }), 'thanks') })
   }
 
   return {
@@ -289,6 +328,7 @@ const SEGMENT_SYSTEM = `${DECK_SCHEMA_GUIDE}
 
 现在你在为一份**用户已确认大纲**的课件生成其中**一段连续的页面**。请严格遵守：
 - 只输出一个 JSON 对象：{ "slides": [ SlideObject, ... ] } —— 只含本段页面，按给定顺序。
+- **本段覆盖上面规则 1、2**：本段只是整册的一部分，页数以「本段要生成的页面」为准；除非大纲里本段第一页就是 cover / 最后一页就是 end，否则**不要输出 cover / end**，也不要为了凑 8~14 页增删页面。
 - 每页的 layout 与 title 照大纲执行，**不要增删或重排**。
 - 每页的 brief 是用户确认过的要点：成稿内容必须**覆盖并深化 brief**，不得偏题，不得丢弃 brief 中给出的数字 / 案例 / 结论。
 - 与「前文已生成页面」保持连贯：延续其术语与口径，不重复其内容。
@@ -302,7 +342,9 @@ export function splitOutlineSegments(outline: Outline): OutlineSlide[][] {
   const segs: OutlineSlide[][] = []
   let cur: OutlineSlide[] = []
   for (const s of outline.slides) {
-    if (s.layout === 'section' && cur.length) {
+    // A lone cover rides with the first part (one call, not a one-page call).
+    const loneCover = cur.length === 1 && cur[0].layout === 'cover'
+    if (s.layout === 'section' && cur.length && !loneCover) {
       segs.push(cur)
       cur = []
     }
@@ -394,23 +436,95 @@ export async function generateSegmentSlides(
 
   const raw = await genJson(() => streamText(SEGMENT_SYSTEM, user, settings, handlers))
   const o = asObj(raw)
-  const rawSlides = (Array.isArray(o.slides) ? o.slides : []).map(asObj)
+  let rawSlides = (Array.isArray(o.slides) ? o.slides : []).map(asObj).filter((c) => Object.keys(c).length)
+  // A cover / end the outline did not ask for in this segment (the guide's
+  // rule 1 leaking through) would shift every later page by one — drop it.
+  const wantsCover = seg[0]?.layout === 'cover'
+  const wantsEnd = seg[seg.length - 1]?.layout === 'end'
+  rawSlides = rawSlides.filter((c, i) => {
+    const l = asStr(c.layout)
+    if (l === 'cover') return wantsCover && i === 0
+    if (l === 'end') return wantsEnd
+    return true
+  })
+
+  // Align candidates to the outline by TITLE first (a page the model dropped
+  // or prepended must not relabel every page after it), by position only for
+  // what is left, in order.
+  const key = (s: string): string => s.replace(/\*\*/g, '').replace(/[\s\p{P}]/gu, '').toLowerCase()
+  const taken = new Set<number>()
+  const byTitle: Array<Record<string, unknown> | undefined> = seg.map((want) => {
+    const k = key(want.title)
+    if (!k) return undefined
+    const at = rawSlides.findIndex((c, i) => !taken.has(i) && key(asStr(c.title)) === k)
+    if (at < 0) return undefined
+    taken.add(at)
+    return rawSlides[at]
+  })
+  const leftovers = rawSlides.filter((_, i) => !taken.has(i))
 
   const out: Array<Record<string, unknown>> = []
   for (let k = 0; k < seg.length; k++) {
-    const cand = rawSlides[k]
-    if (cand && Object.keys(cand).length) {
+    const cand = byTitle[k] ?? leftovers.shift()
+    if (cand) {
       cand.layout = seg[k].layout
       if (!asStr(cand.title) && seg[k].title) cand.title = seg[k].title
+      // A pinned layout whose key fields never arrived (the model wrote the
+      // page as bullets, say) would render blank under that layout — show
+      // what it did write instead of an empty timeline / stats page.
+      if (!layoutHasContent(cand, seg[k].layout)) cand.layout = cand.body && !cand.bullets ? 'image-text' : 'bullets'
       out.push(cand)
     } else {
-      // Model dropped this page — keep the confirmed outline's skeleton.
-      out.push({
-        layout: seg[k].layout,
-        title: seg[k].title,
-        ...(seg[k].brief ? { bullets: [seg[k].brief] } : {}),
-      })
+      // Model dropped this page — keep the confirmed outline's skeleton, in a
+      // layout that can actually show the brief.
+      out.push(skeletonFor(seg[k]))
     }
   }
   return out
+}
+
+/** Does a raw slide object carry the fields `layout` renders? (Mirrors
+ * edit.ts layoutHasContent for normalized slides; this one sees raw JSON.) */
+function layoutHasContent(s: Record<string, unknown>, layout: SlideLayout): boolean {
+  const has = (k: string): boolean => {
+    const v = s[k]
+    return Array.isArray(v) ? v.length > 0 : !!v
+  }
+  switch (layout) {
+    case 'two-col':
+      return has('left') || has('right')
+    case 'big-number':
+      return has('value')
+    case 'stats':
+      return has('stats')
+    case 'quote':
+      return has('text')
+    case 'comparison':
+      return has('items')
+    case 'timeline':
+      return has('steps')
+    case 'code':
+      return has('code')
+    default:
+      return true // bullets / image-text / section / cover / end degrade gracefully
+  }
+}
+
+/** The outline entry as a slide the user can still recognise (title + brief),
+ * in a layout that displays it — the old skeleton stuffed a brief into
+ * `bullets` under a timeline / stats / quote layout, which rendered blank. */
+function skeletonFor(want: OutlineSlide): Record<string, unknown> {
+  const base = { title: want.title }
+  switch (want.layout) {
+    case 'cover':
+    case 'end':
+    case 'section':
+      return { ...base, layout: want.layout, ...(want.brief ? { subtitle: want.brief } : {}) }
+    case 'quote':
+      return want.brief ? { ...base, layout: 'quote', text: want.brief } : { ...base, layout: 'section' }
+    case 'image-text':
+      return { ...base, layout: 'image-text', ...(want.brief ? { body: want.brief } : {}) }
+    default:
+      return { ...base, layout: 'bullets', ...(want.brief ? { bullets: [want.brief] } : {}) }
+  }
 }

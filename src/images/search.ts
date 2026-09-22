@@ -9,7 +9,7 @@
 
 import type { Deck, Slide, SlideBg } from '../types'
 import { effectiveImageProvider, type LlmSettings } from '../llm/settings'
-import { abstractBg, resolveAbstractStyle } from './abstract'
+import { abstractBgForDeck, resolveAbstractStyle } from './abstract'
 
 const REQ_TIMEOUT = 10000
 const CONCURRENCY = 4
@@ -24,14 +24,18 @@ interface SearchOpts {
   exclude?: Set<string>
 }
 
-/** All candidates for `query` from the effective provider (best-effort → []). */
-export async function searchImageCandidates(
+/** A failure that says nothing about the query: offline, timeout, 429, 5xx.
+ * Retrying later may well succeed — unlike "no results". */
+class TransientError extends Error {}
+
+/** Candidates plus whether an empty list came from a transient failure. */
+async function searchCandidatesEx(
   query: string,
   settings: LlmSettings,
   opts: SearchOpts = {},
-): Promise<ImageCandidate[]> {
+): Promise<{ list: ImageCandidate[]; transient: boolean }> {
   const q = query.trim()
-  if (!q) return []
+  if (!q) return { list: [], transient: false }
   try {
     const { source, key } = effectiveImageProvider(settings)
     const candidates: ImageCandidate[] =
@@ -42,10 +46,19 @@ export async function searchImageCandidates(
           : source === 'pixabay'
             ? await pixabay(q, key, opts.signal)
             : await openverse(q, opts.signal)
-    return opts.exclude ? candidates.filter((c) => !opts.exclude!.has(c.url)) : candidates
-  } catch {
-    return []
+    return { list: opts.exclude ? candidates.filter((c) => !opts.exclude!.has(c.url)) : candidates, transient: false }
+  } catch (e) {
+    return { list: [], transient: e instanceof TransientError }
   }
+}
+
+/** All candidates for `query` from the effective provider (best-effort → []). */
+export async function searchImageCandidates(
+  query: string,
+  settings: LlmSettings,
+  opts: SearchOpts = {},
+): Promise<ImageCandidate[]> {
+  return (await searchCandidatesEx(query, settings, opts)).list
 }
 
 /** Finalize a picked candidate: fire Unsplash's required download ping, strip internals. */
@@ -80,8 +93,14 @@ export async function populateDeckImages(
   opts: {
     signal?: AbortSignal
     onProgress?: (done: number, total: number) => void
-    /** Called as soon as each slide's image resolves (index into deck.slides). */
-    onImage?: (slideIndex: number, bg: SlideBg) => void
+    /** Called as soon as each slide's image resolves. `slideIndex` is the
+     * index at START time; `slide` is the object, so callers can resolve the
+     * live index after a structural edit (deck.slides.indexOf(slide)). */
+    onImage?: (slideIndex: number, bg: SlideBg, slide: Slide) => void
+    /** Photo search failed transiently (offline / timeout / rate limit) for
+     * `count` pages: they were left WITHOUT a background so the next open can
+     * try again — say so once. */
+    onTransient?: (count: number) => void
   } = {},
 ): Promise<void> {
   if (!settings.images.enabled) return
@@ -99,9 +118,9 @@ export async function populateDeckImages(
     const style = resolveAbstractStyle(settings.images.abstractStyle, deck.id || deck.title || deck.theme)
     targets.forEach(({ slide, index }, i) => {
       if (opts.signal?.aborted) return
-      const bg = abstractBg(`${queryForSlide(slide, deck)}#${index}`, deck.theme, style)
+      const bg = abstractBgForDeck(`${queryForSlide(slide, deck)}#${index}`, deck, style)
       slide.bg = bg
-      opts.onImage?.(index, bg)
+      opts.onImage?.(index, bg, slide)
       opts.onProgress?.(i + 1, total)
     })
     return
@@ -113,29 +132,40 @@ export async function populateDeckImages(
 
   let done = 0
   let idx = 0
+  let transientCount = 0
   const worker = async (): Promise<void> => {
     while (idx < targets.length) {
       if (opts.signal?.aborted) return
       const { slide, index } = targets[idx++]
-      const found = await searchImage(queryForSlide(slide, deck), settings, {
+      const { list, transient } = await searchCandidatesEx(queryForSlide(slide, deck), settings, {
         signal: opts.signal,
         exclude: used,
       })
-      // Photo search came up empty (network, rate limit, no results)? Fall
-      // back to a generated pattern so the deck never mixes "has background"
-      // and "bare gradient" pages.
+      const found = list.length ? confirmCandidate(list[0], settings) : null
+      if (!found && transient) {
+        // Offline / timed out / rate-limited: NOT "no photo exists". Leave the
+        // page bare (the theme gradient) rather than persist a generated
+        // pattern as if it were the final answer; the next open retries.
+        transientCount++
+        done++
+        opts.onProgress?.(done, total)
+        continue
+      }
+      // Photo search genuinely came up empty? Fall back to a generated
+      // pattern so the deck never mixes "has background" and "bare gradient".
       const bg =
-        found ?? (opts.signal?.aborted ? null : abstractBg(`${queryForSlide(slide, deck)}#${index}`, deck.theme, fallbackStyle))
+        found ?? (opts.signal?.aborted ? null : abstractBgForDeck(`${queryForSlide(slide, deck)}#${index}`, deck, fallbackStyle))
       if (bg) {
         slide.bg = bg
         used.add(bg.url)
-        opts.onImage?.(index, bg)
+        opts.onImage?.(index, bg, slide)
       }
       done++
       opts.onProgress?.(done, total)
     }
   }
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, total) }, worker))
+  if (transientCount && !opts.signal?.aborted) opts.onTransient?.(transientCount)
 }
 
 /** Derive a search query for a slide: model hint first, else its text. */
@@ -157,9 +187,11 @@ function plain(s: string): string {
 /* ------------------------------- providers ------------------------------- */
 
 async function openverse(q: string, signal?: AbortSignal): Promise<ImageCandidate[]> {
+  // Only licenses that allow commercial use AND modification: a deck is
+  // reworked (cropped, darkened, captioned) and may well be shown for money.
   const url =
     `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}` +
-    `&page_size=6&aspect_ratio=wide&mature=false`
+    `&page_size=6&aspect_ratio=wide&mature=false&license_type=commercial,modification`
   const data = await getJson(url, {}, signal)
   const results = Array.isArray(data?.results) ? data.results : []
   return results
@@ -175,9 +207,21 @@ async function openverse(q: string, signal?: AbortSignal): Promise<ImageCandidat
         source: 'openverse',
         credit: credit || undefined,
         link: typeof r.foreign_landing_url === 'string' ? r.foreign_landing_url : undefined,
+        license: ccLicenseLabel(r.license, r.license_version),
+        licenseUrl: typeof r.license_url === 'string' && /^https?:\/\//i.test(r.license_url) ? r.license_url : undefined,
       }
     })
     .filter((x: ImageCandidate | null): x is ImageCandidate => x !== null)
+}
+
+/** "by-sa" + "4.0" → "CC BY-SA 4.0"; CC0 / public-domain marks get their names. */
+function ccLicenseLabel(license: unknown, version: unknown): string | undefined {
+  const lic = typeof license === 'string' ? license.trim().toLowerCase() : ''
+  if (!lic) return undefined
+  const ver = typeof version === 'string' ? version.trim() : ''
+  if (lic === 'cc0') return `CC0${ver ? ` ${ver}` : ''}`
+  if (lic === 'pdm') return 'Public Domain'
+  return `CC ${lic.toUpperCase()}${ver ? ` ${ver}` : ''}`
 }
 
 async function unsplash(q: string, key: string, signal?: AbortSignal): Promise<ImageCandidate[]> {
@@ -260,13 +304,26 @@ async function getJson(
   signal?: AbortSignal,
 ): Promise<any> {
   const ac = new AbortController()
-  const timer = setTimeout(() => ac.abort(), REQ_TIMEOUT)
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    ac.abort()
+  }, REQ_TIMEOUT)
   const onAbort = () => ac.abort()
   signal?.addEventListener('abort', onAbort)
   try {
     const res = await fetch(url, { headers, signal: ac.signal })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) {
+      if (res.status === 429 || res.status >= 500) throw new TransientError(`HTTP ${res.status}`)
+      throw new Error(`HTTP ${res.status}`)
+    }
     return await res.json()
+  } catch (e) {
+    if (e instanceof TransientError) throw e
+    // Our own timeout, or fetch's TypeError for DNS / offline / CORS: transient.
+    if (timedOut || (e instanceof DOMException && e.name === 'AbortError' && !signal?.aborted)) throw new TransientError('timeout')
+    if (e instanceof TypeError) throw new TransientError('network')
+    throw e
   } finally {
     clearTimeout(timer)
     signal?.removeEventListener('abort', onAbort)

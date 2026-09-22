@@ -57,7 +57,7 @@ export async function generateSlideImage(
   })
   if (!res.ok) {
     const detail = (await res.text().catch(() => '')).slice(0, 160)
-    throw new Error(`${t('ed.genImgFailed')}${detail ? `（${detail}）` : ''}`)
+    throw new Error(`${t('ed.genImgFailed')}${detail ? t('common.detail', { d: detail }) : ''}`)
   }
   const json = (await res.json().catch(() => ({}))) as { data?: Array<{ b64_json?: string; url?: string }> }
   const item = json.data?.[0]

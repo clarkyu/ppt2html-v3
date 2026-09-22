@@ -40,12 +40,15 @@ export default defineConfig(({ command, isPreview }) => ({
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
-        name: '课件生成器 · 一句话变精美 PPT',
+        // Bilingual: the installed app is named for both UI languages.
+        name: '课件生成器 · Deck Maker',
         short_name: '课件生成器',
-        description: '输入一句话，AI 生成精美 HTML 课件，浏览器里像 PPT 一样播放。',
+        description: '输入一句话，AI 生成精美 HTML 课件，浏览器里像 PPT 一样播放。One line in, a polished HTML deck out.',
         lang: 'zh-CN',
         dir: 'ltr',
-        theme_color: '#6d5efc',
+        // Same as index.html's theme-color: the launch chrome used to flip
+        // purple → navy on every cold start of the installed app.
+        theme_color: '#0b1020',
         background_color: '#0b1020',
         display: 'standalone',
         orientation: 'any',

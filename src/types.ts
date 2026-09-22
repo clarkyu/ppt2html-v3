@@ -67,6 +67,10 @@ export interface SlideBg {
   credit?: string
   /** Link back to the source page. */
   link?: string
+  /** License label for CC images, e.g. "CC BY-SA 4.0" (Openverse). */
+  license?: string
+  /** Where that license is explained. */
+  licenseUrl?: string
 }
 
 /** One slide. Fields are optional; only those relevant to `layout` are used. */

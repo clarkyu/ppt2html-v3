@@ -1,6 +1,6 @@
 import type { Slide, SlideBg, Column, CompareItem, TimelineStep } from '../types'
 import { mdInline, mdProse, escapeHtml } from '../lib/markdown'
-import { hasCjk } from '../lib/lang'
+import { deckText, hasHan } from '../lib/lang'
 import { highlightCode } from '../lib/highlight'
 import { semIcon } from './semanticIcons'
 
@@ -51,9 +51,9 @@ function cover(s: Slide): string {
   </div>`
 }
 
-function section(s: Slide): string {
+function section(s: Slide, zh?: boolean): string {
   return `<div class="s s-section">
-    ${eyebrow(s.eyebrow ?? (hasCjk(s.title) ? '章节' : 'Chapter'))}
+    ${eyebrow(s.eyebrow ?? deckText(zh ?? hasHan(s.title), 'chapter'))}
     <h2 class="s-section__title">${mdInline(s.title)}</h2>
     ${s.subtitle ? `<p class="s-section__subtitle">${mdInline(s.subtitle)}</p>` : ''}
   </div>`
@@ -163,7 +163,7 @@ function code(s: Slide): string {
     ${title(s.title)}
     <div class="s-code__frame">
       <div class="s-code__bar" aria-hidden="true"><i></i><i></i><i></i>${lang}</div>
-      <pre class="s-code__block"><code>${highlightCode(s.code ?? '')}</code></pre>
+      <pre class="s-code__block"><code>${highlightCode(s.code ?? '', s.language)}</code></pre>
     </div>
   </div>`
 }
@@ -189,15 +189,15 @@ function imageText(s: Slide): string {
   </div>`
 }
 
-function end(s: Slide): string {
+function end(s: Slide, zh?: boolean): string {
   return `<div class="s s-end">
     <div class="s-end__mark" aria-hidden="true"></div>
-    <h2 class="s-end__title">${mdInline(s.title ?? (hasCjk(s.subtitle) ? '谢谢观看' : 'Thank You'))}</h2>
+    <h2 class="s-end__title">${mdInline(s.title ?? deckText(zh ?? hasHan(s.subtitle), 'thanks'))}</h2>
     ${s.subtitle ? `<p class="s-end__subtitle">${mdInline(s.subtitle)}</p>` : ''}
   </div>`
 }
 
-const RENDERERS: Record<Slide['layout'], (s: Slide) => string> = {
+const RENDERERS: Record<Slide['layout'], (s: Slide, zh?: boolean) => string> = {
   cover,
   section,
   bullets,
@@ -212,10 +212,13 @@ const RENDERERS: Record<Slide['layout'], (s: Slide) => string> = {
   end,
 }
 
-/** Render one slide's inner HTML based on its layout. */
-export function renderSlideInner(slide: Slide): string {
+/** Render one slide's inner HTML based on its layout. `zh` is the DECK's
+ * language, resolved once by the caller (renderDeckSlides); without it the
+ * few baked-in labels fall back to the slide's own text — a Chinese deck with
+ * a section titled "OKR" used to show a 'Chapter' eyebrow beside its 环节 label. */
+export function renderSlideInner(slide: Slide, opts: { zh?: boolean } = {}): string {
   const renderer = RENDERERS[slide.layout] ?? bullets
-  return renderer(slide)
+  return renderer(slide, opts.zh)
 }
 
 /**
@@ -239,7 +242,18 @@ export function bgCssUrl(url: string | undefined): string | null {
     return `url('${safe}')`
   }
   if (!/^https?:\/\//i.test(url)) return null
-  const safe = encodeURI(url).replace(/['"()<>\\]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)
+  // Photo URLs from the providers arrive already percent-encoded: a blanket
+  // encodeURI turned their `%28` into `%2528` and the image never loaded.
+  // Decode-then-encode normalises both raw and encoded input; a malformed
+  // sequence (decodeURI throws) is left as is. Then escape what could close
+  // the CSS string / style attribute.
+  let u: string
+  try {
+    u = encodeURI(decodeURI(url))
+  } catch {
+    u = url
+  }
+  const safe = u.replace(/['"()<>\\\s\u0000-\u001f]/g, (c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`)
   return `url('${safe}')`
 }
 
@@ -286,7 +300,15 @@ export function creditHtml(bg: SlideBg | undefined): string {
     bg.link && /^https?:\/\//i.test(bg.link)
       ? `<a href="${escapeHtml(bg.link)}" target="_blank" rel="noopener noreferrer">${safe}</a>`
       : safe
-  return `<div class="deck-slide__credit">${inner}</div>`
+  // CC images (Openverse) must name their license, not just the creator.
+  const lic = (bg.license ?? '').trim()
+  const licHtml = lic
+    ? ' · ' +
+      (bg.licenseUrl && /^https?:\/\//i.test(bg.licenseUrl)
+        ? `<a href="${escapeHtml(bg.licenseUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(lic)}</a>`
+        : escapeHtml(lic))
+    : ''
+  return `<div class="deck-slide__credit">${inner}${licHtml}</div>`
 }
 
 /** Attribution caption for a slide's background image (empty if none). */

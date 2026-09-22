@@ -3,7 +3,7 @@ import type { LlmSettings } from './settings'
 import { requestText } from './client'
 import { extractJson } from './extractJson'
 import { normalizeSlide } from '../render/normalize'
-import { DECK_SCHEMA_GUIDE } from './prompt'
+import { DECK_SCHEMA_GUIDE, fencedMaterial, MATERIAL_RULE } from './prompt'
 import { sliceMaterial, SLICE_THRESHOLD } from '../lib/materialSlice'
 import { t } from '../i18n'
 
@@ -37,10 +37,33 @@ export async function regenerateSlide(
   const norm = normalizeSlide(extractJson(text))
   // A response that parses but normalizes to nothing is a failure — throw so
   // the editor shows a retryable error instead of silently keeping the old
-  // content while toasting success.
-  if (!norm) throw new Error(t('err.noJson'))
+  // content while toasting success. Same for a reply that lacks the fields
+  // this page's (pinned) layout renders: forcing the layout back onto it
+  // would produce a blank timeline / stats / quote page.
+  if (!norm || !layoutHasContent(norm, slide.layout)) throw new Error(t('err.noJson'))
   // Never change the layout; keep the existing background state.
-  return { ...norm, layout: slide.layout, bg: slide.bg, bgOff: slide.bgOff, imageQuery: norm.imageQuery ?? slide.imageQuery }
+  return {
+    ...norm,
+    layout: slide.layout,
+    bg: slide.bg,
+    bgOff: slide.bgOff,
+    imageQuery: norm.imageQuery ?? slide.imageQuery,
+    eyebrow: norm.eyebrow ?? slide.eyebrow,
+    note: carriedNote(slide, norm, instruction),
+  }
+}
+
+/**
+ * A full speaker script (notes.ts writes 120–250 chars per page) must not be
+ * erased or shrunk to the model's 2-sentence default by a content rewrite:
+ * keep the existing note unless the instruction is about it, or the page had
+ * none / only a stub.
+ */
+function carriedNote(prev: Slide, next: Slide, instruction: string): string | undefined {
+  const old = (prev.note ?? '').trim()
+  const aboutNote = /note|讲稿|备注|旁白|台词|script|speaker/i.test(instruction)
+  if (old.length > 80 && !aboutNote) return old
+  return next.note ?? (old || undefined)
 }
 
 /** The one field group `layout` cannot render without — a reply that declares a
@@ -103,7 +126,15 @@ export async function relayoutSlide(
   // Forcing the target layout onto a reply missing its key fields would render
   // an empty page — treat that as a failure too (caller skips, original stays).
   if (!norm || !layoutHasContent(norm, layout)) throw new Error(t('err.noJson'))
-  return { ...norm, layout, bg: slide.bg, bgOff: slide.bgOff, imageQuery: norm.imageQuery ?? slide.imageQuery }
+  return {
+    ...norm,
+    layout,
+    bg: slide.bg,
+    bgOff: slide.bgOff,
+    imageQuery: norm.imageQuery ?? slide.imageQuery,
+    eyebrow: norm.eyebrow ?? slide.eyebrow,
+    note: carriedNote(slide, norm, instruction),
+  }
 }
 
 const ADD_SYSTEM = `${DECK_SCHEMA_GUIDE}
@@ -137,7 +168,7 @@ export async function generateNewSlide(
   const mat = deck.material?.trim()
   if (mat) {
     const scoped = mat.length > SLICE_THRESHOLD ? sliceMaterial(mat, `${instruction} ${deck.title}`) : mat
-    materialBlock = `\n\n参考素材（生成本课件时用户提供，优先引用其中的事实）：\n"""\n${scoped}\n"""`
+    materialBlock = `\n\n参考素材（生成本课件时用户提供，优先引用其中的事实；分隔标记之间）：\n${fencedMaterial(scoped)}\n${MATERIAL_RULE}`
   }
   const user =
     `课件主题：${deck.prompt || deck.title}\n` +

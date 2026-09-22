@@ -6,7 +6,7 @@
 
 import type { Deck, Slide } from '../types'
 import type { PlayerHandle } from './player'
-import { deckIsCjk } from '../lib/lang'
+import { deckIsChinese, hasCjk } from '../lib/lang'
 
 export interface NarratorHandle {
   stop: () => void
@@ -22,24 +22,30 @@ function stripMd(s: string | undefined): string {
   return (s ?? '').replace(/\*\*(.+?)\*\*/g, '$1')
 }
 
-/** What to say for a slide: the script if present, else its visible content. */
+/** What to say for a slide: the script if present, else its visible content.
+ * Separators follow the slide's script: an English page read with "。" and
+ * "，" makes the TTS voice stumble. */
 export function speechText(s: Slide): string {
   const note = (s.note ?? '').trim()
   if (note) return stripMd(note)
+  const cjk = hasCjk([s.title, s.subtitle, s.body, s.text, s.value, ...(s.bullets ?? [])].filter(Boolean).join(''))
+  const STOP = cjk ? '。' : '. '
+  const COMMA = cjk ? '，' : ', '
+  const COLON = cjk ? '：' : ': '
   const parts: string[] = [stripMd(s.title)]
   if (s.subtitle) parts.push(stripMd(s.subtitle))
-  if (s.bullets?.length) parts.push(s.bullets.map(stripMd).join('。'))
-  if (s.stats?.length) parts.push(s.stats.map((x) => `${x.label}，${x.value}`).join('。'))
-  if (s.value) parts.push(`${stripMd(s.value)}。${stripMd(s.caption)}`)
-  if (s.text) parts.push(`${stripMd(s.text)}${s.author ? `。${stripMd(s.author)}` : ''}`)
-  if (s.items?.length) parts.push(s.items.map((it) => `${stripMd(it.heading)}：${(it.points ?? []).map(stripMd).join('，')}`).join('。'))
-  if (s.steps?.length) parts.push(s.steps.map((st) => `${stripMd(st.label)}${st.text ? `，${stripMd(st.text)}` : ''}`).join('。'))
+  if (s.bullets?.length) parts.push(s.bullets.map(stripMd).join(STOP))
+  if (s.stats?.length) parts.push(s.stats.map((x) => `${x.label}${COMMA}${x.value}`).join(STOP))
+  if (s.value) parts.push(`${stripMd(s.value)}${STOP}${stripMd(s.caption)}`)
+  if (s.text) parts.push(`${stripMd(s.text)}${s.author ? `${STOP}${stripMd(s.author)}` : ''}`)
+  if (s.items?.length) parts.push(s.items.map((it) => `${stripMd(it.heading)}${COLON}${(it.points ?? []).map(stripMd).join(COMMA)}`).join(STOP))
+  if (s.steps?.length) parts.push(s.steps.map((st) => `${stripMd(st.label)}${st.text ? `${COMMA}${stripMd(st.text)}` : ''}`).join(STOP))
   if (s.body) parts.push(stripMd(s.body))
   if (s.left || s.right) {
-    const col = (c: Slide['left']): string => (c ? `${stripMd(c.heading)}：${(c.bullets ?? []).map(stripMd).join('，')}` : '')
-    parts.push([col(s.left), col(s.right)].filter(Boolean).join('。'))
+    const col = (c: Slide['left']): string => (c ? `${stripMd(c.heading)}${COLON}${(c.bullets ?? []).map(stripMd).join(COMMA)}` : '')
+    parts.push([col(s.left), col(s.right)].filter(Boolean).join(STOP))
   }
-  return parts.filter(Boolean).join('。')
+  return parts.filter(Boolean).join(STOP).trim()
 }
 
 function pickVoice(cjk: boolean): SpeechSynthesisVoice | undefined {
@@ -58,7 +64,7 @@ export function startNarration(deck: Deck, player: PlayerHandle, hooks: NarrateH
   const synth = window.speechSynthesis
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return null
 
-  const cjk = deckIsCjk(deck)
+  const cjk = deckIsChinese(deck)
   const total = deck.slides.length
   let live = true
   let seq = 0
@@ -74,12 +80,33 @@ export function startNarration(deck: Deck, player: PlayerHandle, hooks: NarrateH
     }
   }, 12000)
 
+  // Auto-play must SHOW what it reads: in click-to-reveal step mode every
+  // page it advanced to sat with all its bullets hidden. Fragments are off for
+  // the session and restored to the user's preference when narration stops.
+  const stepping = player.stepMode()
+  if (stepping) {
+    player.reveal.configure({ fragments: false })
+    player.reveal.sync()
+  }
+
+  let offSlide: () => void = () => {}
+  let offVoices: () => void = () => {}
   const stop = (): void => {
     if (!live) return
     live = false
     window.clearInterval(keepalive)
     window.clearTimeout(watchdog)
+    offSlide()
+    offVoices()
     synth.cancel()
+    if (stepping && player.stepMode()) {
+      try {
+        player.reveal.configure({ fragments: true })
+        player.reveal.sync()
+      } catch {
+        /* player may already be torn down */
+      }
+    }
   }
 
   const finished = (): void => {
@@ -131,7 +158,8 @@ export function startNarration(deck: Deck, player: PlayerHandle, hooks: NarrateH
   }
 
   // Manual navigation re-anchors the narration to whatever page is shown.
-  player.onSlideChange((num) => {
+  // (Unsubscribed on stop — each start used to leave its listener behind.)
+  offSlide = player.onSlideChange((num) => {
     if (!live) return
     if (num === expected) return
     expected = num
@@ -146,6 +174,7 @@ export function startNarration(deck: Deck, player: PlayerHandle, hooks: NarrateH
       if (live) speakSlide(player.getIndices().h)
     }
     synth.addEventListener?.('voiceschanged', once)
+    offVoices = () => synth.removeEventListener?.('voiceschanged', once)
   }
 
   expected = player.getIndices().h + 1

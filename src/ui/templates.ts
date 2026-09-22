@@ -10,7 +10,7 @@ import { navigate } from '../router'
 import { escapeHtml } from '../lib/markdown'
 import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
-import { getLang, t } from '../i18n'
+import { getLang, t, pages } from '../i18n'
 
 export function renderTemplates(view: HTMLElement): () => void {
   const cleanups: Array<() => void> = []
@@ -21,7 +21,7 @@ export function renderTemplates(view: HTMLElement): () => void {
       <h2>${t('tpl.title')}</h2>
       <a href="#/">${t('common.back')}</a>
     </div>
-    <p class="tpl-sub">${t('tpl.subtitle')}</p>
+    <p class="tpl-sub">${t('tpl.subtitle')}${t('tpl.zhContent') ? ` ${escapeHtml(t('tpl.zhContent'))}` : ''}</p>
     <div class="deck-grid" data-grid></div>`
 
   const grid = view.querySelector<HTMLElement>('[data-grid]')!
@@ -36,7 +36,7 @@ export function renderTemplates(view: HTMLElement): () => void {
         <div class="deck-card__title">${escapeHtml(name)}</div>
         <div class="tpl-card__desc">${escapeHtml(tpl.desc[lang])}</div>
         <div class="deck-card__meta">
-          <span>${tpl.spec.slides?.length ?? 0} ${t('unit.pages')}</span>
+          <span>${pages(tpl.spec.slides?.length ?? 0)}</span>
           <button class="btn btn--primary btn--sm" data-use>${icons.plus} ${t('tpl.use')}</button>
         </div>
       </div>`
@@ -46,7 +46,7 @@ export function renderTemplates(view: HTMLElement): () => void {
       const deck = instantiateTemplate(tpl)
       void persistDeck(deck).then((ok) => {
         if (!ok) return
-        toast(t('tpl.created').replace('{name}', name))
+        toast(t('tpl.created', { name: name }))
         navigate(`#/edit/${deck.id}`)
       })
     })

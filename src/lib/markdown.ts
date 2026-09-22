@@ -15,10 +15,22 @@ const PROSE_TAGS = [
   'p', 'ul', 'ol', 'li', 'blockquote', 'h3', 'h4', 'hr', 'pre',
 ]
 
+// Links in slide text always open in a new tab: `target` is no longer an
+// allowed attribute (model / share-link text can't pick a window name), and a
+// same-tab link would navigate away from the running deck.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A') {
+    node.setAttribute('target', '_blank')
+    node.setAttribute('rel', 'noopener noreferrer')
+  }
+})
+
 function sanitize(dirty: string, tags: string[]): string {
   return DOMPurify.sanitize(dirty, {
     ALLOWED_TAGS: tags,
-    ALLOWED_ATTR: ['href', 'title', 'target', 'rel', 'class'],
+    // No `class`: untrusted text could otherwise attach any app / reveal.js
+    // class (fragment, present, visually-hidden…) to its own markup.
+    ALLOWED_ATTR: ['href', 'title', 'rel'],
   })
 }
 
@@ -34,6 +46,39 @@ export function mdProse(text: string | undefined): string {
   if (!text) return ''
   const raw = marked.parse(text) as string
   return sanitize(raw, PROSE_TAGS)
+}
+
+/**
+ * Inline Markdown → plain text, for places that render a title as TEXT
+ * (chapter corner label, closing recap pills, presenter "up next", the
+ * deck title): a bolded title used to show its literal `**` there.
+ */
+export function mdPlain(text: string | undefined): string {
+  if (!text) return ''
+  return mdPlainKeepBold(text)
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*\*/g, '')
+    .trim()
+}
+
+const BOLD_HOLD = '\u0000'
+
+/**
+ * mdPlain minus the bold pass and the trim: `**…**` pairs survive for callers
+ * that turn them into bold runs (the PPTX export), and a fragment keeps the
+ * spaces at its edges. Only PAIRED markers are unwrapped — a bare `_`, `*` or
+ * `` ` `` is content (template placeholders like `__%`, snake_case names, x*y).
+ */
+export function mdPlainKeepBold(text: string | undefined): string {
+  if (!text) return ''
+  return text
+    .replace(/\*\*/g, BOLD_HOLD) // shield bold pairs from the single-marker rule
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url) → text
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/~~(.+?)~~/g, '$1')
+    .replace(/(^|[^\w*])[*_](\S(?:.*?\S)?)[*_](?![\w*])/g, '$1$2')
+    .replace(/\u0000/g, '**')
 }
 
 /** Escape a string for safe insertion as HTML text. */

@@ -6,6 +6,8 @@ import {
   hasSystemKey,
   hasSystemImageKey,
   systemKeyApplies,
+  hostOf,
+  isDeepSeekEndpoint,
   type LlmSettings,
   type Provider,
 } from '../llm/settings'
@@ -14,6 +16,7 @@ import { startStructure } from './structure'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { escapeHtml } from '../lib/markdown'
+import { openOverlay, overlayOpen } from '../lib/overlay'
 import { t } from '../i18n'
 import type { ClarifyQuestion, Clarification, GenerateOptions } from '../types'
 
@@ -45,16 +48,18 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     return
   }
 
-  const el = document.createElement('div')
-  el.className = 'overlay'
-  el.innerHTML = `<div class="clarify card"><div data-body></div></div>`
-  document.body.appendChild(el)
-  const body = el.querySelector<HTMLElement>('[data-body]')!
+  // One wizard at a time: a second launch while one is up (auto-repeat on
+  // the launcher, a double tap) would stack a second overlay and a second
+  // billed request.
+  if (overlayOpen()) return
+
+  const ov = openOverlay(`<div class="clarify card"><div data-body></div></div>`, () => close())
+  const body = ov.el.querySelector<HTMLElement>('[data-body]')!
   let removed = false
   const close = () => {
     removed = true
     prefetch?.controller.abort()
-    el.remove()
+    ov.dispose()
   }
 
   let prefetch: Prefetch | null = null
@@ -74,6 +79,9 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     pf.promise.then((q) => (pf.resolved = q)).catch((e) => (pf.rejected = e))
     prefetch = pf
   }
+  /** A prefetch still worth keeping for this provider (resolved or in flight). */
+  const prefetchUsable = (provider: Provider): boolean =>
+    !!prefetch && prefetch.provider === provider && !prefetch.rejected && !prefetch.controller.signal.aborted
 
   /* ----------------------------- step 1: model ----------------------------- */
 
@@ -86,13 +94,16 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
       const other: Provider = draft.provider === 'anthropic' ? 'openai' : 'anthropic'
       if (usable(draft, other)) draft.provider = other
     }
-    // Kick off the clarifying-questions request now so it overlaps this step.
-    startPrefetch(draft)
+    // Kick off the clarifying-questions request now so it overlaps this
+    // step — unless the user pasted material: that text goes to a provider
+    // only after they confirm which one, on 开始. Coming BACK to this step
+    // keeps a prefetch that is still valid instead of re-sending it.
+    if (!opts.material?.trim() && !prefetchUsable(draft.provider)) startPrefetch(draft)
 
     body.innerHTML = `
       <div class="clarify__head">
         <h2>${t('guided.pickModel')}</h2>
-        <p>${t('guided.pickModelSub').replace('{topic}', escapeHtml(trimmed))}</p>
+        <p>${t('guided.pickModelSub', { topic: escapeHtml(trimmed) })}</p>
         ${hasSystemKey ? `<p class="clarify__hint">${t('guided.systemKeyHint')}</p>` : ''}
       </div>
       <div class="modelpick">
@@ -159,9 +170,9 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
       const systemCovers = ready && !ownKey
       segBtns.forEach((b) => b.classList.toggle('active', b.dataset.provider === draft.provider))
 
-      // Thinking-mode toggle only applies to DeepSeek V4 endpoints.
-      const isDeepseek = draft.provider === 'openai' && cfg.baseUrl.toLowerCase().includes('deepseek')
-      thinkRow.hidden = !isDeepseek
+      // Thinking-mode toggle only applies to DeepSeek V4 endpoints — the same
+      // host test the client uses to decide whether to SEND `thinking`.
+      thinkRow.hidden = !(draft.provider === 'openai' && isDeepSeekEndpoint(cfg.baseUrl))
       thinkBox.checked = draft.thinking
 
       const activePreset = presetFor(draft.provider, cfg.baseUrl)
@@ -177,8 +188,8 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
 
       noteEl.textContent = ready
         ? systemCovers
-          ? t('guided.willUseSystem').replace('{model}', cfg.model)
-          : t('guided.willUse').replace('{host}', hostOf(cfg.baseUrl)).replace('{model}', cfg.model)
+          ? t('guided.willUseSystem', { model: cfg.model })
+          : t('guided.willUse', { host: hostOf(cfg.baseUrl) || cfg.baseUrl, model: cfg.model })
         : t('guided.warnNoKey')
       noteEl.classList.toggle('modelpick__note--warn', !ready)
       goBtn.disabled = !ready
@@ -217,9 +228,12 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
         toast(t('err.noKeyShort'))
         return
       }
-      saveSettings(draft)
-      // If the provider changed vs. what we prefetched with, redo the prefetch.
-      if (!prefetch || prefetch.provider !== draft.provider) startPrefetch(draft)
+      // Storage refusing (quota / private mode) must not block the wizard: the
+      // in-memory draft drives this run; the user just hears it won't stick.
+      if (!saveSettings(draft)) toast(t('settings.saveFailed'))
+      // Prefetch now if none is usable for this provider (material was held
+      // back until this commit; or the provider changed; or it failed).
+      if (!prefetchUsable(draft.provider)) startPrefetch(draft)
       goQuestions()
     })
 
@@ -241,14 +255,26 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     // Still loading (or failed): show generic defaults instantly, then upgrade
     // to the AI-tailored questions once they arrive (unless the user engaged).
     touched = false
-    showQuestions(defaultQuestions(), true)
-    pf?.promise
+    showQuestions(defaultQuestions(trimmed), true)
+    // Whatever happens to the prefetch, the "optimizing…" line must not stay
+    // up forever: it clears when the tailored questions land, when there are
+    // none, when the request fails, or once the user has started answering.
+    const settle = (): void => body.querySelector('.clarify__loading')?.remove()
+    if (!pf) {
+      settle()
+      return
+    }
+    pf.promise
       .then((q) => {
-        if (removed || touched || step !== 'questions' || !q.length) return
+        if (removed || step !== 'questions') return
+        if (touched || !q.length) {
+          settle()
+          return
+        }
         showQuestions(q, false)
       })
       .catch(() => {
-        /* keep the defaults — they are perfectly usable */
+        if (!removed && step === 'questions') settle() // the defaults are perfectly usable
       })
   }
 
@@ -274,7 +300,10 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
 
     // Any interaction locks the current questions in (no live swap after this).
     const list = body.querySelector<HTMLElement>('.clarify__list')!
-    const markTouched = () => (touched = true)
+    const markTouched = () => {
+      touched = true
+      body.querySelector('.clarify__loading')?.remove() // no swap will happen now
+    }
     list.addEventListener('click', (e) => {
       const chip = (e.target as HTMLElement).closest<HTMLElement>('[data-opt]')
       if (chip) chip.classList.toggle('active')
@@ -304,14 +333,6 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     goQuestions()
   } else {
     showModel()
-  }
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host
-  } catch {
-    return url
   }
 }
 

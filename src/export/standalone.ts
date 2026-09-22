@@ -8,6 +8,8 @@
 import type { Deck } from '../types'
 import { renderDeckSlides } from '../render/renderDeck'
 import { customThemeStyleAttr } from '../render/customTheme'
+import { TARGETS } from '../render/fit'
+import { deckIsChinese } from '../lib/lang'
 import { escapeHtml } from '../lib/markdown'
 import { downloadText } from '../lib/backup'
 import themesCss from '../render/themes.css?raw'
@@ -86,19 +88,24 @@ body { background: var(--bg); font-family: var(--font-body); }
 }`
 
 // Tiny inline player. Plain ES5-ish JS (runs in the exported file, no bundler).
-const PLAYER_JS = `(function(){
+// The fit logic mirrors render/fit.ts — TARGETS is injected from there so the
+// two can't drift again; the print hook fits every page like the viewer's.
+const playerJs = (): string => `(function(){
 var stage=document.querySelector('.slides');if(!stage)return;
 var secs=[].slice.call(stage.querySelectorAll(':scope > section'));var total=secs.length;var i=0;
 var posEl=document.querySelector('[data-pos]');
-var TARGETS=[['.s-cover__title',3,0.45],['.s-cover__subtitle',2,0.6],['.s-section__title',3,0.45],['.s-section__subtitle',2,0.6],['.s-title',3,0.5],['.s-end__title',2,0.5],['.s-end__subtitle',2,0.6],['.s-big__value',2,0.4],['.s-big__caption',2,0.6],['.s-quote__text',5,0.55]];
+var TARGETS=${JSON.stringify(TARGETS.map((t) => [t.sel, t.maxLines, t.minScale]))};
 function fitOne(el,maxLines,minScale){el.style.fontSize='';el.style.maxWidth='';var base=parseFloat(getComputedStyle(el).fontSize);if(!base)return;var min=base*minScale;
 function fits(){var cs=getComputedStyle(el);var lh=parseFloat(cs.lineHeight)||parseFloat(cs.fontSize)*1.2;var pad=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);return el.scrollHeight<=lh*maxLines+pad+2;}
 function shrink(){var size=base;for(var k=0;k<40;k++){if(fits())return true;size=Math.max(min,size-base*0.045);el.style.fontSize=size+'px';if(size<=min)break;}return fits();}
 if(shrink())return;if(getComputedStyle(el).maxWidth!=='none'){el.style.maxWidth='none';el.style.fontSize='';shrink();}}
 function fitSlide(root){for(var t=0;t<TARGETS.length;t++){var els=root.querySelectorAll(TARGETS[t][0]);for(var j=0;j<els.length;j++)fitOne(els[j],TARGETS[t][1],TARGETS[t][2]);}
-var s=root.querySelector('.s');if(!s)return;s.style.transform='';s.style.transformOrigin='';var availH=s.clientHeight,availW=s.clientWidth;if(!availH||!availW)return;var pj=s.style.justifyContent;s.style.justifyContent='flex-start';var ch=s.scrollHeight,cw=s.scrollWidth;s.style.justifyContent=pj;var scale=Math.min(availH/ch,availW/cw,1);if(scale<0.995){s.style.transformOrigin='center center';s.style.transform='scale('+Math.max(scale,0.4)+')';}}
+var s=root.querySelector('.s');if(!s)return;s.style.transform='';s.style.transformOrigin='';var availH=s.clientHeight,availW=s.clientWidth;if(!availH||!availW)return;var pj=s.style.justifyContent;s.style.justifyContent='flex-start';
+var decos=[].slice.call(s.querySelectorAll('[aria-hidden="true"]')).filter(function(d){return getComputedStyle(d).position==='absolute';});var pd=decos.map(function(d){return d.style.display;});decos.forEach(function(d){d.style.display='none';});
+var ch=s.scrollHeight,cw=s.scrollWidth;decos.forEach(function(d,k){d.style.display=pd[k];});s.style.justifyContent=pj;var scale=Math.min(availH/ch,availW/cw,1);if(scale<0.995){s.style.transformOrigin='center center';s.style.transform='scale('+Math.max(scale,0.4)+')';}}
 function layout(){var s=Math.min(innerWidth/1280,innerHeight/720);stage.style.transform='translate(-50%,-50%) scale('+s+')';}
 function show(n){i=Math.max(0,Math.min(total-1,n));for(var k=0;k<total;k++)secs[k].classList.toggle('active',k===i);fitSlide(secs[i]);if(posEl)posEl.textContent=(i+1)+' / '+total;try{history.replaceState(null,'','#'+(i+1));}catch(e){}}
+addEventListener('beforeprint',function(){for(var k=0;k<total;k++){var sec=secs[k];var pv=sec.style.visibility,po=sec.style.opacity;sec.style.visibility='hidden';sec.style.opacity='1';fitSlide(sec);sec.style.visibility=pv;sec.style.opacity=po;}});
 function next(){show(i+1);}function prev(){show(i-1);}
 var blackout=document.createElement('div');blackout.style.cssText='position:fixed;inset:0;background:#000;z-index:99;display:none';document.body.appendChild(blackout);
 addEventListener('keydown',function(e){var k=e.key;if(k==='ArrowRight'||k==='ArrowDown'||k==='PageDown'||k===' '){next();e.preventDefault();}else if(k==='ArrowLeft'||k==='ArrowUp'||k==='PageUp'){prev();e.preventDefault();}else if(k==='Home'){show(0);}else if(k==='End'){show(total-1);}else if(k==='b'||k==='B'||k==='.'){blackout.style.display=blackout.style.display==='none'?'block':'none';}else if(k==='f'||k==='F'){var d=document;if(d.fullscreenElement){d.exitFullscreen();}else if(d.documentElement.requestFullscreen){d.documentElement.requestFullscreen();}}});
@@ -113,13 +120,21 @@ var start=(parseInt((location.hash||'').slice(1),10)||1)-1;show(isFinite(start)&
 
 /** Build the full self-contained HTML document for a deck. */
 export function standaloneHtml(deck: Deck): string {
-  const slides = renderDeckSlides(deck)
+  // The exported player has no presenter view, so speaker notes would only
+  // ride along invisibly in the file — a script written for the presenter's
+  // eyes must not travel with the audience copy. (PPTX export keeps them by
+  // design: PowerPoint shows them as notes.)
+  const slides = renderDeckSlides({ ...deck, slides: deck.slides.map(({ note: _note, ...s }) => s) })
   // `.player` carries the shared typography + --pos/--neg vars (themes.css only
   // scopes those to `.player`, not `.theme-*`), so the export renders with the
   // app's fonts. A custom theme adds its derived palette as inline vars.
   const customStyle = deck.customTheme ? ` style="${escapeHtml(customThemeStyleAttr(deck.customTheme))}"` : ''
+  // Document language and the nav buttons' accessible names follow the deck.
+  const cjk = deckIsChinese(deck)
+  const prevLabel = cjk ? '上一页' : 'Previous'
+  const nextLabel = cjk ? '下一页' : 'Next'
   return `<!doctype html>
-<html lang="zh">
+<html lang="${cjk ? 'zh-CN' : 'en'}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -135,11 +150,11 @@ ${EXPORT_CSS}
 ${slides}
 </div></div>
 <div class="exp-nav">
-  <button data-prev type="button" aria-label="Previous">&lsaquo;</button>
+  <button data-prev type="button" aria-label="${prevLabel}">&lsaquo;</button>
   <span class="exp-pos" data-pos></span>
-  <button data-next type="button" aria-label="Next">&rsaquo;</button>
+  <button data-next type="button" aria-label="${nextLabel}">&rsaquo;</button>
 </div>
-<script>${PLAYER_JS}</script>
+<script>${playerJs()}</script>
 </body>
 </html>`
 }
