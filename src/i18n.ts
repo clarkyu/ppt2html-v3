@@ -517,6 +517,7 @@ const DICT: Record<string, Entry> = {
   'refine.go': { zh: '开始精修 {n} 页', en: 'Refine {n} page(s)' },
   'refine.busy': { zh: '正在精修第 {i}/{n} 页…（已改完的页即时生效）', en: 'Refining page {i}/{n}… (finished pages apply live)' },
   'refine.done': { zh: '完成：改写 {x} 页，跳过 {y} 页（失败的页保持原样）。', en: 'Done: {x} rewritten, {y} skipped (failures keep the original).' },
+  'refine.pageN': { zh: '第 {n} 页', en: 'Page {n}' },
   'refine.aborted': { zh: '已中止：{k} 页已改写（可全部撤销），其余未动。', en: 'Stopped: {k} page(s) rewritten (undo available); the rest were left as is.' },
   'refine.undoAll': { zh: '全部撤销', en: 'Undo all' },
   'ge.button': { zh: '整册 AI 修改（一句话指令，先出计划再执行）', en: 'Whole-deck AI edit (plan first, then apply)' },

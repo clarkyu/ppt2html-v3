@@ -2,9 +2,11 @@
 // the same inputs across runs is what makes score deltas attributable to
 // prompt changes. Edit deliberately — changing a topic resets its baseline.
 //
-// Spread: the six template scenarios (training / report / launch / classroom /
-// retro / pitch) + science, tech, humanities, health; two English topics; two
-// with duration pressure (short & long); one with pasted material.
+// Spread (16 topics): the six template scenarios (training / report / launch /
+// classroom / retro / pitch) + science, tech, humanities, health, business,
+// education, psychology; two English topics; four with duration pressure
+// (5 / 10 / 15 / 30 min); one with pasted material. Duration topics get the
+// same slideCount the product derives (run-eval mirrors home.ts).
 
 export const TOPICS = [
   { id: 'train-comm', topic: '给团队做一次高效沟通培训', opts: {} },

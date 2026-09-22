@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { TOPICS } from './topics.mjs'
 import { scoreDeck, summarize } from './score.mjs'
+import { CAPACITY_CODES, formatIssue, slideIssues, textLen, labelLike, deckLanguage } from '../../src/lib/qualityContract.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const args = process.argv.slice(2)
@@ -36,6 +37,39 @@ const MODE = has('--mock') ? 'mock' : has('--local') ? 'local' : 'golden'
 const RENDER = !has('--no-render') && MODE !== 'mock'
 const ONLY = val('--only')?.split(',').map((s) => s.trim()).filter(Boolean)
 const PORT = Number(process.env.EVAL_PORT || 5177)
+
+// A typo in --only or --baseline used to run "successfully" with no decks /
+// no Δ and no warning — fail loudly instead.
+if (ONLY) {
+  const known = new Set(TOPICS.map((t) => t.id))
+  const unknown = ONLY.filter((id) => !known.has(id))
+  if (unknown.length || !ONLY.length) {
+    console.error(`--only：未知主题 ${unknown.join(', ') || '(空)'}；可用：${[...known].join(', ')}`)
+    process.exit(1)
+  }
+}
+const BASELINE_PATH = val('--baseline')
+let BASELINE = null
+if (BASELINE_PATH !== undefined) {
+  if (!BASELINE_PATH || !existsSync(BASELINE_PATH)) {
+    console.error(`--baseline：文件不存在：${BASELINE_PATH || '(未给路径)'}`)
+    process.exit(1)
+  }
+  try {
+    BASELINE = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
+    if (!BASELINE?.summary) throw new Error('缺 summary 字段')
+  } catch (e) {
+    console.error(`--baseline：无法解析 ${BASELINE_PATH}：${e.message}`)
+    process.exit(1)
+  }
+}
+
+/** Mirror of src/lib/duration.ts (pure; that module pulls in i18n). */
+const slidesForMinutes = (minutes) => Math.max(5, Math.min(40, Math.round(minutes / 1.3)))
+/** The options the product would send for a topic: home.ts derives slideCount
+ * from the duration; the golden run used to send the duration alone, i.e. a
+ * prompt the product never produces, with expectPages always empty. */
+const optsFor = (t) => ({ ...t.opts, slideCount: t.opts.slideCount ?? (t.opts.durationMinutes ? slidesForMinutes(t.opts.durationMinutes) : undefined) })
 
 for (const k of ['HTTP_PROXY','HTTPS_PROXY','http_proxy','https_proxy','ALL_PROXY','all_proxy','NO_PROXY','no_proxy']) delete process.env[k]
 
@@ -63,12 +97,26 @@ const BAD_DECK = {
     { layout: 'image-text', title: '长文页', body: '这一段说明文字被刻意写得非常非常长，远远超过图文页大约九十个字的容量上限，还在继续写，继续写，塞进更多没有信息量的句子，让它一定超过一百一十个字符的宽容线，再补一句凑数的话让它彻底超标，然后再来一句确保万无一失的凑数长句压轴收尾。' },
   ],
 }
+// English deck: normal English bullets must NOT be capacity violations (the
+// limits are CJK-character units; Latin letters count ½), one stray CJK
+// title must count as ONE mismatch, and a quote page is note-checked but
+// anchor-exempt.
+const EN_DECK = {
+  title: 'Time management for new professionals', theme: 'aurora',
+  slides: [
+    { layout: 'cover', title: 'Time management for new professionals', imageQuery: 'desk clock' },
+    { layout: 'bullets', title: 'Why the first 90 days matter', imageQuery: 'calendar', note: 'Most habits that stick are formed in the first quarter, so this is where we invest.', bullets: ['New hires form 80% of lasting habits in the first 90 days', 'A weekly review takes 20 minutes and saves about 3 hours', 'Saying no to one meeting a day frees a full workday each month'] },
+    { layout: 'quote', text: 'What gets scheduled gets done.', author: 'Michael Hyatt', imageQuery: 'notebook' },
+    { layout: 'bullets', title: '时间盒', imageQuery: 'timer', note: 'Timeboxing is the simplest technique and the one people actually keep using.', bullets: ['Block two focus hours before noon, every single day', 'Batch email into three fixed slots, not constant checks', 'Protect one meeting-free afternoon per week for deep work'] },
+    { layout: 'end', title: 'Thank you', imageQuery: 'sunset road' },
+  ],
+}
 const MOCK_EXPECT = [
   ['bad 首页不是 cover', (s) => s.bad.structureIssues.some((x) => x.includes('cover'))],
   ['bad 连续 bullets>2', (s) => s.bad.structureIssues.some((x) => x.includes('连续 bullets'))],
-  ['bad 标题超长被抓', (s) => s.bad.capViolations.some((x) => x.includes('标题'))],
-  ['bad bullets 超条数被抓', (s) => s.bad.capViolations.some((x) => x.includes('bullets 条数'))],
-  ['bad body 超长被抓', (s) => s.bad.capViolations.some((x) => x.includes('body 长度'))],
+  ['bad 标题超长被抓', (s) => s.bad.capCodes.includes('title.tooLong')],
+  ['bad bullets 超条数被抓', (s) => s.bad.capCodes.includes('bullets.tooMany')],
+  ['bad body 超长被抓', (s) => s.bad.capCodes.includes('body.tooLong')],
   ['bad 非英文 imageQuery 被抓', (s) => s.bad.nonEnglishQuery >= 1],
   ['bad 重复 imageQuery 被抓', (s) => s.bad.dupQueries >= 1],
   ['bad 不配平的 ** 被抓', (s) => s.bad.unbalancedBold >= 1],
@@ -76,6 +124,15 @@ const MOCK_EXPECT = [
   ['good 结构零问题', (s) => s.good.structureIssues.length === 0],
   ['good 容量零违规', (s) => s.good.capViolationCount === 0],
   ['good 讲稿覆盖率=1', (s) => s.good.noteCoverage === 1],
+  ['en 正常英文 bullets 不算容量违规（按中文字折算）', (s) => s.en.capViolationCount === 0 || (console.log('     ', s.en.capViolations.join(' | ')), false)],
+  ['en 12 词英文 bullet 是观点句，4 词是标签', () => !labelLike('Block two focus hours before noon, every single day') && labelLike('Improve efficiency now')],
+  ['en 折算：46 字母英文 ≈ 24 字，28 字中文 = 28', () => textLen('Short video compresses attention to eight seconds') <= 28 && textLen('短视频把用户平均注意力压缩到了八秒钟以内的一个数字') === 25],
+  ['en 一个中文标题只算 1 处语言错配（不反转基准）', (s) => s.en.langMismatch === 1 && s.en.lang === 'en'],
+  ['en quote 页：计入讲稿覆盖、不计锚点', (s) => s.en.noteCoverage === +(2 / 3).toFixed(2) && s.en.anchorRate === 1],
+  ['契约一致：scorer 的容量违规 = 同一 slideIssues 的容量码', (s) => JSON.stringify(s.bad.capCodes) === JSON.stringify(BAD_DECK.slides.flatMap((sl) => slideIssues(sl).filter((x) => CAPACITY_CODES.has(x.code)).map((x) => x.code)))],
+  ['契约一致：每个容量码都有中英文文案', () => [...CAPACITY_CODES].every((code) => ['zh', 'en'].every((l) => !/\{|^[a-z]+\.[A-Za-z]+$/.test(formatIssue({ code, params: { n: 1, max: 1, min: 1, i: 1, c: 1, col: 'left', text: 'x' } }, l))))],
+  ['deckLanguage：无标题时按多数内容页', () => deckLanguage({ slides: [{ layout: 'bullets', title: 'A' }, { layout: 'bullets', title: 'B' }, { layout: 'bullets', title: '丙' }] }) === 'en'],
+  ['锚点：句中专名算案例，下一行的句首大写不算', () => slideIssues({ layout: 'bullets', note: 'x'.repeat(30), bullets: ['We copied what Stripe does for onboarding flows', 'A second sentence here', 'A third sentence here'] }).every((x) => x.code !== 'anchor.missing') && slideIssues({ layout: 'bullets', note: 'x'.repeat(30), bullets: ['Improve efficiency now', 'Communicate better', 'Own your outcomes'] }).some((x) => x.code === 'anchor.missing')],
 ]
 
 /* --------------------------- infra helpers ---------------------------- */
@@ -151,7 +208,7 @@ async function collectDecks(page, base) {
         const { normalizeDeck } = await import('/src/render/normalize.ts')
         const spec = await generateDeckSpec(topic, opts, loadSettings())
         return JSON.parse(JSON.stringify(normalizeDeck(spec, { prompt: topic })))
-      }, t)
+      }, { topic: t.topic, opts: optsFor(t) })
       console.log(`${decks[t.id].slides.length} 页`)
     } catch (e) {
       console.log(`失败：${String(e).slice(0, 120)}`)
@@ -246,7 +303,7 @@ async function main() {
   if (MODE === 'mock') {
     // The good fixture is a deliberate 7-pager — score it against its own
     // target so the 8~14 default-range rule doesn't flag the fixture itself.
-    const scored = { good: scoreDeck(GOOD_DECK, { expectPages: 7 }), bad: scoreDeck(BAD_DECK) }
+    const scored = { good: scoreDeck(GOOD_DECK, { expectPages: 7 }), bad: scoreDeck(BAD_DECK), en: scoreDeck(EN_DECK, { expectPages: 5 }) }
     let fail = 0
     for (const [name, check] of MOCK_EXPECT) {
       const okk = check(scored)
@@ -268,11 +325,15 @@ async function main() {
     await browser.close()
   })
 
-  const expect = MODE === 'golden' ? Object.fromEntries(TOPICS.map((t) => [t.id, t.opts.slideCount])) : {}
+  if (MODE === 'golden' && !Object.keys(decks).length) {
+    console.error('golden：没有生成任何课件（全部失败？）——不写结果目录')
+    process.exit(1)
+  }
+  // Page targets come from the same derivation the prompt received.
+  const expect = MODE === 'golden' ? Object.fromEntries(TOPICS.map((t) => [t.id, optsFor(t).slideCount])) : {}
   const scored = Object.fromEntries(Object.entries(decks).map(([id, d]) => [id, scoreDeck(d, { expectPages: expect[id] })]))
   const summary = summarize(scored)
-  const baselinePath = val('--baseline')
-  const baseline = baselinePath && existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : null
+  const baseline = BASELINE
   const meta = { mode: MODE, at, model: MODE === 'golden' ? (process.env.EVAL_LLM_MODEL || 'deepseek-chat') : undefined }
 
   const dir = path.join(ROOT, 'scripts/eval/results', `${at.replace(/[:.]/g, '-')}-${MODE}`)

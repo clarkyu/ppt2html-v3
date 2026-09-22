@@ -5,7 +5,7 @@
 // whole-deck undo. Overlay shell reuses the share panel styles.
 
 import type { Deck, Slide } from '../types'
-import { deckIssues, refineInstruction } from '../lib/quality'
+import { deckIssues, issueText, refineInstruction } from '../lib/quality'
 import { regenerateSlide } from '../llm/edit'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { t } from '../i18n'
@@ -38,7 +38,7 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
       (f) => `
       <li>
         <b>P${f.index + 1} · ${escapeHtml(f.title.slice(0, 24))}</b>
-        <ul>${f.issues.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul>
+        <ul>${f.issues.map((x) => `<li>${escapeHtml(issueText(x))}</li>`).join('')}</ul>
       </li>`,
     )
     .join('')
@@ -100,7 +100,7 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
         .replace('{i}', String(done + skipped + 1))
         .replace('{n}', String(found.length))
       try {
-        const next = await regenerateSlide(deck, f.index, refineInstruction(f.issues), settings, signal)
+        const next = await regenerateSlide(deck, f.index, refineInstruction(deck, f.issues), settings, signal)
         if (halted()) break
         hooks.apply(f.index, next)
         done++
