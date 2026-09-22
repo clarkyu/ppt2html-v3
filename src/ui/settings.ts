@@ -6,6 +6,8 @@ import {
   hasSystemImageKey,
   SYSTEM_DEEPSEEK,
   systemKeyApplies,
+  normalizeBaseUrl,
+  baseUrlProblem,
   type LlmSettings,
   type Provider,
 } from '../llm/settings'
@@ -62,7 +64,8 @@ export function renderSettings(view: HTMLElement): () => void {
 
       <div class="form-group">
         <label>${t('settings.baseUrl')}</label>
-        <input class="form-input" data-base placeholder="">
+        <input class="form-input" data-base placeholder="" aria-describedby="settings-base-error">
+        <div class="hint" id="settings-base-error" data-base-error role="alert" style="color:var(--neg,#e5484d)" hidden></div>
       </div>
 
       <div class="form-group">
@@ -140,6 +143,7 @@ export function renderSettings(view: HTMLElement): () => void {
   const segBtns = view.querySelectorAll<HTMLButtonElement>('[data-provider]')
   const noteEl = view.querySelector<HTMLElement>('[data-note]')!
   const baseEl = view.querySelector<HTMLInputElement>('[data-base]')!
+  const baseErrEl = view.querySelector<HTMLElement>('[data-base-error]')!
   const keyEl = view.querySelector<HTMLInputElement>('[data-key]')!
   const modelSelect = view.querySelector<HTMLSelectElement>('[data-model-select]')!
   const modelCustom = view.querySelector<HTMLInputElement>('[data-model-custom]')!
@@ -264,6 +268,7 @@ export function renderSettings(view: HTMLElement): () => void {
 
   baseEl.addEventListener('input', () => {
     state[state.provider].baseUrl = baseEl.value
+    baseErrEl.hidden = true
     updateKeyHint()
     if (!customModel) rebuildModels()
   })
@@ -326,10 +331,25 @@ export function renderSettings(view: HTMLElement): () => void {
   })
 
   view.querySelector('[data-save]')!.addEventListener('click', () => {
-    // Fall back to placeholder defaults for empty base/model.
     const hint = PROVIDER_HINTS[state.provider]
-    if (!state[state.provider].baseUrl.trim()) state[state.provider].baseUrl = hint.base
-    if (!state[state.provider].model.trim()) state[state.provider].model = hint.model
+    const cfg = state[state.provider]
+    // Empty base → the provider default; a missing scheme is added
+    // ("api.example.com/v1" used to become a same-origin POST carrying the
+    // key); what still can't work (not a URL, key over plain http to a public
+    // host) is refused with an inline reason instead of being stored.
+    cfg.baseUrl = normalizeBaseUrl(cfg.baseUrl) || hint.base
+    baseEl.value = cfg.baseUrl
+    const problem = baseUrlProblem(cfg.baseUrl)
+    if (problem) {
+      baseErrEl.textContent = t(problem === 'insecure' ? 'settings.baseUrlInsecure' : 'settings.baseUrlInvalid')
+      baseErrEl.hidden = false
+      baseEl.focus()
+      return
+    }
+    baseErrEl.hidden = true
+    // A blank model means "this endpoint's first choice", not gpt-4o-mini
+    // regardless of where the request goes.
+    if (!cfg.model.trim()) cfg.model = modelChoicesFor(state.provider, cfg.baseUrl, '')[0] ?? hint.model
     saveSettings(state)
     customModel = false
     paint()

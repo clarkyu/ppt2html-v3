@@ -2,7 +2,7 @@
 // Used by both the Settings page and the pre-generation model picker so the
 // user can *choose* a model instead of typing one (custom entry still allowed).
 
-import type { Provider } from './settings'
+import { hostOf, type Provider } from './settings'
 
 export interface ModelPreset {
   label: string
@@ -170,12 +170,22 @@ export function modelNote(id: string): string {
   return MODEL_NOTES[id.trim()] ?? ''
 }
 
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host.toLowerCase()
-  } catch {
-    return url.trim().toLowerCase()
-  }
+/**
+ * Known output-token ceilings by host (and optionally model). DeepSeek V4
+ * (0813) allows 384K on the official API; Groq's small models reject anything
+ * above 8192 with HTTP 400. Endpoints not listed get no clamp — the client
+ * retries once without the field if the provider rejects it.
+ */
+const OUTPUT_CAPS: Array<{ host: RegExp; model?: RegExp; cap: number }> = [
+  { host: /deepseek/, cap: 384_000 },
+  { host: /(^|\.)api\.groq\.com$/, model: /8b-instant|gemma/i, cap: 8192 },
+]
+
+/** The output-token ceiling to respect for this endpoint + model, if known. */
+export function outputCap(baseUrl: string, model: string): number | undefined {
+  const host = hostOf(baseUrl)
+  if (!host) return undefined
+  return OUTPUT_CAPS.find((c) => c.host.test(host) && (!c.model || c.model.test(model.trim())))?.cap
 }
 
 /** Best-matching preset for a provider + base URL (matched by host). */

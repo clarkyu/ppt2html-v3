@@ -81,17 +81,77 @@ export const SYSTEM_IMAGE = {
 export const hasSystemImageKey =
   SYSTEM_IMAGE.unsplashKey.length > 0 || SYSTEM_IMAGE.pexelsKey.length > 0 || SYSTEM_IMAGE.pixabayKey.length > 0
 
-function isDeepSeekHost(url: string): boolean {
+/** Host of a URL, lowercased; '' when it doesn't parse. A scheme-less or
+ * malformed base URL is therefore never "DeepSeek" and never a preset match
+ * (five call sites used to each guess differently on the raw string). */
+export function hostOf(url: string): string {
   try {
-    return new URL(url).host.toLowerCase().includes('deepseek')
+    return new URL(url.trim()).host.toLowerCase()
   } catch {
-    return url.toLowerCase().includes('deepseek')
+    return ''
   }
+}
+
+/** The one "is this DeepSeek" test: client extras, output cap, the thinking
+ * toggle and the system-key fallback all key off it. */
+export function isDeepSeekEndpoint(baseUrl: string): boolean {
+  return hostOf(baseUrl).includes('deepseek')
+}
+
+/** Ensure a scheme: "api.example.com/v1" → "https://api.example.com/v1".
+ * Without one, fetch resolved the base against the app's own origin and
+ * POSTed the API key to GitHub Pages. */
+export function normalizeBaseUrl(url: string): string {
+  const s = url.trim().replace(/\/+$/, '')
+  if (!s) return ''
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(s) ? s : `https://${s}`
+}
+
+/**
+ * Why a base URL can't be used ('' when it's fine): it isn't a URL, or it's
+ * plain http to a non-local host — the API key would cross the network in
+ * clear. http stays allowed for localhost / LAN / *.local (Ollama, LM Studio…).
+ */
+export function baseUrlProblem(url: string): '' | 'invalid' | 'insecure' {
+  let u: URL
+  try {
+    u = new URL(url.trim())
+  } catch {
+    return 'invalid'
+  }
+  // Chromium's parser accepts "https://not a url" (spaces and all) where Node
+  // and the spec refuse it — check the hostname ourselves.
+  if (!plausibleHostname(u.hostname)) return 'invalid'
+  if (u.protocol === 'https:') return ''
+  if (u.protocol !== 'http:') return 'invalid'
+  return isLocalHostname(u.hostname) ? '' : 'insecure'
+}
+
+function plausibleHostname(h: string): boolean {
+  if (!h || /[\s%]/.test(h)) return false
+  if (/^\[[0-9a-f:.]+\]$/i.test(h)) return true // IPv6 literal
+  return /^[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?)*$/i.test(h)
+}
+
+function isLocalHostname(h: string): boolean {
+  const host = h.toLowerCase().replace(/^\[|\]$/g, '')
+  return (
+    host === 'localhost' ||
+    host === '::1' ||
+    host === '0.0.0.0' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host.endsWith('.lan') ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  )
 }
 
 /** True when the active endpoint is DeepSeek and can ride on the system key. */
 export function systemKeyApplies(settings: LlmSettings): boolean {
-  return hasSystemKey && settings.provider === 'openai' && isDeepSeekHost(settings.openai.baseUrl)
+  return hasSystemKey && settings.provider === 'openai' && isDeepSeekEndpoint(settings.openai.baseUrl)
 }
 
 export const DEFAULT_SETTINGS: LlmSettings = {
@@ -142,10 +202,15 @@ export function loadSettings(): LlmSettings {
     const parsed = JSON.parse(raw) as Partial<LlmSettings>
     const images = { ...DEFAULT_SETTINGS.images, ...parsed.images }
     if (!ABSTRACT_STYLES.includes(images.abstractStyle)) images.abstractStyle = 'auto'
+    // Base URLs saved before the form validated them may lack a scheme.
+    const anthropic = { ...DEFAULT_SETTINGS.anthropic, ...parsed.anthropic }
+    const openai = { ...DEFAULT_SETTINGS.openai, ...parsed.openai }
+    anthropic.baseUrl = normalizeBaseUrl(String(anthropic.baseUrl ?? '')) || DEFAULT_SETTINGS.anthropic.baseUrl
+    openai.baseUrl = normalizeBaseUrl(String(openai.baseUrl ?? '')) || DEFAULT_SETTINGS.openai.baseUrl
     return {
       provider: parsed.provider === 'openai' ? 'openai' : 'anthropic',
-      anthropic: { ...DEFAULT_SETTINGS.anthropic, ...parsed.anthropic },
-      openai: { ...DEFAULT_SETTINGS.openai, ...parsed.openai },
+      anthropic,
+      openai,
       thinking: parsed.thinking === true,
       images,
       imageGen: { ...DEFAULT_SETTINGS.imageGen, ...parsed.imageGen },

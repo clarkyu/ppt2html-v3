@@ -5,7 +5,7 @@ import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
-import { liveTitles, renderLive } from '../lib/live'
+import { liveTitles, renderLive, renderThinking } from '../lib/live'
 import { saveDraft } from '../lib/draft'
 import { t } from '../i18n'
 import {
@@ -194,7 +194,11 @@ export function startPageOutline(
       structure,
       sIndex,
       loadSettings(),
-      { signal: controller.signal, onToken: (full) => renderLive(liveEl, liveTitles(full)) },
+      {
+        signal: controller.signal,
+        onToken: (full) => renderLive(liveEl, liveTitles(full)),
+        onReasoning: (n) => renderThinking(liveEl, n),
+      },
       instruction,
       confirmedFor(sIndex),
     )

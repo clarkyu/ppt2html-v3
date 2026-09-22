@@ -137,6 +137,30 @@ const DICT: Record<string, Entry> = {
     en: 'The model service errored — try again shortly.',
   },
   'err.noJson': { zh: '模型没有返回有效的 JSON', en: 'The model did not return valid JSON' },
+  'err.truncated': {
+    zh: '模型输出被截断（达到输出上限）——请减少页数 / 时长，或换用输出上限更高的模型。',
+    en: 'The model’s output was cut off (output limit reached) — ask for fewer pages, or switch to a model with a higher output limit.',
+  },
+  'err.contentFilter': {
+    zh: '模型拒绝了这次请求（内容策略）——换个说法试试。',
+    en: 'The model declined this request (content policy) — try rephrasing.',
+  },
+  'err.badResponse': {
+    zh: '接口返回的不是模型回复（像是网页或错误页）——请检查设置里的 Base URL。',
+    en: 'The endpoint returned something other than a model reply (a web page?) — check the base URL in Settings.',
+  },
+  'err.http402': {
+    zh: '账户余额不足或需要付费——请检查该服务的账户额度。',
+    en: 'Payment required or balance exhausted — check your account with that provider.',
+  },
+  'err.systemKeyUnavailable': {
+    zh: '内置的 DeepSeek 额度暂时不可用（限流或额度用尽）——稍后再试，或到「设置」填写自己的 API Key。',
+    en: 'The built-in DeepSeek quota is unavailable right now (rate limit or exhausted) — retry later, or add your own API key in Settings.',
+  },
+  'err.badBaseUrl': {
+    zh: '设置里的 Base URL 无法使用——需要形如 https://api.example.com/v1 的完整地址。',
+    en: 'The base URL in Settings can’t be used — enter a full address like https://api.example.com/v1.',
+  },
   'err.offline': { zh: '当前离线，请联网后重试。', en: 'You are offline — reconnect and retry.' },
   'err.viewCrashed': { zh: '这个页面打不开', en: 'This screen failed to open' },
   'db.saveFailed': {
@@ -155,6 +179,15 @@ const DICT: Record<string, Entry> = {
   'gen.title': { zh: '正在生成课件…', en: 'Generating your deck…' },
   'gen.subtitle': { zh: '「{topic}」 · 共 {n} 页', en: '“{topic}” · {n} slides' },
   'gen.connecting': { zh: '正在连接模型…', en: 'Connecting to the model…' },
+  'gen.thinking': { zh: '模型思考中…（已推理 {n} 字）', en: 'Model is thinking… ({n} chars of reasoning so far)' },
+  'settings.baseUrlInvalid': {
+    zh: '请输入完整的接口地址，例如 https://api.example.com/v1',
+    en: 'Enter a full endpoint URL, e.g. https://api.example.com/v1',
+  },
+  'settings.baseUrlInsecure': {
+    zh: '公网地址必须用 https://（API Key 会随请求发送）；本机 / 局域网地址可用 http://',
+    en: 'Public endpoints must use https:// (the API key travels with each request); http:// is fine for localhost / LAN.',
+  },
   'gen.failed': { zh: '生成失败', en: 'Generation failed' },
   'gen.pageProgress': { zh: '已生成 {x} / {n} 页', en: 'Generated {x} / {n} slides' },
   'gen.pageCount': { zh: '已生成 {x} 页…', en: 'Generated {x} slides…' },

@@ -6,6 +6,8 @@ import {
   hasSystemKey,
   hasSystemImageKey,
   systemKeyApplies,
+  hostOf,
+  isDeepSeekEndpoint,
   type LlmSettings,
   type Provider,
 } from '../llm/settings'
@@ -159,9 +161,9 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
       const systemCovers = ready && !ownKey
       segBtns.forEach((b) => b.classList.toggle('active', b.dataset.provider === draft.provider))
 
-      // Thinking-mode toggle only applies to DeepSeek V4 endpoints.
-      const isDeepseek = draft.provider === 'openai' && cfg.baseUrl.toLowerCase().includes('deepseek')
-      thinkRow.hidden = !isDeepseek
+      // Thinking-mode toggle only applies to DeepSeek V4 endpoints — the same
+      // host test the client uses to decide whether to SEND `thinking`.
+      thinkRow.hidden = !(draft.provider === 'openai' && isDeepSeekEndpoint(cfg.baseUrl))
       thinkBox.checked = draft.thinking
 
       const activePreset = presetFor(draft.provider, cfg.baseUrl)
@@ -178,7 +180,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
       noteEl.textContent = ready
         ? systemCovers
           ? t('guided.willUseSystem').replace('{model}', cfg.model)
-          : t('guided.willUse').replace('{host}', hostOf(cfg.baseUrl)).replace('{model}', cfg.model)
+          : t('guided.willUse').replace('{host}', hostOf(cfg.baseUrl) || cfg.baseUrl).replace('{model}', cfg.model)
         : t('guided.warnNoKey')
       noteEl.classList.toggle('modelpick__note--warn', !ready)
       goBtn.disabled = !ready
@@ -304,14 +306,6 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     goQuestions()
   } else {
     showModel()
-  }
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host
-  } catch {
-    return url
   }
 }
 

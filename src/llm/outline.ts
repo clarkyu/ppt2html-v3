@@ -12,6 +12,7 @@ import {
 import type { LlmSettings } from './settings'
 import { streamText, type GenerateHandlers } from './client'
 import { extractJson } from './extractJson'
+import { LlmError, backoff, isAbort } from './errors'
 import { DECK_SCHEMA_GUIDE, contextBlock } from './prompt'
 import { slidesForMinutes } from '../lib/duration'
 import { deckIsCjk } from '../lib/lang'
@@ -47,16 +48,23 @@ function coerceTheme(v: unknown, hint?: ThemeName): ThemeName {
 /**
  * Run an LLM call and parse its JSON, retrying a few times on parse failure —
  * models (esp. DeepSeek in thinking mode) occasionally return an empty or
- * non-JSON answer; a retry almost always recovers. Aborts are not retried.
+ * non-JSON answer; a retry almost always recovers. Only what a fresh sample
+ * can fix is retried: malformed JSON, or ONE transient 429/5xx after a short
+ * pause. A bad key, a truncated reply or a dead network used to burn all
+ * three attempts identically (and three times the tokens). Aborts propagate.
  */
 async function genJson(run: () => Promise<string>, attempts = 3): Promise<unknown> {
   let lastErr: unknown
+  let transient = 0
   for (let i = 0; i < attempts; i++) {
     try {
       return extractJson(await run())
     } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') throw e
+      if (isAbort(e)) throw e
+      if (!(e instanceof LlmError) || !e.retryable) throw e
+      if (e.transient && ++transient > 1) throw e
       lastErr = e
+      if (e.transient) await backoff()
     }
   }
   throw lastErr

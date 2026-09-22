@@ -3,7 +3,7 @@ import { persistDeck } from '../lib/persist'
 import { getSampleDeck } from '../sample'
 import { mountPlayer, type PlayerHandle } from '../player/player'
 import { populateDeckImages } from '../images/search'
-import { loadSettings } from '../llm/settings'
+import { isConfigured, loadSettings } from '../llm/settings'
 import { navigate } from '../router'
 import { icons } from '../lib/icons'
 import { t } from '../i18n'
@@ -646,6 +646,13 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
       const aiBtns = [rewriteBtn, refineBtn, view.querySelector<HTMLButtonElement>('[data-gedit]')!]
       genBtn.addEventListener('click', () => {
         if (!loadedDeck || genBtn.disabled) return
+        // Same gate as every other AI entry point: an unconfigured user gets
+        // "add a key in Settings", not a 401 dressed up as "invalid key".
+        if (!isConfigured(loadSettings())) {
+          toast(t('err.noKey'))
+          navigate('#/settings')
+          return
+        }
         const hasLong = loadedDeck.slides.some((s) => (s.note ?? '').trim().length > 80)
         if (hasLong && !window.confirm(t('viewer.genNotesConfirm'))) return
         genBtn.disabled = true

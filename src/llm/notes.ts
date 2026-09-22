@@ -11,6 +11,7 @@ import type { Deck, Slide } from '../types'
 import type { LlmSettings } from './settings'
 import { streamText } from './client'
 import { extractJson } from './extractJson'
+import { LlmError, backoff, isAbort } from './errors'
 import { deckIsCjk } from '../lib/lang'
 import { sliceMaterial, SLICE_THRESHOLD } from '../lib/materialSlice'
 import { t } from '../i18n'
@@ -158,14 +159,20 @@ export async function generateSpeakerNotes(
     // (localized) message; parse failures get a dedicated one.
     let lastErr: unknown
     let appliedAny = false
+    let transient = 0
     for (let attempt = 0; attempt < 3 && pending.size; attempt++) {
       if (handlers.signal?.aborted) throw new DOMException('aborted', 'AbortError')
       let text: string
       try {
         text = await streamText(NOTES_SYSTEM, batchPrompt(deck, [...pending]), settings, { signal: handlers.signal })
       } catch (e) {
-        if (e instanceof DOMException && e.name === 'AbortError') throw e
+        if (isAbort(e)) throw e
+        // Only a fresh sample can fix a transient 429/5xx (once, after a short
+        // pause); a bad key, a truncated reply or a dead network fails the
+        // same way thrice — surface it now, earlier batches stay written.
+        if (!(e instanceof LlmError) || !e.transient || ++transient > 1) throw e
         lastErr = e
+        await backoff(1500, handlers.signal)
         continue
       }
       try {
