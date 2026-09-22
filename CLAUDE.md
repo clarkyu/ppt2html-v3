@@ -20,6 +20,10 @@ LLM。部署在 GitHub Pages:https://clarkyu.github.io/ppt2html-v3/
   用户指示过:**不要主动查部署状态**,听指令往前干。
 - **节奏**:实现 → `npm run build`(含 tsc)→ 无头 Playwright 验证(全过才算)→
   提交 → 推送 → 草稿 PR → 汇报 → 等合并 → 重置分支 → 下一个。
+- **上一个 PR 未合并时**:后续批次照常在本地**逐批独立提交**叠上去(每批自己的
+  verify 脚本 + 全量回归),等合并后 `git fetch origin main && git rebase origin/main`,
+  然后**一次只推一个提交**(`git push origin <sha>:<分支>`)开草稿 PR,合并再推下一个——
+  保持一批一个 PR。审计修复状态见下文「全项目审计」。
 
 ## 无头验证方法(已验证可用的固定配方)
 
@@ -58,6 +62,16 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
   `npx vite --port …`,外层 shell 的命令行仍会被匹配连坐:**pkill 单独放一条命令**。
 - **容器/会话重开 = 仓库重新克隆,未提交改动全部丢失**(node_modules 也没了,先
   `npm ci`)。功能验证通过就立刻提交推送,别把提交压到审查之后。
+- 更多固定配方(审计批次里沉淀的):真流式 mock 用 `http.createServer` 在 5197 分块吐
+  SSE(verify-b04);同 URL `page.goto` 是同文档跳转不清浮层,用 `goto`+`reload`;
+  播放页有会话级**位置记忆**(`sessionStorage ppt2html.pos.<id>`),测试的 openViewer
+  先删它否则从上次页面开始;隐藏的 `<input type=file>` 要 `waitForSelector(sel,
+  {state:'attached'})` + `setInputFiles`;对话框焦点在 rAF 后移入,opacity 有 0.12s
+  过渡——断言前 `waitForTimeout(250)`;`getComputedStyle` 的值要在 `el.remove()` 之前
+  读;flex 子项的 `display` 计算值是 `flex` 不是 `inline-flex`;粗指针/无 hover 用
+  `newContext({isMobile:true, hasTouch:true})`,减弱动画用 `reducedMotion:'reduce'`;
+  多个 verify 脚本并行打同一个 dev server 偶发超时——失败的单独重跑一次再下结论;
+  `pptx` 下载用 `page.waitForEvent('download')` + JSZip 在 Node 侧解包核对 XML。
 
 ## 架构地图(按功能找文件)
 
@@ -96,8 +110,22 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
 - **素材**:`src/lib/extractText.ts`(txt/md/docx/pdf 本机解析,mammoth/pdfjs 懒加载
   且被 workbox globIgnores 排除出离线包)、`materialSlice.ts`(长素材>3000 字按环节
   词面切片,结构规划保全量)、`deckMaterial.ts`(deck→提纲式素材,导入件 AI 重构用)
-- **其他**:`src/lib/lang.ts`(CJK 检测,课件语言跟随)、`highlight.ts`(零依赖代码高亮)、
-  `draft.ts`(向导草稿 24h)、`styles.ts`(我的风格 localStorage 库)、`i18n.ts`(全部文案 zh/en)
+- **其他**:`src/lib/lang.ts`(`hasCjk` 脚本无关计数用;`hasHan`/`isChineseText`/
+  `deckIsChinese` 按汉字多数判定课件语言;**`deckText(zh, key)` 是课件内固定文案的唯一
+  来源**——谢谢观看/章节/环节/新部分/未命名页/编辑器占位,绝不用 t())、
+  `highlight.ts`(零依赖代码高亮)、`draft.ts`(向导草稿 24h)、`composer.ts`(首页作文框
+  sessionStorage)、`styles.ts`(我的风格 localStorage 库)、`i18n.ts`(全部文案 zh/en;
+  **`t(key, params)` 函数式插值,`tn(key, n)` 单复数,`pages(n)`;禁止再写
+  `.replace('{x}', …)`**)、`overlay.ts`(向导用 `openOverlay`;播放页/库的现成面板用
+  `dialogize(el, onClose)` 变成 role=dialog:焦点/Tab 圈禁/Esc 捕获/回焦)、
+  `toast.ts`(单一 `.toasts` 容器 role=status 堆叠,支持一个动作按钮)+ `dom.ts
+  removeWithUndo`(删行 toast 内撤销)、`llm/errors.ts`(LlmError kind/retryable)、
+  `llm/extractJson.ts`
+- **脚本**:`scripts/check-chunks.mjs`(构建后守卫:pdfjs/mammoth 块不得进离线壳)、
+  `scripts/i18n-check.mjs`(`npm run i18n:check`,字典键 ↔ 源码引用双向校验,0 缺 0 冗才过)、
+  `scripts/audit-check.mjs`(`npm run audit:check`,生产依赖 high/critical 门禁,白名单
+  按包名+通告标题)、`scripts/eval/`(评测器);deploy.yml 顺序 audit → i18n → build →
+  eval --mock,任一红不部署
 
 ## 已知坑(踩过、修过,别再踩)
 
@@ -141,6 +169,23 @@ chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/c
   预览的替代方案,别再尝试动态 OG。
 - **deck.material 是 local-only 契约**(PR #70 用户已认可):share.ts 的 portable()
   是显式字段白名单,material 绝不能加入;导出同样不得携带。
+- **`.player .reveal` 不能有 z-index**——它会成为层叠上下文,把 reveal 的翻页箭头
+  (z 56,须落在讲稿条 55 与工具栏 60 之间)困在里面。
+- **播放页浮层的色值 token**:`--fg/--muted/--card-border/--accent` 只在 `.player.theme-*`
+  里定义,浮层是 `.player` 的兄弟,又被 reveal 的 `.reveal-viewport{color:#000}` 染黑——
+  app.css 已在 `.viewer, .sharepanel, .stylepick, .rehearse-summary` 上把它们映射到应用
+  token,新浮层复用这些类或自己映射。
+- **紧凑工具栏是测量驱动的**(`.viewer--compact`,viewer.ts relayoutBar):新工具必须放在
+  `.viewer__tools` 里且靠 `hidden` 显隐(MutationObserver 会重算);20 个工具 ≈1090px,
+  1280px 桌面刚好内联,别再加宽按钮间距。
+- **PPTX 导出/导入的字段标签** `ppt2html:<版式>:<字段>`(export/pptx.ts objectName ↔
+  import/pptx.ts fromTagged)必须同步改;`chrome` 标记的装饰导入时跳过。
+- **pdf.js 用 legacy 构建**(`pdfjs-dist/legacy/build/…`):6.3+ 主线程调
+  `Map.prototype.getOrInsertComputed`,旧浏览器每页抛错;别换回主线构建。
+- **`npm audit fix --omit=dev` 会删掉 devDependencies**(vite 都没了)——之后 `npm install`
+  并重启 dev server;image-size(经 pptxgenjs)只能靠 audit-check 白名单,别 `--force`。
+- 图标按钮必须带 `aria-label`(模板里写 `title="…" aria-label="…"`);没有控件的
+  `<label>` 用 `<span class="form-label">`;开关类按钮写 `aria-pressed`。
 
 ## 功能全景(截至 PR #73,全部已上线)
 
@@ -170,6 +215,10 @@ AI 修改三层(播放页,persistable 门禁):单页改写(#58)→ 一键精修(
 新增页(凭空生成,携带素材)/更换版式;#73 审查修复:换版式强制重挂、空页/回声
 防护、end 锚点钳制、中止可撤销、错误可见、按身份回位、计划列表本地化);均可撤销。
 质量度量:`npm run eval` 评测器(golden 16 主题/本地模板/评分器自测,--baseline 出 Δ)。
+审计修复(2026-09,B01–B15,详见 DEVLOG):离线 PWA/数据丢失、编辑器完整性、播放页
+AI 面板生命周期、LLM 客户端健壮性、设置/分享隐私、质量契约单一来源、大纲/素材管线、
+向导状态与浮层、渲染/打印/导出保真、播放体验、PPTX 往返、移动端布局、无障碍语义、
+国际化(课件语言 deckText / t(key, params) / i18n-check)、构建与工具链门禁。
 
 ## 补充坑(PR14–16 踩到的)
 
@@ -184,8 +233,12 @@ AI 修改三层(播放页,persistable 门禁):单页改写(#58)→ 一键精修(
 
 1. 多语言课件一键翻译(整套 deck 翻译为另一语言)——用户曾明确跳过,勿擅自开工
 2. golden set 真实基线:用户本机 EVAL_LLM_KEY 跑第一份,之后 prompt 迭代对 Δ
-3. 全项目高标准审计(2026-09 用户要求,workflow 32 审查者 × 逐条对抗验证)的
-   修复批次——报告出来后按"安全/数据 → 常见路径 bug → UX/a11y → 可维护性"分 PR 落地
+3. 全项目高标准审计(2026-09,32 审查者 × 逐条对抗验证,134 条 15 批,报告
+   https://claude.ai/artifact/5hFXBwuiYMt7QV2y3Zg7gw)——**全部 15 批已实现并验证**:
+   #76 安全、#78 B01、#79 B02 已合并,#80 B03 待合并,B04–B15 在本地分支上逐批独立提交,
+   等 #80 合并后按「一次只推一个提交」逐个开 PR(见开发约定);每批详情见 DEVLOG
+   「会话四·全项目审计修复」。之后可做:CSP meta(script-src 'self',先确认 reveal 无内联
+   handler)、模板/示例的英文版内容
 
 已完成(曾在候选里):自定义主题=PR #49;课件模板库=PR #52;导入 PPTX=PR #53;
 练习模式=PR #54;分享卡片/系统分享/接收端 CTA=PR #56;移动三件套=PR #57;
