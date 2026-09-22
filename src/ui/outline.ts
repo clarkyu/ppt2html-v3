@@ -1,4 +1,4 @@
-import { generatePartPages, assembleOutline } from '../llm/outline'
+import { generatePartPages, assembleOutline, normalizeOutline } from '../llm/outline'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { generateAndPlay } from './generating'
 import { navigate } from '../router'
@@ -389,7 +389,10 @@ export function startPageOutline(
         showOverview()
       },
       onGenerate: () => {
-        const edited = collectOutline(body, trimmed)
+        // Through the same normalizer as a model outline: a cover / end row
+        // pinned mid-deck becomes a section divider instead of a second
+        // cover page inside the deck.
+        const edited = normalizeOutline(collectOutline(body, trimmed), trimmed)
         if (!edited.slides.length) {
           toast(t('outline.keepOnePage'))
           return

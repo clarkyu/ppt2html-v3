@@ -11,6 +11,8 @@ import { loadDraft, clearDraft } from '../lib/draft'
 import { durationOptions, slidesForMinutes } from '../lib/duration'
 import { getLang, t } from '../i18n'
 import { toast } from '../lib/toast'
+import { MATERIAL_MAX_CHARS } from '../llm/prompt'
+import { clampChars } from '../lib/materialSlice'
 import type { GenerateOptions, ThemeName } from '../types'
 
 /** Minimal Web Speech API surface (not in lib.dom; prefixed on Chrome/Safari). */
@@ -120,7 +122,7 @@ export function renderHome(view: HTMLElement): () => void {
       </div>
       <details class="composer__material" data-material-box>
         <summary>${icons.note} ${t('home.materialSummary')}</summary>
-        <textarea class="composer__input composer__material-input" data-material rows="5" maxlength="8000"
+        <textarea class="composer__input composer__material-input" data-material rows="5" maxlength="${MATERIAL_MAX_CHARS}"
           placeholder="${escapeHtml(t('home.materialPlaceholder'))}"></textarea>
         <div class="composer__material-row">
           <button class="btn btn--ghost btn--sm" data-material-file>${icons.upload} ${t('home.materialUpload')}</button>
@@ -278,9 +280,22 @@ export function renderHome(view: HTMLElement): () => void {
     })
   }
 
+  // Every way text enters the material box (file import, one-tap paste) goes
+  // through here: merge, cap at the prompt limit (surrogate-safe) and SAY so —
+  // the textarea's maxlength only guards typing, not programmatic writes, so
+  // pasted over-limit material used to be cut downstream without a word.
+  const appendMaterial = (text: string, sep = '\n\n'): boolean => {
+    const cur = materialEl.value.trim()
+    const merged = cur ? `${cur}${sep}${text}` : text
+    materialEl.value = clampChars(merged, MATERIAL_MAX_CHARS)
+    const truncated = merged.length > MATERIAL_MAX_CHARS
+    if (truncated) toast(t('home.materialTruncated').replace('{n}', String(MATERIAL_MAX_CHARS)))
+    materialEl.focus()
+    return truncated
+  }
+
   // File → material: .txt/.md read directly, .pdf/.docx parsed on-device
-  // (lazy-loaded parsers, see lib/extractText). Appends into the box; the
-  // 8000-char cap is enforced by the textarea's maxlength.
+  // (lazy-loaded parsers, see lib/extractText). Appends into the box.
   const fileBtn = view.querySelector<HTMLButtonElement>('[data-material-file]')!
   const fileInput = view.querySelector<HTMLInputElement>('[data-material-input]')!
   fileBtn.addEventListener('click', () => fileInput.click())
@@ -293,13 +308,10 @@ export function renderHome(view: HTMLElement): () => void {
     fileBtn.textContent = t('home.materialParsing')
     void import('../lib/extractText')
       .then(({ extractFileText }) => extractFileText(file))
-      .then((text) => {
-        const cur = materialEl.value.trim()
-        const merged = cur ? `${cur}\n\n${text}` : text
-        materialEl.value = merged.slice(0, 8000)
-        if (merged.length > 8000) toast(t('home.materialTruncated'))
-        else toast(t('home.materialParsed').replace('{n}', String(text.length)))
-        materialEl.focus()
+      .then(({ text, decodedAs }) => {
+        const truncated = appendMaterial(text)
+        if (decodedAs === 'gbk') toast(t('home.materialDecodedGbk'))
+        else if (!truncated) toast(t('home.materialParsed').replace('{n}', String(text.length)))
       })
       .catch((err: Error) => toast(err.message || t('home.materialParseFailed')))
       .finally(() => {
@@ -322,10 +334,13 @@ export function renderHome(view: HTMLElement): () => void {
             toast(t('home.pasteEmpty'))
             return
           }
-          const target = materialBox.open ? materialEl : topicEl
-          const cur = target.value.trim()
-          target.value = cur ? `${cur}${target === materialEl ? '\n' : ' '}${got}` : got
-          target.focus()
+          if (materialBox.open) {
+            appendMaterial(got, '\n')
+            return
+          }
+          const cur = topicEl.value.trim()
+          topicEl.value = cur ? `${cur} ${got}` : got
+          topicEl.focus()
         })
         .catch(() => toast(t('home.pasteFailed'))) // permission denied / insecure context
     })

@@ -17,6 +17,7 @@ import { deckIsCjk } from '../lib/lang'
 import { semIconKey } from './semanticIcons'
 import { sanitizeCustomTheme } from './customTheme'
 import { MATERIAL_MAX_CHARS } from '../llm/prompt'
+import { clampChars } from '../lib/materialSlice'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
 const THEME_SET = new Set<string>(THEMES)
@@ -332,6 +333,6 @@ export function sanitizeDeck(
   // deck.material is a local-only contract (share must never carry it); the
   // restore path keeps it so speaker scripts can still quote real facts.
   const material = opts.allowMaterial && typeof o.material === 'string' ? o.material.trim() : ''
-  if (material) deck.material = material.slice(0, MATERIAL_MAX_CHARS)
+  if (material) deck.material = clampChars(material, MATERIAL_MAX_CHARS)
   return deck
 }

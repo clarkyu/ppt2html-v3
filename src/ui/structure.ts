@@ -1,4 +1,4 @@
-import { generateStructure } from '../llm/outline'
+import { generateStructure, MAX_PART_PAGES } from '../llm/outline'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { startPageOutline } from './outline'
 import { navigate } from '../router'
@@ -143,7 +143,7 @@ function renderSecRow(s: Section): string {
           <input class="ol-row__title" data-title value="${escapeHtml(s.title)}" placeholder="${escapeHtml(t('struct.partTitle'))}">
           <div class="sec-row__budget" title="${escapeHtml(t('struct.partPages'))}">
             <button class="sec-row__step" data-dec type="button" tabindex="-1">−</button>
-            <input class="sec-row__pages" type="number" min="1" max="15" data-pages value="${s.pages ?? 3}">
+            <input class="sec-row__pages" type="number" min="1" max="${MAX_PART_PAGES}" data-pages value="${s.pages ?? 3}">
             <button class="sec-row__step" data-inc type="button" tabindex="-1">+</button>
             <span class="sec-row__unit">${t('unit.pages')}</span>
             <span class="sec-row__time" data-time></span>
@@ -249,7 +249,7 @@ function wireEditor(
     } else if (btn.dataset.inc !== undefined || btn.dataset.dec !== undefined) {
       const input = row.querySelector<HTMLInputElement>('[data-pages]')
       if (input) {
-        const next = Math.min(15, Math.max(1, pagesOf(row) + (btn.dataset.inc !== undefined ? 1 : -1)))
+        const next = Math.min(MAX_PART_PAGES, Math.max(1, pagesOf(row) + (btn.dataset.inc !== undefined ? 1 : -1)))
         input.value = String(next)
         recalc()
       }
@@ -258,6 +258,18 @@ function wireEditor(
 
   list.addEventListener('input', (e) => {
     if ((e.target as HTMLElement).matches('[data-pages]')) recalc()
+  })
+  // A typed value past the cap used to be accepted here and silently cut to
+  // the cap by the page planner — clamp it where the user can see it.
+  list.addEventListener('change', (e) => {
+    const input = e.target as HTMLInputElement
+    if (!input.matches('[data-pages]')) return
+    const v = Number(input.value)
+    if (Number.isFinite(v) && v > MAX_PART_PAGES) {
+      input.value = String(MAX_PART_PAGES)
+      toast(t('struct.pagesClamped').replace('{max}', String(MAX_PART_PAGES)))
+      recalc()
+    }
   })
 
   body.querySelector('[data-add]')!.addEventListener('click', () => {
@@ -292,7 +304,7 @@ function collectStructure(body: HTMLElement, topic: string): Structure {
     const ttl = row.querySelector<HTMLInputElement>('[data-title]')?.value.trim() ?? ''
     const brief = row.querySelector<HTMLInputElement>('[data-brief]')?.value.trim() || undefined
     const pagesRaw = Number(row.querySelector<HTMLInputElement>('[data-pages]')?.value)
-    const pages = Number.isFinite(pagesRaw) && pagesRaw > 0 ? Math.round(pagesRaw) : 3
+    const pages = Number.isFinite(pagesRaw) && pagesRaw > 0 ? Math.min(MAX_PART_PAGES, Math.round(pagesRaw)) : 3
     if (ttl || brief) sections.push({ title: ttl || (brief as string), brief: ttl ? brief : undefined, pages })
   })
 

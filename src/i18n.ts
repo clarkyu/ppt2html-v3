@@ -242,7 +242,17 @@ const DICT: Record<string, Entry> = {
   'home.materialUpload': { zh: '从文件导入', en: 'Import a file' },
   'home.materialParsing': { zh: '解析中…', en: 'Parsing…' },
   'home.materialParsed': { zh: '已提取 {n} 字。', en: 'Extracted {n} characters.' },
-  'home.materialTruncated': { zh: '内容较长，已截取前 8000 字。', en: 'Long content — kept the first 8000 characters.' },
+  'home.materialTruncated': { zh: '内容较长，已截取前 {n} 字。', en: 'Long content — kept the first {n} characters.' },
+  'home.materialTooBig': { zh: '文件太大（超过 8 MB）——请只导入需要的部分。', en: 'File too large (over 8 MB) — import just the part you need.' },
+  'home.materialDecodedGbk': {
+    zh: '文件不是 UTF-8 编码，已按 GBK 解码——请检查文字是否正常。',
+    en: 'The file was not UTF-8; decoded as GBK — please check the text reads correctly.',
+  },
+  'imp.materialTrimmed': {
+    zh: '课件较长，重构素材保留了全部标题与要点，讲者备注有所精简。',
+    en: 'Long deck: the rebuild material keeps every title and bullet; speaker notes were trimmed.',
+  },
+  'struct.pagesClamped': { zh: '单个部分最多 {max} 页。', en: 'A part can hold at most {max} pages.' },
   'home.materialUnsupported': { zh: '暂只支持 txt / md / pdf / docx 文件。', en: 'Only txt / md / pdf / docx files are supported.' },
   'home.materialEmptyFile': { zh: '这个文件里没有提取到文字。', en: 'No text could be extracted from this file.' },
   'home.materialParseFailed': { zh: '文件解析失败——可以打开文件复制文字后粘贴过来。', en: 'Parsing failed — open the file and paste the text instead.' },

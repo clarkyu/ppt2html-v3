@@ -3,6 +3,7 @@ import { generateDeckSpec } from '../llm/client'
 import { loadSettings, isConfigured, activeConfig, newDeckBranding } from '../llm/settings'
 import { normalizeDeck, normalizeSlide } from '../render/normalize'
 import { MATERIAL_MAX_CHARS } from '../llm/prompt'
+import { clampChars } from '../lib/materialSlice'
 import { mountSlidePreview } from '../render/preview'
 import { saveDeck } from '../store/db'
 import { navigate } from '../router'
@@ -117,7 +118,7 @@ export function generateAndPlay(
     deck.branding = newDeckBranding(settings)
     // Keep the generation material on the deck (local only — the share-link
     // allowlist excludes it) so the speaker-script pass can quote real facts.
-    if (opts.material?.trim()) deck.material = opts.material.trim().slice(0, MATERIAL_MAX_CHARS)
+    if (opts.material?.trim()) deck.material = clampChars(opts.material.trim(), MATERIAL_MAX_CHARS)
     // Background images are fetched lazily in the player (non-blocking).
     // A save failure is NOT a generation failure: its retry only re-saves
     // (nothing regenerated or billed), instead of re-streaming the last
@@ -316,9 +317,12 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
       },
     })
       .then((spec) => {
-        const deck = normalizeDeck(spec, { prompt: trimmed, model, theme: opts.theme })
+        // The user's explicit theme choice wins over the model's suggestion
+        // (which is only the fallback when nothing was chosen) — the live
+        // thumbnails were already drawn in the chosen theme.
+        const deck = normalizeDeck({ ...spec, theme: opts.theme ?? spec.theme }, { prompt: trimmed, model, theme: opts.theme })
         deck.branding = newDeckBranding(settings)
-        if (opts.material?.trim()) deck.material = opts.material.trim().slice(0, MATERIAL_MAX_CHARS)
+        if (opts.material?.trim()) deck.material = clampChars(opts.material.trim(), MATERIAL_MAX_CHARS)
         return saveAndOpen(deck).catch(() => showSaveFail(deck))
       })
       .catch((err: unknown) => {

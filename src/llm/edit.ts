@@ -37,8 +37,10 @@ export async function regenerateSlide(
   const norm = normalizeSlide(extractJson(text))
   // A response that parses but normalizes to nothing is a failure — throw so
   // the editor shows a retryable error instead of silently keeping the old
-  // content while toasting success.
-  if (!norm) throw new Error(t('err.noJson'))
+  // content while toasting success. Same for a reply that lacks the fields
+  // this page's (pinned) layout renders: forcing the layout back onto it
+  // would produce a blank timeline / stats / quote page.
+  if (!norm || !layoutHasContent(norm, slide.layout)) throw new Error(t('err.noJson'))
   // Never change the layout; keep the existing background state.
   return {
     ...norm,

@@ -57,7 +57,9 @@ function offerRestyle(host: HTMLElement, deck: Deck): void {
       wrap.remove()
       void Promise.all([import('../lib/deckMaterial'), import('./guided')]).then(
         ([{ deckToMaterial }, { startGuidedGeneration }]) => {
-          startGuidedGeneration(deck.title, { material: deckToMaterial(deck) })
+          const mat = deckToMaterial(deck)
+          if (mat.truncated) toast(t('imp.materialTrimmed'))
+          startGuidedGeneration(deck.title, { material: mat.text })
         },
       )
     }

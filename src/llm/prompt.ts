@@ -1,4 +1,5 @@
 import type { GenerateOptions } from '../types'
+import { clampChars } from '../lib/materialSlice'
 
 // The system prompt defines the JSON contract and the design intent.
 // Keeping the schema description tight and example-driven yields far more
@@ -73,7 +74,7 @@ const MATERIAL_CLOSE = '<<<素材结束>>>'
  * can't close the fence early and smuggle instructions in after it.
  */
 export function fencedMaterial(text: string, max = MATERIAL_MAX_CHARS): string {
-  const body = text.trim().slice(0, max).replace(/<<<\s*素材(开始|结束)\s*>>>/g, '')
+  const body = clampChars(text.trim(), max).replace(/<<<\s*素材(开始|结束)\s*>>>/g, '')
   return `${MATERIAL_OPEN}\n${body}\n${MATERIAL_CLOSE}`
 }
 
