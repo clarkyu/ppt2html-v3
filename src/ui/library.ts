@@ -5,6 +5,9 @@ import { mountThumb } from '../render/preview'
 import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
 import { toast } from '../lib/toast'
+import { deckToMaterial } from '../lib/deckMaterial'
+import { startGuidedGeneration } from './guided'
+import { normalizeDeck } from '../render/normalize'
 import { t, tn, pages } from '../i18n'
 import { dialogize } from '../lib/overlay'
 import { buildBackup, backupFilename, downloadText, parseBackupFile, restoreDecks } from '../lib/backup'
@@ -61,13 +64,9 @@ function offerRestyle(host: HTMLElement, deck: Deck): void {
       navigate(`#/edit/${deck.id}`)
     } else if (el.closest('[data-imp-rebuild]')) {
       dismiss()
-      void Promise.all([import('../lib/deckMaterial'), import('./guided')]).then(
-        ([{ deckToMaterial }, { startGuidedGeneration }]) => {
-          const mat = deckToMaterial(deck)
-          if (mat.truncated) toast(t('imp.materialTrimmed'))
-          startGuidedGeneration(deck.title, { material: mat.text })
-        },
-      )
+      const mat = deckToMaterial(deck)
+      if (mat.truncated) toast(t('imp.materialTrimmed'))
+      startGuidedGeneration(deck.title, { material: mat.text })
     }
   })
 }
@@ -135,7 +134,6 @@ export function renderLibrary(view: HTMLElement): () => void {
     try {
       const { importPptx } = await import('../import/pptx')
       const spec = await importPptx(await file.arrayBuffer(), file.name)
-      const { normalizeDeck } = await import('../render/normalize')
       // No prompt for an import: the local file name is nobody else's business
       // (it used to ride inside share links as deck.prompt).
       const deck = normalizeDeck(spec, { prompt: '', id: crypto.randomUUID() })

@@ -24,6 +24,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Gates before anything is built: production-dependency advisories
+      # (high/critical, minus the documented Node-only exception), dictionary
+      # hygiene, then the build itself (tsc + Vite + the offline-chunk guard)
+      # and the scorer's self-test. A red gate blocks the deploy.
+      - run: npm run audit:check
+      - run: npm run i18n:check
       # A system-provided DeepSeek key (repo/Actions secret) is baked into the
       # bundle so users can generate out-of-the-box. Absent → app falls back to
       # BYOK-only. NOTE: in a static site this key ships publicly (accepted).
@@ -36,6 +42,7 @@ jobs:
           VITE_UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
           VITE_PEXELS_KEY: ${{ secrets.PEXELS_KEY }}
           VITE_PIXABAY_KEY: ${{ secrets.PIXABAY_KEY }}
+      - run: npm run eval -- --mock
       # Enables GitHub Pages via the API if it isn't already, so the deploy
       # step doesn't 404 on a repo where Pages was never turned on.
       - name: Setup Pages

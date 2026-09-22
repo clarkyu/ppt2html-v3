@@ -4,7 +4,7 @@ import { getSampleDeck } from '../sample'
 import { mountSlidePreview } from '../render/preview'
 import { regenerateSlide } from '../llm/edit'
 import { searchImageCandidates, confirmCandidate, queryForSlide, type ImageCandidate } from '../images/search'
-import { genImageConfigured } from '../images/genai'
+import { genImageConfigured, generateSlideImage } from '../images/genai'
 import { abstractBgForDeck, resolveAbstractStyle } from '../images/abstract'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { navigate, setLeaveGuard, setLangHandler } from '../router'
@@ -535,8 +535,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
       const target = deck.slides[i]
       btn.setAttribute('disabled', '')
       toast(t('ed.genImgStart'))
-      import('../images/genai')
-        .then(({ generateSlideImage }) => generateSlideImage(target, deck, settings, signal))
+      generateSlideImage(target, deck, settings, signal)
         .then((bg) => {
           const j = indexOf(target)
           if (j < 0) {

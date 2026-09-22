@@ -13,6 +13,7 @@ import { openPresenter, type PresenterHandle } from '../player/presenter'
 import { startNarration, type NarratorHandle } from '../player/narrate'
 import { deckBudget, fmtClock, formatElapsed } from '../player/rehearse'
 import { dialogize } from '../lib/overlay'
+import { decodeDeckFromHash } from '../lib/share'
 import { deckIsChinese } from '../lib/lang'
 import { openStylePicker } from './stylePicker'
 import { openSharePanel } from './sharePanel'
@@ -339,7 +340,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   })
 
   const load = shareData
-    ? import('../lib/share').then(({ decodeDeckFromHash }) => decodeDeckFromHash(shareData))
+    ? decodeDeckFromHash(shareData)
     : id === 'sample'
       ? Promise.resolve(getSampleDeck())
       : getDeck(id)

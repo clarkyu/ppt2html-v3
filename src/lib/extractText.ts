@@ -57,8 +57,11 @@ async function fromDocx(file: File): Promise<string> {
 }
 
 async function fromPdf(file: File): Promise<string> {
-  const pdfjs = await loadParser(() => import('pdfjs-dist'))
-  const worker = (await loadParser(() => import('pdfjs-dist/build/pdf.worker.min.mjs?url'))).default
+  // The legacy build carries pdf.js's own polyfills: the modern build (≥ 6.3)
+  // calls `Map.prototype.getOrInsertComputed`, which browsers before ~2026
+  // lack — text still came out, but with an uncaught error per page.
+  const pdfjs = await loadParser(() => import('pdfjs-dist/legacy/build/pdf.mjs'))
+  const worker = (await loadParser(() => import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'))).default
   pdfjs.GlobalWorkerOptions.workerSrc = worker
   const task = pdfjs.getDocument({ data: await file.arrayBuffer() })
   const doc = await task.promise
