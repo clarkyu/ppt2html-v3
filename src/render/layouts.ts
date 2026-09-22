@@ -163,7 +163,7 @@ function code(s: Slide): string {
     ${title(s.title)}
     <div class="s-code__frame">
       <div class="s-code__bar" aria-hidden="true"><i></i><i></i><i></i>${lang}</div>
-      <pre class="s-code__block"><code>${highlightCode(s.code ?? '')}</code></pre>
+      <pre class="s-code__block"><code>${highlightCode(s.code ?? '', s.language)}</code></pre>
     </div>
   </div>`
 }
@@ -239,7 +239,18 @@ export function bgCssUrl(url: string | undefined): string | null {
     return `url('${safe}')`
   }
   if (!/^https?:\/\//i.test(url)) return null
-  const safe = encodeURI(url).replace(/['"()<>\\]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)
+  // Photo URLs from the providers arrive already percent-encoded: a blanket
+  // encodeURI turned their `%28` into `%2528` and the image never loaded.
+  // Decode-then-encode normalises both raw and encoded input; a malformed
+  // sequence (decodeURI throws) is left as is. Then escape what could close
+  // the CSS string / style attribute.
+  let u: string
+  try {
+    u = encodeURI(decodeURI(url))
+  } catch {
+    u = url
+  }
+  const safe = u.replace(/['"()<>\\\s\u0000-\u001f]/g, (c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`)
   return `url('${safe}')`
 }
 

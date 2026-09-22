@@ -7,7 +7,8 @@
 // waves, diagonal rays). 'auto' picks one for the whole deck (seeded), so every
 // slide shares a look while its shapes still vary page to page.
 
-import type { SlideBg, ThemeName } from '../types'
+import type { CustomTheme, SlideBg, ThemeName } from '../types'
+import { customAbstractPalette } from '../render/customTheme'
 
 export const ABSTRACT_STYLES = ['auto', 'blobs', 'mesh', 'grid', 'dots', 'waves', 'rays'] as const
 export type AbstractStyle = (typeof ABSTRACT_STYLES)[number]
@@ -216,6 +217,19 @@ export function resolveAbstractStyle(style: AbstractStyle, seed: string): Concre
  */
 export function abstractBg(seed: string, theme: ThemeName, style: AbstractStyle = 'auto'): SlideBg {
   return abstractBgWith(seed, PALETTE[theme] ?? PALETTE.aurora, style)
+}
+
+/** The deck's own palette: a custom "我的风格" when it has one, else its named
+ * theme. Every fallback pattern (lazy fill, photo-search miss, editor re-roll)
+ * goes through here — custom-theme decks used to get aurora/ink patterns. */
+export function abstractBgForDeck(
+  seed: string,
+  deck: { theme: ThemeName; customTheme?: CustomTheme },
+  style: AbstractStyle = 'auto',
+): SlideBg {
+  return deck.customTheme
+    ? abstractBgWith(seed, customAbstractPalette(deck.customTheme), style)
+    : abstractBg(seed, deck.theme, style)
 }
 
 /**

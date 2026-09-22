@@ -586,6 +586,14 @@ const DICT: Record<string, Entry> = {
   },
   'viewer.narrateOff': { zh: '语音讲解已停止。', en: 'Narration stopped.' },
   'viewer.narrateEnd': { zh: '讲解完毕——全篇已放映结束。', en: 'Narration finished — the deck played through.' },
+  'viewer.photosUnavailable': {
+    zh: '有 {n} 页配图暂时取不到（离线或图库限流）——下次打开会再试。',
+    en: '{n} page background(s) could not be fetched right now (offline or rate-limited) — they will be retried next time.',
+  },
+  'style.lowContrast': {
+    zh: '强调色与底色对比度只有 {r}:1——细线、色条会看不清，建议换更亮 / 更暗的强调色。',
+    en: 'Accent vs. background contrast is only {r}:1 — rules and bars will be faint; try a lighter / darker accent.',
+  },
   'viewer.narrateNoTts': {
     zh: '当前浏览器不支持语音合成，无法语音讲解。',
     en: 'This browser has no speech synthesis — narration is unavailable.',

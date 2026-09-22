@@ -9,7 +9,7 @@
 
 import type { CustomTheme, Deck, Slide, ThemeName } from '../types'
 import { deckIsCjk } from '../lib/lang'
-import { isLightBg, normalizeHex } from '../render/customTheme'
+import { customPalette } from '../render/customTheme'
 
 interface Pal {
   bg: string
@@ -46,24 +46,22 @@ function blend(a: string, b: string, t: number): string {
   return pa.map((v, i) => Math.round(v * t + pb[i] * (1 - t)).toString(16).padStart(2, '0')).join('').toUpperCase()
 }
 
-/** Build a flat-hex Pal from a custom "我的风格" — mirrors themes.css derivation. */
+/** Build a flat-hex Pal from a custom "我的风格" — the SAME derivation the
+ * on-screen palette uses (customTheme.customPalette), so the export can't
+ * disagree with the player about contrast or lightness. pptxgenjs wants bare
+ * upper-case 6-digit hex. */
 function paletteFromCustom(ct: CustomTheme): Pal {
-  // Normalize (expand #abc, validate) then strip '#' + uppercase: blend() and
-  // pptxgenjs want bare 6-digit hex. Bad input falls back to aurora colors, and
-  // light/dark uses the same WCAG-contrast decision as the on-screen palette.
-  const bare = (hex: string, fallback: string) => (normalizeHex(hex) ?? fallback).slice(1).toUpperCase()
-  const bg = bare(ct.bg, '#0b1020')
-  const light = isLightBg(`#${bg}`)
+  const p = customPalette(ct)
+  const bare = (hex: string) => hex.slice(1).toUpperCase()
   return {
-    bg,
-    accent: bare(ct.accent, '#8b7cff'),
-    accent2: bare(ct.accent2, '#22d3ee'),
-    light,
-    fg: light ? blend('000000', bg, 0.82) : blend('FFFFFF', bg, 0.9),
-    strong: light ? '111111' : 'FFFFFF',
-    muted: light ? blend('000000', bg, 0.5) : blend('FFFFFF', bg, 0.56),
-    // near-white card on light, bg lifted 8% toward white on dark (like aurora 181F3A).
-    card: light ? blend('FFFFFF', bg, 0.55) : blend('FFFFFF', bg, 0.08),
+    bg: bare(p.bg),
+    accent: bare(p.accent),
+    accent2: bare(p.accent2),
+    light: p.light,
+    fg: bare(p.fg),
+    strong: p.light ? '111111' : 'FFFFFF',
+    muted: bare(p.muted),
+    card: bare(p.card),
   }
 }
 

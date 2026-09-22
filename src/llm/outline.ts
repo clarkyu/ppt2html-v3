@@ -293,6 +293,10 @@ export function normalizeOutline(raw: unknown, topic: string, themeHint?: ThemeN
     slides.push({ layout, title, brief })
     if (slides.length >= 60) break
   }
+  // A cover that isn't first (a stray row before it) is still THE cover:
+  // move it up; any further cover / a non-final end becomes a divider.
+  const coverAt = slides.findIndex((s) => s.layout === 'cover')
+  if (coverAt > 0) slides.unshift(...slides.splice(coverAt, 1))
   slides.forEach((s, i) => {
     if ((s.layout === 'cover' && i > 0) || (s.layout === 'end' && i < slides.length - 1)) s.layout = 'section'
   })

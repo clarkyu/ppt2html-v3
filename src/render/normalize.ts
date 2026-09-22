@@ -14,6 +14,7 @@ import {
 } from '../types'
 import { genId } from '../lib/dom'
 import { deckIsCjk } from '../lib/lang'
+import { mdPlain } from '../lib/markdown'
 import { semIconKey } from './semanticIcons'
 import { sanitizeCustomTheme } from './customTheme'
 import { MATERIAL_MAX_CHARS } from '../llm/prompt'
@@ -183,7 +184,10 @@ function coerceLayout(v: unknown, slide: Record<string, unknown>): SlideLayout {
 
 export function normalizeSlide(raw: unknown): Slide | null {
   if (!raw || typeof raw !== 'object') return null
-  const o = raw as Record<string, unknown>
+  // Icons arrive inline ({text, icon}) from the model but as a parallel
+  // `bulletIcons` array from templates, the editor and AI rewrites — fold the
+  // latter in here so no path drops them (inline form wins where both exist).
+  const o = inlineStoredIcons(raw) as Record<string, unknown>
   const layout = coerceLayout(o.layout, o)
 
   const b = asBullets(o.bullets)
@@ -254,8 +258,10 @@ export function normalizeDeck(
     .filter((s): s is Slide => s !== null)
 
   const firstCover = slides.find((s) => s.layout === 'cover')
+  // The deck title is shown as TEXT (library, app bar, exports): a model that
+  // bolded the cover title must not leak `**` into it.
   const title =
-    asString(spec.title) || firstCover?.title || meta.prompt.slice(0, 40) || '未命名课件'
+    mdPlain(asString(spec.title) || firstCover?.title) || meta.prompt.slice(0, 40) || '未命名课件'
 
   // Guarantee a title slide up front and a closing slide (in the deck's own
   // language) — for fresh model output only (`fill` defaults on). A stored
@@ -264,6 +270,12 @@ export function normalizeDeck(
   if (meta.fill !== false) {
     if (!firstCover) {
       slides.unshift({ layout: 'cover', title, subtitle: asString(spec.subtitle) })
+    } else if (slides[0] !== firstCover) {
+      // A cover that the model put second (after a stray section, say) is
+      // still THE cover — bring it to the front rather than accept a deck
+      // that opens on page 2.
+      slides.splice(slides.indexOf(firstCover), 1)
+      slides.unshift(firstCover)
     }
     if (slides.length && slides[slides.length - 1].layout !== 'end') {
       slides.push({ layout: 'end', title: deckIsCjk({ title, slides }) ? '谢谢观看' : 'Thank You' })
@@ -319,7 +331,7 @@ export function sanitizeDeck(
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
   if (!Array.isArray(o.slides)) return null
-  const slides = o.slides.slice(0, DECK_MAX_SLIDES).map(inlineStoredIcons)
+  const slides = o.slides.slice(0, DECK_MAX_SLIDES)
   if (!slides.some((s) => normalizeSlide(s))) return null
   const id = opts.id ?? (typeof o.id === 'string' && o.id.trim() ? o.id.trim() : undefined)
   const createdAt = typeof o.createdAt === 'number' && Number.isFinite(o.createdAt) ? o.createdAt : opts.now

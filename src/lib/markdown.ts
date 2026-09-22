@@ -48,6 +48,23 @@ export function mdProse(text: string | undefined): string {
   return sanitize(raw, PROSE_TAGS)
 }
 
+/**
+ * Inline Markdown → plain text, for places that render a title as TEXT
+ * (chapter corner label, closing recap pills, presenter "up next", the
+ * deck title): a bolded title used to show its literal `**` there.
+ */
+export function mdPlain(text: string | undefined): string {
+  if (!text) return ''
+  return text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url) → text
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/~~(.+?)~~/g, '$1')
+    .replace(/(^|[^\w*])[*_](\S(?:.*?\S)?)[*_](?![\w*])/g, '$1$2')
+    .replace(/\*\*/g, '')
+    .trim()
+}
+
 /** Escape a string for safe insertion as HTML text. */
 export function escapeHtml(text: string | undefined): string {
   if (!text) return ''

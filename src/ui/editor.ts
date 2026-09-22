@@ -5,7 +5,7 @@ import { mountSlidePreview } from '../render/preview'
 import { regenerateSlide } from '../llm/edit'
 import { searchImageCandidates, confirmCandidate, queryForSlide, type ImageCandidate } from '../images/search'
 import { genImageConfigured } from '../images/genai'
-import { abstractBg, resolveAbstractStyle } from '../images/abstract'
+import { abstractBgForDeck, resolveAbstractStyle } from '../images/abstract'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { navigate, setLeaveGuard, setLangHandler } from '../router'
 import { applyCustomTheme } from '../render/customTheme'
@@ -479,7 +479,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
       if (settings.images.mode === 'abstract') {
         const style = resolveAbstractStyle(settings.images.abstractStyle, deck.id || deck.title || deck.theme)
         const seed = `${queryForSlide(deck.slides[i], deck)}#${i}#${Date.now()}`
-        deck.slides[i].bg = abstractBg(seed, deck.theme, style)
+        deck.slides[i].bg = abstractBgForDeck(seed, deck, style)
         deck.slides[i].bgOff = undefined
         replaceCard(card, i)
         setStatus(t('ed.unsaved'))

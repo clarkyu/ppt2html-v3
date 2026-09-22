@@ -182,12 +182,17 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
     // off so the player's own 1280×720 page layout applies; cleared afterprint.
     document.documentElement.classList.add('print-pdf')
     mount.querySelectorAll<HTMLElement>('.reveal .slides > section').forEach((sec) => {
-      const prev = { display: sec.style.display, visibility: sec.style.visibility }
+      // reveal marks unvisited pages with the `hidden` ATTRIBUTE, and the
+      // app's global [hidden]{display:none!important} beats the inline
+      // display below — those pages measured 0×0 and fitSlide was a no-op.
+      const prev = { display: sec.style.display, visibility: sec.style.visibility, hidden: sec.hasAttribute('hidden') }
+      sec.removeAttribute('hidden')
       sec.style.display = 'block'
       sec.style.visibility = 'hidden'
       fitSlide(sec)
       sec.style.display = prev.display
       sec.style.visibility = prev.visibility
+      if (prev.hidden) sec.setAttribute('hidden', '')
     })
   }
   const afterPrint = () => document.documentElement.classList.remove('print-pdf')
@@ -721,6 +726,9 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             player?.setSlideBackground(j, bg)
             scheduleSave()
             presenterRefreshSoon()
+          },
+          onTransient: (n) => {
+            if (!disposed) toast(t('viewer.photosUnavailable').replace('{n}', String(n)))
           },
         })
           .then(() => {

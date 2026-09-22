@@ -44,22 +44,26 @@ export function mountSlidePreview(
  * (expected to be a `.thumb` element). Returns a cleanup function.
  */
 export function mountThumb(container: HTMLElement, deck: Deck): () => void {
+  // The same renderer as every other single-slide preview — it carries
+  // data-layout, so a photo cover gets the cover scrim, not the heavy
+  // content-page one the thumbnails used to show.
+  const cover = deck.slides?.[0]
+  if (cover) {
+    try {
+      return mountSlidePreview(container, deck.theme, cover, deck.customTheme)
+    } catch {
+      /* fall through to the empty stage */
+    }
+  }
   // A stored deck with no slides or a corrupt first slide (old import,
   // hand-edited backup) must not throw here — one bad thumbnail used to blank
   // the entire library.
-  const cover = deck.slides?.[0]
-  let coverHtml = ''
-  try {
-    coverHtml = cover ? `${slideBgHtml(cover)}${renderSlideInner(cover)}` : ''
-  } catch {
-    coverHtml = ''
-  }
   container.innerHTML =
     `<div class="thumb__stage">` +
     `<div class="player theme-${escapeHtml(deck.theme)}">` +
     `<div class="player__bg"></div>` +
     `<div class="reveal deck"><div class="slides">` +
-    `<section class="deck-slide">${coverHtml}</section>` +
+    `<section class="deck-slide"></section>` +
     `</div></div></div></div>`
 
   applyCustomTheme(container.querySelector<HTMLElement>('.player')!, deck.customTheme)

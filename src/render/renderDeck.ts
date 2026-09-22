@@ -1,6 +1,6 @@
 import type { Deck, Branding } from '../types'
 import { renderSlideInner, slideBgHtml, slideCreditHtml } from './layouts'
-import { escapeHtml } from '../lib/markdown'
+import { escapeHtml, mdPlain } from '../lib/markdown'
 import { deckIsCjk } from '../lib/lang'
 
 function validLogo(u?: string): string {
@@ -36,7 +36,7 @@ export function renderDeckSlides(deck: Deck): string {
   // "what we covered" so the last slide isn't just "谢谢观看".
   const chapterTitles = deck.slides
     .filter((s) => s.layout === 'section')
-    .map((s) => (s.title ?? '').trim())
+    .map((s) => mdPlain(s.title))
     .filter(Boolean)
     .slice(0, 4)
   const recapHtml =
@@ -48,7 +48,7 @@ export function renderDeckSlides(deck: Deck): string {
     .map((slide, i) => {
       if (slide.layout === 'section') {
         sectionNum += 1
-        sectionTitle = (slide.title ?? '').trim()
+        sectionTitle = mdPlain(slide.title) // rendered as text, not Markdown
       }
       const note = slide.note ? `<aside class="notes">${escapeHtml(slide.note)}</aside>` : ''
 

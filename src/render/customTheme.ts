@@ -19,6 +19,9 @@ const VAR_KEYS = [
   '--muted',
   '--accent',
   '--accent2',
+  '--accent-text',
+  '--accent2-text',
+  '--accent-fg',
   '--accent-grad',
   '--card',
   '--card-border',
@@ -111,38 +114,104 @@ export function customAbstractPalette(ct: CustomTheme): { base: string; a1: stri
   }
 }
 
-/** The derived CSS custom properties for a custom theme. */
-export function customThemeVars(ct: CustomTheme): Record<string, string> {
+/** WCAG contrast ratio between two colors. */
+export function contrastRatio(a: string, b: string): number {
+  return contrast(relLuminance(normalizeHex(a) ?? '#000000'), relLuminance(normalizeHex(b) ?? '#000000'))
+}
+
+/**
+ * Mix `color` toward `toward` (black or white) starting at weight `from`,
+ * stepping until it reads against `bg` at `min` contrast (or the mix is
+ * exhausted). Mid-tone bases used to yield 2.6–2.9:1 muted text.
+ */
+function ensureContrast(color: string, toward: string, bg: string, from: number, min: number): string {
+  let w = from
+  let out = mix(toward, color, w)
+  const bgL = relLuminance(bg)
+  while (contrast(relLuminance(out), bgL) < min && w < 1) {
+    w = Math.min(1, w + 0.05)
+    out = mix(toward, color, w)
+  }
+  return out
+}
+
+/** Every derived color of a custom theme, as `#rrggbb` — the one derivation
+ * the CSS vars, the PPTX export and the style picker all read. */
+export interface CustomPalette {
+  bg: string
+  light: boolean
+  fg: string
+  fgStrong: string
+  muted: string
+  accent: string
+  accent2: string
+  /** The accents as TEXT colors: nudged toward fg until they read at ≥3:1. */
+  accentText: string
+  accent2Text: string
+  /** Text placed ON an accent fill (timeline nodes, pills). */
+  accentFg: string
+  card: string
+  cardBorder: string
+  rule: string
+  codeBg: string
+  deep: string
+}
+
+export function customPalette(ct: CustomTheme): CustomPalette {
   // Normalize first so a `#`-less or 3-digit color can't emit invalid CSS.
   const bg = normalizeHex(ct.bg) ?? '#0b1020'
   const accent = normalizeHex(ct.accent) ?? '#8b7cff'
   const accent2 = normalizeHex(ct.accent2) ?? '#22d3ee'
   const light = isLightBg(bg)
+  const ink = light ? '#000000' : '#ffffff'
 
-  const fg = light ? mix('#000000', bg, 0.82) : mix('#ffffff', bg, 0.9)
+  const fg = ensureContrast(bg, ink, bg, light ? 0.82 : 0.9, 7)
   const fgStrong = light ? mix('#000000', bg, 0.92) : '#ffffff'
-  const muted = light ? mix('#000000', bg, 0.5) : mix('#ffffff', bg, 0.56)
-  const card = light ? mix('#ffffff', bg, 0.55) : rgba('#ffffff', 0.05)
-  const cardBorder = light ? mix('#000000', bg, 0.12) : rgba('#ffffff', 0.12)
-  const rule = light ? mix('#000000', bg, 0.1) : rgba('#ffffff', 0.12)
-  const codeBg = light ? '#1b2130' : mix('#000000', bg, 0.45)
-  const deep = light ? mix('#000000', bg, 0.04) : mix('#000000', bg, 0.28)
+  const muted = ensureContrast(bg, ink, bg, light ? 0.5 : 0.56, 4.5)
+  const accentText = ensureContrast(accent, fg, bg, 0, 3)
+  const accent2Text = ensureContrast(accent2, fg, bg, 0, 3)
+  const accentFg = isLightBg(accent) ? '#111111' : '#ffffff'
+  return {
+    bg,
+    light,
+    fg,
+    fgStrong,
+    muted,
+    accent,
+    accent2,
+    accentText,
+    accent2Text,
+    accentFg,
+    card: light ? mix('#ffffff', bg, 0.55) : mix('#ffffff', bg, 0.08),
+    cardBorder: light ? mix('#000000', bg, 0.12) : mix('#ffffff', bg, 0.12),
+    rule: light ? mix('#000000', bg, 0.1) : mix('#ffffff', bg, 0.12),
+    codeBg: light ? '#1b2130' : mix('#000000', bg, 0.45),
+    deep: light ? mix('#000000', bg, 0.04) : mix('#000000', bg, 0.28),
+  }
+}
 
+/** The derived CSS custom properties for a custom theme. */
+export function customThemeVars(ct: CustomTheme): Record<string, string> {
+  const p = customPalette(ct)
+  const { bg, accent, accent2, light } = p
   return {
     '--bg':
       `radial-gradient(1150px 820px at 12% -5%, ${rgba(accent, light ? 0.1 : 0.2)} 0%, transparent 58%), ` +
       `radial-gradient(880px 680px at 100% 100%, ${rgba(accent2, light ? 0.08 : 0.16)} 0%, transparent 55%), ` +
-      `linear-gradient(160deg, ${bg}, ${deep})`,
-    '--fg': fg,
-    '--fg-strong': fgStrong,
-    '--muted': muted,
+      `linear-gradient(160deg, ${bg}, ${p.deep})`,
+    '--fg': p.fg,
+    '--fg-strong': p.fgStrong,
+    '--muted': p.muted,
     '--accent': accent,
     '--accent2': accent2,
+    '--accent-text': p.accentText,
+    '--accent2-text': p.accent2Text,
+    '--accent-fg': p.accentFg,
     '--accent-grad': `linear-gradient(120deg, ${accent}, ${accent2})`,
-    '--card': card,
-    '--card-border': cardBorder,
-    '--rule': rule,
-    '--code-bg': codeBg,
+    '--card': light ? p.card : rgba('#ffffff', 0.05),
+    '--card-border': light ? p.cardBorder : rgba('#ffffff', 0.12),
+    '--rule': light ? p.rule : rgba('#ffffff', 0.12),
+    '--code-bg': p.codeBg,
     '--code-fg': '#e6e9f5',
     '--code-inline-bg': rgba(accent, light ? 0.12 : 0.16),
     '--font-display': ct.serif ? SERIF_STACK : SANS_STACK,

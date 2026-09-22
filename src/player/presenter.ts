@@ -13,7 +13,7 @@ import type { PlayerHandle } from './player'
 import { renderDeckSlides } from '../render/renderDeck'
 import { customThemeStyleAttr } from '../render/customTheme'
 import { fitSlide } from '../render/fit'
-import { escapeHtml } from '../lib/markdown'
+import { escapeHtml, mdPlain } from '../lib/markdown'
 import { t } from '../i18n'
 import themesCss from '../render/themes.css?raw'
 import slidesCss from '../render/slides.css?raw'
@@ -200,7 +200,7 @@ export function openPresenter(deck: Deck, player: PlayerHandle): PresenterHandle
       notesEl.textContent = note || t('presenter.noNote')
       notesEl.classList.toggle('empty', !note)
     }
-    const nextTitle = cur < n ? deck.slides[cur]?.title?.trim() : ''
+    const nextTitle = cur < n ? mdPlain(deck.slides[cur]?.title) : ''
     if (nextTitleEl) {
       nextTitleEl.innerHTML = nextTitle
         ? `${escapeHtml(t('presenter.upNext'))} <b>${escapeHtml(nextTitle)}</b>`
