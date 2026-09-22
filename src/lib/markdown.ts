@@ -55,14 +55,30 @@ export function mdProse(text: string | undefined): string {
  */
 export function mdPlain(text: string | undefined): string {
   if (!text) return ''
-  return text
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url) → text
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/(\*\*|__)(.+?)\1/g, '$2')
-    .replace(/~~(.+?)~~/g, '$1')
-    .replace(/(^|[^\w*])[*_](\S(?:.*?\S)?)[*_](?![\w*])/g, '$1$2')
+  return mdPlainKeepBold(text)
+    .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/\*\*/g, '')
     .trim()
+}
+
+const BOLD_HOLD = '\u0000'
+
+/**
+ * mdPlain minus the bold pass and the trim: `**…**` pairs survive for callers
+ * that turn them into bold runs (the PPTX export), and a fragment keeps the
+ * spaces at its edges. Only PAIRED markers are unwrapped — a bare `_`, `*` or
+ * `` ` `` is content (template placeholders like `__%`, snake_case names, x*y).
+ */
+export function mdPlainKeepBold(text: string | undefined): string {
+  if (!text) return ''
+  return text
+    .replace(/\*\*/g, BOLD_HOLD) // shield bold pairs from the single-marker rule
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](url) → text
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/~~(.+?)~~/g, '$1')
+    .replace(/(^|[^\w*])[*_](\S(?:.*?\S)?)[*_](?![\w*])/g, '$1$2')
+    .replace(/\u0000/g, '**')
 }
 
 /** Escape a string for safe insertion as HTML text. */

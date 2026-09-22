@@ -401,6 +401,7 @@ const DICT: Record<string, Entry> = {
   'imp.start': { zh: '正在解析 PPTX…', en: 'Parsing the PPTX…' },
   'imp.done': { zh: '已导入 {n} 页,版式为自动识别——可在编辑器里调整。', en: 'Imported {n} pages (layouts auto-detected) — adjust in the editor.' },
   'imp.doneTitle': { zh: '已导入 {n} 页', en: '{n} slides imported' },
+  'imp.skippedVisuals': { zh: '{n} 处图片 / 图表 / 图形只有画面没有文字,未导入。', en: '{n} picture(s)/chart(s) had no text and were not imported.' },
   'imp.choiceHint': {
     zh: '直接编辑保持原样；「AI 重构」会把这份课件的内容与结构作为素材，重新生成一份更精炼、版式更合理的新课件（原导入件保留在课件库，不受影响）。',
     en: 'Edit keeps it as-is. “AI rebuild” feeds its content & structure to the generator as material and produces a NEW, tighter deck — the imported one stays in your library untouched.',

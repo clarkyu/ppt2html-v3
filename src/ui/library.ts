@@ -68,6 +68,10 @@ function offerRestyle(host: HTMLElement, deck: Deck): void {
 
 export function renderLibrary(view: HTMLElement): () => void {
   const thumbCleanups: Array<() => void> = []
+  // Cleared by the cleanup below: a PPTX import or a restore that finishes
+  // after the user has navigated away must not append its dialog onto — or
+  // re-render into — whatever screen is mounted now.
+  let alive = true
   let all: Deck[] = []
   let query = ''
   let sort: SortKey = 'updated'
@@ -130,8 +134,13 @@ export function renderLibrary(view: HTMLElement): () => void {
       // (it used to ride inside share links as deck.prompt).
       const deck = normalizeDeck(spec, { prompt: '', id: crypto.randomUUID() })
       await saveDeck(deck)
-      toast(t('imp.done').replace('{n}', String(deck.slides.length)))
-      offerRestyle(view, deck)
+      toast(
+        t('imp.done').replace('{n}', String(deck.slides.length)) +
+          (spec.skippedVisuals ? ` ${t('imp.skippedVisuals').replace('{n}', String(spec.skippedVisuals))}` : ''),
+      )
+      // The deck is saved either way; the follow-up choice belongs to the
+      // library screen only.
+      if (alive) offerRestyle(view, deck)
     } catch (e) {
       toast((e as Error)?.message || t('imp.failed'))
     } finally {
@@ -256,7 +265,10 @@ export function renderLibrary(view: HTMLElement): () => void {
   }
 
   const reload = async () => {
-    all = await listDecks()
+    if (!alive) return
+    const decks = await listDecks()
+    if (!alive) return
+    all = decks
     render()
   }
 
@@ -273,5 +285,8 @@ export function renderLibrary(view: HTMLElement): () => void {
     body.innerHTML = `<div class="empty"><h3>${t('lib.readError')}</h3><p>${t('lib.readErrorHint')}</p></div>`
   })
 
-  return () => thumbCleanups.forEach((fn) => fn())
+  return () => {
+    alive = false
+    thumbCleanups.forEach((fn) => fn())
+  }
 }
