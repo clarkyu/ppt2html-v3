@@ -66,6 +66,8 @@ const DICT: Record<string, Entry> = {
   'common.save': { zh: '保存', en: 'Save' },
   'common.loading': { zh: '加载中…', en: 'Loading…' },
   'common.gotIt': { zh: '知道了', en: 'Got it' },
+  'common.undo': { zh: '撤销', en: 'Undo' },
+  'outline.rowDeleted': { zh: '已删除这一行', en: 'Row removed' },
   'common.close': { zh: '关闭', en: 'Close' },
   'common.retry': { zh: '重试', en: 'Retry' },
   'common.next': { zh: '下一步 →', en: 'Next →' },
@@ -479,6 +481,7 @@ const DICT: Record<string, Entry> = {
   'style.preview': { zh: '预览', en: 'Preview' },
   'style.saveApply': { zh: '保存并应用', en: 'Save & apply' },
   'style.delete': { zh: '删除这套风格', en: 'Delete this style' },
+  'style.deleteConfirm': { zh: '删除风格「{name}」?此操作不可撤销。', en: 'Delete the style "{name}"? This cannot be undone.' },
   'share.button': { zh: '分享（链接内含课件，无需服务器）', en: 'Share (deck travels inside the link)' },
   'share.title': { zh: '分享这份课件', en: 'Share this deck' },
   'share.hint': {

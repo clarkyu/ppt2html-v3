@@ -3,6 +3,7 @@ import { loadSettings, isConfigured } from '../llm/settings'
 import { startPageOutline } from './outline'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
+import { removeWithUndo } from '../lib/dom'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
 import { liveTitles, renderLive, renderThinking } from '../lib/live'
@@ -155,9 +156,9 @@ function renderSecRow(s: Section): string {
         <div class="ol-row__top">
           <input class="ol-row__title" data-title value="${escapeHtml(s.title)}" placeholder="${escapeHtml(t('struct.partTitle'))}">
           <div class="sec-row__budget" title="${escapeHtml(t('struct.partPages'))}">
-            <button class="sec-row__step" data-dec type="button" tabindex="-1">−</button>
+            <button class="sec-row__step" data-dec type="button" tabindex="-1" aria-hidden="true">−</button>
             <input class="sec-row__pages" type="number" min="1" max="${MAX_PART_PAGES}" data-pages value="${s.pages ?? 3}">
-            <button class="sec-row__step" data-inc type="button" tabindex="-1">+</button>
+            <button class="sec-row__step" data-inc type="button" tabindex="-1" aria-hidden="true">+</button>
             <span class="sec-row__unit">${t('unit.pages')}</span>
             <span class="sec-row__time" data-time></span>
           </div>
@@ -257,8 +258,7 @@ function wireEditor(
       list.insertBefore(row.nextElementSibling, row)
       recalc()
     } else if (btn.dataset.del !== undefined) {
-      row.remove()
-      recalc()
+      removeWithUndo(row, t('outline.rowDeleted'), recalc)
     } else if (btn.dataset.inc !== undefined || btn.dataset.dec !== undefined) {
       const input = row.querySelector<HTMLInputElement>('[data-pages]')
       if (input) {

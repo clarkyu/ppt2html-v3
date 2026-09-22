@@ -34,8 +34,17 @@ export function openSharePanel(host: HTMLElement, deck: Deck): () => void {
   host.appendChild(wrap)
   let cardObjUrl = ''
   let closed = false
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      close()
+    }
+  }
+  window.addEventListener('keydown', onKey)
   const close = (): void => {
+    if (closed) return
     closed = true
+    window.removeEventListener('keydown', onKey)
     if (cardObjUrl) URL.revokeObjectURL(cardObjUrl)
     wrap.remove()
   }

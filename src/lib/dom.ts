@@ -1,5 +1,32 @@
 /** Small DOM helpers — enough to build views without a framework. */
 
+import { toast } from './toast'
+import { t } from '../i18n'
+
+/**
+ * Remove a list row with an undo: the toast's 撤销 puts the very same element
+ * back where it was (a mis-tap on 删除 used to drop an outline row and its
+ * AI-written brief for good). `after` re-numbers / re-totals the list and runs
+ * on both the removal and the restore.
+ */
+export function removeWithUndo(row: HTMLElement, message: string, after: () => void): void {
+  const parent = row.parentElement
+  if (!parent) return
+  const next = row.nextElementSibling
+  row.remove()
+  after()
+  toast(message, {
+    action: {
+      label: t('common.undo'),
+      onClick: () => {
+        if (!parent.isConnected) return
+        parent.insertBefore(row, next && next.parentElement === parent ? next : null)
+        after()
+      },
+    },
+  })
+}
+
 export function $<T extends HTMLElement = HTMLElement>(
   selector: string,
   root: ParentNode = document,

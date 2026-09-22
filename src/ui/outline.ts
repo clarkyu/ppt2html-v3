@@ -3,6 +3,7 @@ import { loadSettings, isConfigured } from '../llm/settings'
 import { generateAndPlay } from './generating'
 import { navigate } from '../router'
 import { toast } from '../lib/toast'
+import { removeWithUndo } from '../lib/dom'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
 import { liveTitles, renderLive, renderThinking } from '../lib/live'
@@ -575,8 +576,7 @@ function wireRowList(body: HTMLElement): void {
       list.insertBefore(row.nextElementSibling, row)
       renumber()
     } else if (btn.dataset.del !== undefined) {
-      row.remove()
-      renumber()
+      removeWithUndo(row, t('outline.rowDeleted'), renumber)
     }
   })
 
@@ -662,8 +662,7 @@ function wireOverview(
       list.insertBefore(row.nextElementSibling, row)
       renumber()
     } else if (btn.dataset.del !== undefined) {
-      row.remove()
-      renumber()
+      removeWithUndo(row, t('outline.rowDeleted'), renumber)
     }
   })
 

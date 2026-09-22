@@ -80,6 +80,8 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         <span class="viewer__timer" data-timer title="${t('viewer.timerTitle')}">${icons.clock}<b>00:00</b></span>
         <button class="btn btn--sm viewer__more" data-more title="${t('viewer.more')}">⋯</button>
         <div class="viewer__tools" data-tools>
+          <button class="btn btn--primary btn--sm" data-save-shared hidden>${icons.save} ${t('share.saveCopy')}</button>
+          <button class="btn btn--primary btn--sm" data-make-own hidden>${icons.sparkles} ${t('share.makeOwn')}</button>
           <button class="btn btn--sm" data-step title="${t('viewer.stepMode')}">${icons.steps}</button>
           <button class="btn btn--sm" data-narrate title="${t('viewer.narrate')}">${icons.speaker}</button>
           <button class="btn btn--sm" data-rehearse title="${t('reh.button')}">${icons.stopwatch}</button>
@@ -98,8 +100,6 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           <button class="btn btn--sm" data-share title="${t('share.button')}">${icons.share}</button>
           <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}">${icons.expand}</button>
           <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}">${icons.keyboard}</button>
-          <button class="btn btn--primary btn--sm" data-save-shared hidden>${icons.save} ${t('share.saveCopy')}</button>
-          <button class="btn btn--primary btn--sm" data-make-own hidden>${icons.sparkles} ${t('share.makeOwn')}</button>
         </div>
       </div>
       <div class="viewer__notes" data-notes-panel hidden></div>
@@ -159,6 +159,21 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
     toolsEl.classList.toggle('open')
   })
   toolsEl.addEventListener('click', () => toolsEl.classList.remove('open'))
+  // Compact ("⋯") mode is decided by measuring, not by a width query: how many
+  // tools a deck shows varies (owner vs recipient, AI buttons), so a fixed
+  // breakpoint clipped share / export / help on landscape phones and 1024px
+  // desktops. Measure with the tools inline, then tuck them away if the bar
+  // overflows. Re-run on resize and whenever a tool is shown or hidden.
+  const relayoutBar = (): void => {
+    viewerEl.classList.remove('viewer--compact')
+    const overflow = bar.scrollWidth > bar.clientWidth + 1
+    viewerEl.classList.toggle('viewer--compact', overflow)
+    if (!overflow) toolsEl.classList.remove('open')
+  }
+  relayoutBar()
+  window.addEventListener('resize', relayoutBar)
+  const toolsObserver = new MutationObserver(relayoutBar)
+  toolsObserver.observe(toolsEl, { attributes: true, attributeFilter: ['hidden'], subtree: true })
 
   // Portrait phones show a "rotate to landscape" nudge (a 16:9 deck is tiny in
   // portrait). It's playable either way; dismissing hides it for the session
@@ -762,6 +777,8 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
     window.clearInterval(timerInt)
     window.clearInterval(rehInterval)
     window.removeEventListener('keydown', onKey)
+    window.removeEventListener('resize', relayoutBar)
+    toolsObserver.disconnect()
     window.removeEventListener('beforeprint', fitAllForPrint)
     window.removeEventListener('afterprint', afterPrint)
     afterPrint()

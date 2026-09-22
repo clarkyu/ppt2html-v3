@@ -92,7 +92,17 @@ export function openStylePicker(
   }
   render()
   host.appendChild(wrap)
-  const close = (): void => wrap.remove()
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      close()
+    }
+  }
+  window.addEventListener('keydown', onKey)
+  const close = (): void => {
+    window.removeEventListener('keydown', onKey)
+    wrap.remove()
+  }
 
   const openForm = (): void => {
     const seed: CustomTheme = current.custom ?? { bg: '#0b1020', accent: '#8b7cff', accent2: '#22d3ee', serif: false }
@@ -154,7 +164,12 @@ export function openStylePicker(
     }
     const del = target.closest<HTMLElement>('[data-del]')
     if (del) {
-      removeStyle(del.dataset.del!)
+      // A palette is gone for good once removed — ask first (the control is
+      // now always visible on touch, so a stray tap is a real risk).
+      const id = del.dataset.del!
+      const name = loadStyles().find((s) => s.id === id)?.name ?? ''
+      if (!confirm(t('style.deleteConfirm').replace('{name}', name))) return
+      removeStyle(id)
       render()
       return
     }
