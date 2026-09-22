@@ -44,14 +44,21 @@ const REVEAL_CONFIG = {
   // We render our own page number baked into each slide (also shows in print),
   // so reveal's built-in number is off to avoid duplication.
   slideNumber: false as const,
-  // Show each slide's full content as soon as you land on it — no click-to-reveal
-  // stepping. (Bullets etc. carry a `.fragment` class; keeping stepping on made
-  // freshly-flipped slides look blank, esp. behind a background image.)
+  // Click-to-reveal stepping is a per-user preference (setStepMode below):
+  // this default is overridden at mount from localStorage. Bullets etc. carry
+  // a `.fragment` class either way; with stepping off they show at once.
   fragments: false,
   hash: false,
   respondToHashChanges: false,
   history: false,
   keyboard: true,
+  // Reveal's shortcuts (Space / arrows / letters) belong to the deck, not to
+  // a focused text field or an overlay's button: Space on the share panel's
+  // 复制 used to flip the slide behind it instead of copying.
+  keyboardCondition: () => {
+    const a = document.activeElement as HTMLElement | null
+    return !a?.closest('.sharepanel, .stylepick, .viewer__help, .rehearse-summary, .refinepanel, .gedit, .rewritepanel, input, textarea, select')
+  },
   overview: true,
   center: true,
   touch: true,

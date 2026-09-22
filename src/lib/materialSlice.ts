@@ -5,6 +5,8 @@
 // planning still sees the full material (it must detect an embedded outline);
 // only the per-part and per-segment prompts get sliced.
 
+import { CJK_CLASS, hasCjk } from './lang'
+
 /** `s.slice(0, n)` that never splits a surrogate pair (an emoji or a rare CJK
  * character on the cut would become a lone surrogate — invalid JSON for the
  * request body). Every MATERIAL_MAX_CHARS cut goes through here. */
@@ -51,12 +53,12 @@ function blocks(material: string): string[] {
  * material always degraded to its leading 3000 chars). */
 function grams(text: string): Set<string> {
   const out = new Set<string>()
-  const cjk = text.match(/[぀-ヿ㐀-鿿豈-﫿가-힯]+/g) ?? []
+  const cjk = text.match(new RegExp(CJK_CLASS + '+', 'g')) ?? []
   for (const run of cjk) {
     for (let i = 0; i < run.length - 1; i++) out.add(run.slice(i, i + 2))
   }
   for (const w of text.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}-]+/gu) ?? []) {
-    if (!/[぀-ヿ㐀-鿿豈-﫿가-힯]/.test(w)) out.add(w)
+    if (!hasCjk(w)) out.add(w)
   }
   return out
 }

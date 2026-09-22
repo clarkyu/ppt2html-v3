@@ -14,6 +14,8 @@ import { renderDeckSlides } from '../render/renderDeck'
 import { customThemeStyleAttr } from '../render/customTheme'
 import { fitSlide } from '../render/fit'
 import { escapeHtml, mdPlain } from '../lib/markdown'
+import { deckIsCjk } from '../lib/lang'
+import { formatElapsed } from './rehearse'
 import { t } from '../i18n'
 import themesCss from '../render/themes.css?raw'
 import slidesCss from '../render/slides.css?raw'
@@ -85,14 +87,7 @@ body {
 .pres-controls button:hover { background: var(--card-border); }
 `
 
-function fmt(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  const hh = Math.floor(s / 3600)
-  const mm = Math.floor((s % 3600) / 60)
-  const ss = s % 60
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return hh ? `${hh}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`
-}
+const fmt = formatElapsed
 
 export function openPresenter(deck: Deck, player: PlayerHandle): PresenterHandle | null {
   const win = window.open('', 'ppt2html-presenter', 'width=1180,height=760')
@@ -104,7 +99,7 @@ export function openPresenter(deck: Deck, player: PlayerHandle): PresenterHandle
   const customStyle = deck.customTheme ? ` style="${escapeHtml(customThemeStyleAttr(deck.customTheme))}"` : ''
   win.document.open()
   win.document.write(
-    `<!doctype html><html lang="zh" class="player theme-${escapeHtml(deck.theme)}"${customStyle}><head>` +
+    `<!doctype html><html lang="${deckIsCjk(deck) ? 'zh-CN' : 'en'}" class="player theme-${escapeHtml(deck.theme)}"${customStyle}><head>` +
       `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
       `<title>${title}</title><style>${themesCss}\n${slidesCss}\n${PRES_CSS}</style></head>` +
       `<body>` +

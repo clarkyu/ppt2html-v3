@@ -7,10 +7,11 @@
   --r-background-color: transparent;
 }
 
-/* Content marked `.fragment` (bullets, cards, timeline steps) should be fully
-   visible as soon as a slide is shown — we don't use click-to-reveal stepping
-   (see `fragments: false`). This out-specifies reveal's own `.fragment` hiding
-   without !important, so the entrance animation below can still run. */
+/* Content marked `.fragment` (bullets, cards, timeline steps) is fully visible
+   as soon as a slide is shown unless the user turned on click-to-reveal step
+   mode (`.player--step`, a persisted preference — see setStepMode). This
+   out-specifies reveal's own `.fragment` hiding without !important, so the
+   entrance animation below can still run. */
 .player:not(.player--step) .reveal .slides section .fragment {
   opacity: 1;
   visibility: visible;
@@ -57,20 +58,20 @@
   z-index: 0;
 }
 
+/* No z-index here on purpose: it would make .reveal a stacking context and
+   trap the arrows' z-index below, under the viewer's notes strip (z 55). The
+   deck still paints above .player__bg (z 0) — reveal's own .slides is z 1. */
 .player .reveal {
   position: relative;
-  z-index: 1;
   height: 100%;
 }
-.player .reveal-viewport {
-  background: transparent;
-}
-
-/* Navigation arrows */
+/* Navigation arrows — between the speaker-notes strip (z 55) and the toolbar
+   (z 60) in the viewer's stacking context, so the strip never covers them. */
 .player .reveal .controls {
   color: var(--accent);
   right: 18px;
   bottom: 18px;
+  z-index: 56;
 }
 .player .reveal .controls button::after,
 .player .reveal .controls button::before {
@@ -81,19 +82,6 @@
 .player .reveal .progress {
   color: var(--accent2);
   height: 5px;
-}
-
-/* Slide number pill */
-.player .reveal .slide-number {
-  right: 16px;
-  bottom: 16px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  font-family: var(--font-mono);
-  font-size: 15px;
-  background: color-mix(in srgb, var(--fg-strong) 12%, transparent);
-  color: var(--fg);
-  backdrop-filter: blur(6px);
 }
 
 /* Overview mode tint */

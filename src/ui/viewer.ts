@@ -11,7 +11,7 @@ import { toast } from '../lib/toast'
 import { downloadStandalone } from '../export/standalone'
 import { openPresenter, type PresenterHandle } from '../player/presenter'
 import { startNarration, type NarratorHandle } from '../player/narrate'
-import { deckBudget, fmtClock } from '../player/rehearse'
+import { deckBudget, fmtClock, formatElapsed } from '../player/rehearse'
 import { openStylePicker } from './stylePicker'
 import { openSharePanel } from './sharePanel'
 import { openRewritePanel } from './rewritePanel'
@@ -161,10 +161,22 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   toolsEl.addEventListener('click', () => toolsEl.classList.remove('open'))
 
   // Portrait phones show a "rotate to landscape" nudge (a 16:9 deck is tiny in
-  // portrait). It's playable either way; dismissing hides it for the session.
-  view.querySelector('[data-rotate-dismiss]')!.addEventListener('click', () =>
-    viewerEl.classList.add('rotate-dismissed'),
-  )
+  // portrait). It's playable either way; dismissing hides it for the session
+  // (sessionStorage — it used to come back on every deck opened).
+  const ROTATE_KEY = 'ppt2html.rotateHintDismissed'
+  try {
+    if (sessionStorage.getItem(ROTATE_KEY) === '1') viewerEl.classList.add('rotate-dismissed')
+  } catch {
+    /* storage unavailable — the hint simply shows */
+  }
+  view.querySelector('[data-rotate-dismiss]')!.addEventListener('click', () => {
+    viewerEl.classList.add('rotate-dismissed')
+    try {
+      sessionStorage.setItem(ROTATE_KEY, '1')
+    } catch {
+      /* best-effort */
+    }
+  })
 
   view.querySelector('[data-back]')!.addEventListener('click', goBack)
   view.querySelector('[data-overview]')!.addEventListener('click', () => player?.toggleOverview())
@@ -254,14 +266,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   const timerEl = view.querySelector<HTMLElement>('[data-timer]')!
   const timerOut = timerEl.querySelector('b')!
   let startedAt = Date.now()
-  const fmt = (ms: number) => {
-    const s = Math.max(0, Math.floor(ms / 1000))
-    const hh = Math.floor(s / 3600)
-    const mm = Math.floor((s % 3600) / 60)
-    const ss = s % 60
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return hh ? `${hh}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`
-  }
+  const fmt = formatElapsed
   const tick = () => (timerOut.textContent = fmt(Date.now() - startedAt))
   timerInt = window.setInterval(tick, 1000)
   timerEl.addEventListener('click', () => {
@@ -553,9 +558,11 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         panels.add(openSharePanel(viewerEl, deck))
       })
       // Remember the playback position per deck (session-scoped): a refresh or
-      // an accidental back no longer dumps the presenter to slide 1.
+      // an accidental back no longer dumps the presenter to slide 1. Only for
+      // decks with an identity of their own: every share link used to share
+      // the id 'shared', so opening a second link resumed the first one's page.
       const posKey = `ppt2html.pos.${id}`
-      let posRestored = false
+      let posRestored = !persistable
       let curNum = 1
       onSlide((num) => {
         curNum = num
@@ -567,10 +574,12 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             return
           }
         }
-        try {
-          sessionStorage.setItem(posKey, String(num))
-        } catch {
-          /* best-effort */
+        if (persistable) {
+          try {
+            sessionStorage.setItem(posKey, String(num))
+          } catch {
+            /* best-effort */
+          }
         }
         setNote(deck.slides[num - 1]?.note)
         presenter?.update(num)
