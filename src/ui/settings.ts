@@ -1,7 +1,7 @@
 import {
   loadSettings,
   saveSettings,
-  DEFAULT_SETTINGS,
+  freshDefaults,
   hasSystemKey,
   hasSystemImageKey,
   SYSTEM_DEEPSEEK,
@@ -104,9 +104,9 @@ export function renderSettings(view: HTMLElement): () => void {
         </div>
         <div data-img-photo-keys>
           <div class="hint">${(hasSystemImageKey ? t('settings.bgHint.system') : t('settings.bgHint.openverse')) + t('settings.bgHint.tail')}</div>
-          <input class="form-input" data-img-unsplash placeholder="${escapeHtml(t('settings.unsplashPlaceholder'))}" autocomplete="off" style="margin-top:10px">
-          <input class="form-input" data-img-pexels placeholder="${escapeHtml(t('settings.pexelsPlaceholder'))}" autocomplete="off" style="margin-top:8px">
-          <input class="form-input" data-img-pixabay placeholder="${escapeHtml(t('settings.pixabayPlaceholder'))}" autocomplete="off" style="margin-top:8px">
+          <input class="form-input" data-img-unsplash type="password" placeholder="${escapeHtml(t('settings.unsplashPlaceholder'))}" autocomplete="off" style="margin-top:10px">
+          <input class="form-input" data-img-pexels type="password" placeholder="${escapeHtml(t('settings.pexelsPlaceholder'))}" autocomplete="off" style="margin-top:8px">
+          <input class="form-input" data-img-pixabay type="password" placeholder="${escapeHtml(t('settings.pixabayPlaceholder'))}" autocomplete="off" style="margin-top:8px">
           <div class="hint">${t('settings.imgKeyHint')}</div>
         </div>
       </div>
@@ -115,7 +115,7 @@ export function renderSettings(view: HTMLElement): () => void {
         <label>${t('settings.imageGen')}</label>
         <div class="hint">${t('settings.imageGenHint')}</div>
         <input class="form-input" data-gen-base placeholder="${escapeHtml(t('settings.imageGenBase'))}" autocomplete="off" style="margin-top:8px">
-        <input class="form-input" data-gen-key placeholder="${escapeHtml(t('settings.imageGenKey'))}" autocomplete="off" style="margin-top:8px">
+        <input class="form-input" data-gen-key type="password" placeholder="${escapeHtml(t('settings.imageGenKey'))}" autocomplete="off" style="margin-top:8px">
         <input class="form-input" data-gen-model placeholder="${escapeHtml(t('settings.imageGenModel'))}" autocomplete="off" style="margin-top:8px">
       </div>
 
@@ -350,19 +350,26 @@ export function renderSettings(view: HTMLElement): () => void {
     // A blank model means "this endpoint's first choice", not gpt-4o-mini
     // regardless of where the request goes.
     if (!cfg.model.trim()) cfg.model = modelChoicesFor(state.provider, cfg.baseUrl, '')[0] ?? hint.model
-    saveSettings(state)
+    if (!saveSettings(state)) {
+      toast(t('settings.saveFailed'))
+      return
+    }
     customModel = false
     paint()
     toast(t('settings.saved'))
   })
 
   view.querySelector('[data-reset]')!.addEventListener('click', () => {
-    const fresh = structuredClone(DEFAULT_SETTINGS)
-    fresh.provider = state.provider
+    // Every field, from the build's own defaults: on the zero-config build
+    // that is "system DeepSeek, thinking on" (DEFAULT_SETTINGS alone left the
+    // user on an Anthropic tab with no key); the image-gen key resets too.
+    const fresh = freshDefaults()
+    state.provider = fresh.provider
     state.anthropic = fresh.anthropic
     state.openai = fresh.openai
     state.thinking = fresh.thinking
     state.images = fresh.images
+    state.imageGen = fresh.imageGen
     state.branding = fresh.branding
     customModel = false
     paint()

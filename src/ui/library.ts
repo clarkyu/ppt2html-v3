@@ -124,7 +124,9 @@ export function renderLibrary(view: HTMLElement): () => void {
       const { importPptx } = await import('../import/pptx')
       const spec = await importPptx(await file.arrayBuffer(), file.name)
       const { normalizeDeck } = await import('../render/normalize')
-      const deck = normalizeDeck(spec, { prompt: file.name, id: crypto.randomUUID() })
+      // No prompt for an import: the local file name is nobody else's business
+      // (it used to ride inside share links as deck.prompt).
+      const deck = normalizeDeck(spec, { prompt: '', id: crypto.randomUUID() })
       await saveDeck(deck)
       toast(t('imp.done').replace('{n}', String(deck.slides.length)))
       offerRestyle(view, deck)

@@ -14,6 +14,7 @@ import { extractJson } from './extractJson'
 import { LlmError, backoff, isAbort } from './errors'
 import { deckIsCjk } from '../lib/lang'
 import { sliceMaterial, SLICE_THRESHOLD } from '../lib/materialSlice'
+import { fencedMaterial, MATERIAL_RULE } from './prompt'
 import { t } from '../i18n'
 
 /** Pages per LLM call — big enough to keep flow, small enough to never truncate. */
@@ -91,7 +92,7 @@ function batchPrompt(deck: Deck, pages: number[]): string {
   if (mat) {
     const query = picked.map((p) => `${stripMd(deck.slides[p - 1].title)} ${stripMd(deck.slides[p - 1].subtitle)}`).join(' ')
     const scoped = mat.length > SLICE_THRESHOLD ? sliceMaterial(mat, `${query} ${deck.title}`) : mat
-    materialBlock = `\n\n参考素材（生成本课件时用户提供，讲稿展开优先引用其中的事实）：\n"""\n${scoped}\n"""`
+    materialBlock = `\n\n参考素材（生成本课件时用户提供，讲稿展开优先引用其中的事实；分隔标记之间）：\n${fencedMaterial(scoped)}\n${MATERIAL_RULE}`
   }
   const contiguous = picked.length && picked[picked.length - 1] - picked[0] + 1 === picked.length
   const which = contiguous && picked.length > 1 ? `第 ${picked[0]} ~ ${picked[picked.length - 1]} 页` : `第 ${picked.join('、')} 页`

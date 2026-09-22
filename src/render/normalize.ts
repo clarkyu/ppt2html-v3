@@ -144,11 +144,14 @@ function asSlideBg(v: unknown): SlideBg | undefined {
   if (!url) return undefined
   const source = asString(o.source) ?? 'unknown'
   const link = asString(o.link)
+  const licenseUrl = asString(o.licenseUrl)
   return {
     url,
     source: BG_SOURCES.has(source) ? source : 'unknown',
     credit: asString(o.credit),
     link: link && /^https?:\/\//i.test(link) ? link : undefined,
+    license: asString(o.license)?.slice(0, 40),
+    licenseUrl: licenseUrl && /^https?:\/\//i.test(licenseUrl) ? licenseUrl : undefined,
   }
 }
 

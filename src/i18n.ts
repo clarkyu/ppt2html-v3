@@ -475,6 +475,10 @@ const DICT: Record<string, Entry> = {
   'share.building': { zh: '正在生成链接…', en: 'Building the link…' },
   'share.copy': { zh: '复制', en: 'Copy' },
   'share.copied': { zh: '链接已复制。', en: 'Link copied.' },
+  'share.logoOmitted': {
+    zh: '上传的 Logo 不随链接发送（对方看到的是无 Logo 版本）。',
+    en: 'Your uploaded logo is not included in the link (recipients see the deck without it).',
+  },
   'share.tooBigForQr': {
     zh: '内容较多，二维码装不下——请直接复制链接分享。',
     en: 'Too much content for a QR code — copy the link instead.',
@@ -791,6 +795,10 @@ const DICT: Record<string, Entry> = {
   'settings.switchedTo': { zh: '已切到 {label}，填好 API Key 后记得保存', en: 'Switched to {label} — add the API key and save' },
   'settings.logoTooBig': { zh: 'Logo 图片太大，请用小于 ~900KB 的图片', en: 'Logo image is too large — use one under ~900KB' },
   'settings.saved': { zh: '设置已保存', en: 'Settings saved' },
+  'settings.saveFailed': {
+    zh: '设置没能保存：浏览器存储不可用（隐私模式或空间已满）——本次可继续使用，但下次打开需要重新填写。',
+    en: 'Settings could not be saved — browser storage is unavailable (private mode or full). They work for this visit only.',
+  },
   'settings.resetDone': { zh: '已恢复默认（未保存）', en: 'Reset to defaults (not yet saved)' },
 
   // Editor

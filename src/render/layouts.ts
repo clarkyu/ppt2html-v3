@@ -286,7 +286,15 @@ export function creditHtml(bg: SlideBg | undefined): string {
     bg.link && /^https?:\/\//i.test(bg.link)
       ? `<a href="${escapeHtml(bg.link)}" target="_blank" rel="noopener noreferrer">${safe}</a>`
       : safe
-  return `<div class="deck-slide__credit">${inner}</div>`
+  // CC images (Openverse) must name their license, not just the creator.
+  const lic = (bg.license ?? '').trim()
+  const licHtml = lic
+    ? ' · ' +
+      (bg.licenseUrl && /^https?:\/\//i.test(bg.licenseUrl)
+        ? `<a href="${escapeHtml(bg.licenseUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(lic)}</a>`
+        : escapeHtml(lic))
+    : ''
+  return `<div class="deck-slide__credit">${inner}${licHtml}</div>`
 }
 
 /** Attribution caption for a slide's background image (empty if none). */

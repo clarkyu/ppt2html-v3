@@ -183,8 +183,10 @@ export const DEFAULT_SETTINGS: LlmSettings = {
   branding: {},
 }
 
-/** Fresh defaults. With a system key, default to system DeepSeek (thinking on). */
-function freshDefaults(): LlmSettings {
+/** Fresh defaults. With a system key, default to system DeepSeek (thinking on).
+ * The settings page's "reset" rebuilds from this too — DEFAULT_SETTINGS alone
+ * would put a zero-config user on an Anthropic tab with no key. */
+export function freshDefaults(): LlmSettings {
   const d = structuredClone(DEFAULT_SETTINGS)
   if (hasSystemKey) {
     d.provider = 'openai'
@@ -211,7 +213,9 @@ export function loadSettings(): LlmSettings {
       provider: parsed.provider === 'openai' ? 'openai' : 'anthropic',
       anthropic,
       openai,
-      thinking: parsed.thinking === true,
+      // Absent (settings saved before the field existed) → the build's default,
+      // which is "on" for the system DeepSeek key.
+      thinking: typeof parsed.thinking === 'boolean' ? parsed.thinking : freshDefaults().thinking,
       images,
       imageGen: { ...DEFAULT_SETTINGS.imageGen, ...parsed.imageGen },
       branding: { ...DEFAULT_SETTINGS.branding, ...parsed.branding },
@@ -221,8 +225,16 @@ export function loadSettings(): LlmSettings {
   }
 }
 
-export function saveSettings(settings: LlmSettings): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+/** Persist; false when storage refuses (quota, disabled storage, private
+ * mode) so the caller can say so — Save and the wizard's 开始 used to throw
+ * out of their click handlers and do nothing visible. */
+export function saveSettings(settings: LlmSettings): boolean {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function activeConfig(settings: LlmSettings): ProviderConfig {

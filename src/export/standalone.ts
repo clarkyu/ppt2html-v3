@@ -113,7 +113,11 @@ var start=(parseInt((location.hash||'').slice(1),10)||1)-1;show(isFinite(start)&
 
 /** Build the full self-contained HTML document for a deck. */
 export function standaloneHtml(deck: Deck): string {
-  const slides = renderDeckSlides(deck)
+  // The exported player has no presenter view, so speaker notes would only
+  // ride along invisibly in the file — a script written for the presenter's
+  // eyes must not travel with the audience copy. (PPTX export keeps them by
+  // design: PowerPoint shows them as notes.)
+  const slides = renderDeckSlides({ ...deck, slides: deck.slides.map(({ note: _note, ...s }) => s) })
   // `.player` carries the shared typography + --pos/--neg vars (themes.css only
   // scopes those to `.player`, not `.theme-*`), so the export renders with the
   // app's fonts. A custom theme adds its derived palette as inline vars.

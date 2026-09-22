@@ -159,9 +159,11 @@ function plain(s: string): string {
 /* ------------------------------- providers ------------------------------- */
 
 async function openverse(q: string, signal?: AbortSignal): Promise<ImageCandidate[]> {
+  // Only licenses that allow commercial use AND modification: a deck is
+  // reworked (cropped, darkened, captioned) and may well be shown for money.
   const url =
     `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}` +
-    `&page_size=6&aspect_ratio=wide&mature=false`
+    `&page_size=6&aspect_ratio=wide&mature=false&license_type=commercial,modification`
   const data = await getJson(url, {}, signal)
   const results = Array.isArray(data?.results) ? data.results : []
   return results
@@ -177,9 +179,21 @@ async function openverse(q: string, signal?: AbortSignal): Promise<ImageCandidat
         source: 'openverse',
         credit: credit || undefined,
         link: typeof r.foreign_landing_url === 'string' ? r.foreign_landing_url : undefined,
+        license: ccLicenseLabel(r.license, r.license_version),
+        licenseUrl: typeof r.license_url === 'string' && /^https?:\/\//i.test(r.license_url) ? r.license_url : undefined,
       }
     })
     .filter((x: ImageCandidate | null): x is ImageCandidate => x !== null)
+}
+
+/** "by-sa" + "4.0" → "CC BY-SA 4.0"; CC0 / public-domain marks get their names. */
+function ccLicenseLabel(license: unknown, version: unknown): string | undefined {
+  const lic = typeof license === 'string' ? license.trim().toLowerCase() : ''
+  if (!lic) return undefined
+  const ver = typeof version === 'string' ? version.trim() : ''
+  if (lic === 'cc0') return `CC0${ver ? ` ${ver}` : ''}`
+  if (lic === 'pdm') return 'Public Domain'
+  return `CC ${lic.toUpperCase()}${ver ? ` ${ver}` : ''}`
 }
 
 async function unsplash(q: string, key: string, signal?: AbortSignal): Promise<ImageCandidate[]> {

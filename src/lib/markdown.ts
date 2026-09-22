@@ -15,10 +15,22 @@ const PROSE_TAGS = [
   'p', 'ul', 'ol', 'li', 'blockquote', 'h3', 'h4', 'hr', 'pre',
 ]
 
+// Links in slide text always open in a new tab: `target` is no longer an
+// allowed attribute (model / share-link text can't pick a window name), and a
+// same-tab link would navigate away from the running deck.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A') {
+    node.setAttribute('target', '_blank')
+    node.setAttribute('rel', 'noopener noreferrer')
+  }
+})
+
 function sanitize(dirty: string, tags: string[]): string {
   return DOMPurify.sanitize(dirty, {
     ALLOWED_TAGS: tags,
-    ALLOWED_ATTR: ['href', 'title', 'target', 'rel', 'class'],
+    // No `class`: untrusted text could otherwise attach any app / reveal.js
+    // class (fragment, present, visually-hidden…) to its own markup.
+    ALLOWED_ATTR: ['href', 'title', 'rel'],
   })
 }
 

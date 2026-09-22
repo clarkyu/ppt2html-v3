@@ -219,7 +219,9 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
         toast(t('err.noKeyShort'))
         return
       }
-      saveSettings(draft)
+      // Storage refusing (quota / private mode) must not block the wizard: the
+      // in-memory draft drives this run; the user just hears it won't stick.
+      if (!saveSettings(draft)) toast(t('settings.saveFailed'))
       // If the provider changed vs. what we prefetched with, redo the prefetch.
       if (!prefetch || prefetch.provider !== draft.provider) startPrefetch(draft)
       goQuestions()

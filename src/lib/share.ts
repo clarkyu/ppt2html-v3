@@ -10,11 +10,6 @@
 import type { Deck } from '../types'
 import { sanitizeDeck } from '../render/normalize'
 
-/** A data: logo above this many chars is dropped from share payloads — a 300 KB
- * uploaded logo would otherwise turn the link into a 400K-char URL. Typical
- * logos (20–150 KB → up to ~200K chars base64) still travel; the QR code has
- * its own, much tighter, gate (QR_MAX_CHARS). */
-const SHARE_LOGO_MAX_CHARS = 200_000
 /** Reject absurd fragments before touching them, and bound the INFLATED size:
  * deflate packs 100k identical slides into a ~20K-char link that would freeze
  * the receiver's tab for minutes. */
@@ -72,21 +67,28 @@ export function shareSupported(): boolean {
   return typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined'
 }
 
-/** The deck, minus what must not travel (ids, timestamps, bulky data URLs).
+/** What a share link leaves behind, so the panel can say so. */
+export function shareOmissions(deck: Deck): { logo: boolean } {
+  return { logo: !!deck.branding?.logo?.startsWith('data:') }
+}
+
+/** The deck, minus what must not travel (ids, timestamps, bulky data URLs,
+ * the user's own request text).
  * NOTE: this is an ALLOWLIST — `deck.material` (the user's pasted source
- * material) is deliberately absent and must never be added here. */
+ * material) is deliberately absent and must never be added here. `prompt`
+ * (the topic as typed, for imports once the local file name) is local-only
+ * as well; receivers get the title. */
 function portable(deck: Deck): Record<string, unknown> {
-  const logo = deck.branding?.logo
-  const branding =
-    logo && logo.startsWith('data:') && logo.length > SHARE_LOGO_MAX_CHARS
-      ? { ...deck.branding, logo: undefined }
-      : deck.branding
+  // An uploaded (data:) logo is dropped like data: backgrounds are: even a
+  // small one is tens of KB — past the QR / share-card limit on its own — and
+  // it's the sender's asset, not part of the content. http(s) logo URLs travel.
+  const { logo, ...brandRest } = deck.branding ?? {}
+  const branding = deck.branding ? { ...brandRest, ...(logo && !logo.startsWith('data:') ? { logo } : {}) } : undefined
   return {
     title: deck.title,
     subtitle: deck.subtitle,
     theme: deck.theme,
     customTheme: deck.customTheme,
-    prompt: deck.prompt,
     branding,
     slides: deck.slides.map((s) => {
       const { bg, ...rest } = s

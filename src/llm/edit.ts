@@ -3,7 +3,7 @@ import type { LlmSettings } from './settings'
 import { requestText } from './client'
 import { extractJson } from './extractJson'
 import { normalizeSlide } from '../render/normalize'
-import { DECK_SCHEMA_GUIDE } from './prompt'
+import { DECK_SCHEMA_GUIDE, fencedMaterial, MATERIAL_RULE } from './prompt'
 import { sliceMaterial, SLICE_THRESHOLD } from '../lib/materialSlice'
 import { t } from '../i18n'
 
@@ -166,7 +166,7 @@ export async function generateNewSlide(
   const mat = deck.material?.trim()
   if (mat) {
     const scoped = mat.length > SLICE_THRESHOLD ? sliceMaterial(mat, `${instruction} ${deck.title}`) : mat
-    materialBlock = `\n\n参考素材（生成本课件时用户提供，优先引用其中的事实）：\n"""\n${scoped}\n"""`
+    materialBlock = `\n\n参考素材（生成本课件时用户提供，优先引用其中的事实；分隔标记之间）：\n${fencedMaterial(scoped)}\n${MATERIAL_RULE}`
   }
   const user =
     `课件主题：${deck.prompt || deck.title}\n` +

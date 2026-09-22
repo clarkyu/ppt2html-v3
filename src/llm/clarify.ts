@@ -3,6 +3,7 @@ import type { LlmSettings } from './settings'
 import { requestText } from './client'
 import { extractJson } from './extractJson'
 import { getLang } from '../i18n'
+import { fencedMaterial, MATERIAL_RULE } from './prompt'
 
 const CLARIFY_SYSTEM = `你是课件需求分析助手。用户给出一个较粗略的主题，你只提出 **1~2 个最关键**的问题——问那些最能改变课件方向、缺了就没法动笔的点，其余一律不问。
 
@@ -23,7 +24,7 @@ function buildClarifyUser(topic: string, opts: GenerateOptions): string {
   // An excerpt is enough for question-picking; the full text rides with the
   // generation prompts (contextBlock), not here.
   if (opts.material?.trim()) {
-    lines.push(`用户已提供参考素材（节选）：\n"""\n${opts.material.trim().slice(0, 2000)}\n"""`)
+    lines.push(`用户已提供参考素材（节选，分隔标记之间）：\n${fencedMaterial(opts.material, 2000)}\n${MATERIAL_RULE}`)
   }
   lines.push('', '请输出 1~2 个最关键澄清问题的 JSON。只输出 JSON。')
   return lines.join('\n')

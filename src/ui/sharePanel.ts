@@ -4,7 +4,7 @@
 // sheet where available, and a plain QR as fallback when the card can't build.
 
 import type { Deck } from '../types'
-import { shareUrl, shareSupported, QR_MAX_CHARS } from '../lib/share'
+import { shareUrl, shareSupported, shareOmissions, QR_MAX_CHARS } from '../lib/share'
 import { t } from '../i18n'
 import { toast } from '../lib/toast'
 
@@ -19,7 +19,7 @@ export function openSharePanel(host: HTMLElement, deck: Deck): () => void {
   wrap.innerHTML = `
     <div class="sharepanel__card">
       <h3>${t('share.title')}</h3>
-      <p class="sharepanel__hint">${t('share.hint')}</p>
+      <p class="sharepanel__hint">${t('share.hint')}${shareOmissions(deck).logo ? ` ${t('share.logoOmitted')}` : ''}</p>
       <div class="sharepanel__row">
         <input class="form-input" data-share-url readonly value="${t('share.building')}">
         <button class="btn btn--primary btn--sm" data-share-copy disabled>${t('share.copy')}</button>
