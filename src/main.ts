@@ -4,6 +4,7 @@ import { parseRoute, canLeave, setLeaveGuard, setLangHandler, getLangHandler, ty
 import { icons } from './lib/icons'
 import { escapeHtml } from './lib/markdown'
 import { showSwUpdateBanner } from './lib/swUpdate'
+import { disposeAllOverlays } from './lib/overlay'
 import { renderHome } from './ui/home'
 import { renderLibrary } from './ui/library'
 import { renderSettings } from './ui/settings'
@@ -52,6 +53,10 @@ let cleanup: (() => void) | null = null
 let current: Route | null = null
 
 function mount(route: Route): void {
+  // Wizard / generation overlays belong to the screen that opened them: a
+  // hash change or the back button closes them (aborting their requests)
+  // instead of mounting the next screen underneath.
+  disposeAllOverlays()
   cleanup?.()
   cleanup = null
   // A screen's guard/handler never outlives it.

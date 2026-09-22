@@ -13,6 +13,8 @@ import { getLang, t } from '../i18n'
 import { toast } from '../lib/toast'
 import { MATERIAL_MAX_CHARS } from '../llm/prompt'
 import { clampChars } from '../lib/materialSlice'
+import { loadComposer, saveComposer } from '../lib/composer'
+import { disposeAllOverlays, overlayOpen } from '../lib/overlay'
 import type { GenerateOptions, ThemeName } from '../types'
 
 /** Minimal Web Speech API surface (not in lib.dom; prefixed on Chrome/Safari). */
@@ -173,9 +175,41 @@ export function renderHome(view: HTMLElement): () => void {
   const durationEl = view.querySelector<HTMLSelectElement>('[data-duration]')!
   const toneEl = view.querySelector<HTMLSelectElement>('[data-tone]')!
 
+  // The composer survives a trip to Settings / a language toggle (both
+  // remount this screen): restore, then keep the snapshot current.
+  const setSelect = (sel: HTMLSelectElement, value: string): void => {
+    if ([...sel.options].some((o) => o.value === value)) sel.value = value
+  }
+  const savedComposer = loadComposer()
+  if (savedComposer) {
+    topicEl.value = savedComposer.topic
+    materialEl.value = savedComposer.material
+    materialBox.open = savedComposer.materialOpen || !!savedComposer.material
+    setSelect(themeEl, savedComposer.theme)
+    setSelect(durationEl, savedComposer.duration)
+    setSelect(toneEl, savedComposer.tone)
+  }
+  const persistComposer = (): void =>
+    saveComposer({
+      topic: topicEl.value,
+      material: materialEl.value,
+      theme: themeEl.value,
+      duration: durationEl.value,
+      tone: toneEl.value,
+      materialOpen: materialBox.open,
+    })
+  topicEl.addEventListener('input', persistComposer)
+  materialEl.addEventListener('input', persistComposer)
+  for (const sel of [themeEl, durationEl, toneEl]) sel.addEventListener('change', persistComposer)
+  materialBox.addEventListener('toggle', persistComposer)
+
   // Unfinished outline-wizard draft → offer to resume where the user left off.
-  const draft = loadDraft()
-  if (draft) {
+  // Re-rendered on 'draftchange' (the wizard exiting deliberately) so the card
+  // appears the moment the draft exists, not on the next visit.
+  const renderDraftNote = (): void => {
+    view.querySelector('.draft-note')?.remove()
+    const draft = loadDraft()
+    if (!draft) return
     const note = document.createElement('div')
     note.className = 'draft-note card'
     note.innerHTML = `
@@ -189,16 +223,25 @@ export function renderHome(view: HTMLElement): () => void {
       </div>`
     view.querySelector('.hero')!.after(note)
     note.querySelector('[data-draft-resume]')!.addEventListener('click', () => {
-      startPageOutline(draft.topic, draft.opts, draft.structure, {
-        results: draft.results,
-        step: draft.step,
-      })
+      if (overlayOpen()) return
+      try {
+        startPageOutline(draft.topic, draft.opts, draft.structure, { results: draft.results, step: draft.step })
+      } catch {
+        // A draft that passed the shape check but still can't be resumed must
+        // not leave a blank overlay on screen.
+        disposeAllOverlays()
+        clearDraft()
+        renderDraftNote()
+        toast(t('home.draftBroken'))
+      }
     })
     note.querySelector('[data-draft-discard]')!.addEventListener('click', () => {
       clearDraft()
       note.remove()
     })
   }
+  renderDraftNote()
+  window.addEventListener('draftchange', renderDraftNote)
 
   const collectOptions = (): GenerateOptions => {
     const minutes = durationEl.value ? Number(durationEl.value) : undefined
@@ -211,14 +254,23 @@ export function renderHome(view: HTMLElement): () => void {
     }
   }
 
-  const submit = () => startGuidedGeneration(topicEl.value, collectOptions())
-  const quick = () => quickGenerateAndPlay(topicEl.value, collectOptions())
+  // One launch at a time: a held Ctrl+Enter (key auto-repeat) or a double
+  // tap used to open several parallel, billed generations.
+  const submit = () => {
+    if (overlayOpen()) return
+    startGuidedGeneration(topicEl.value, collectOptions())
+  }
+  const quick = () => {
+    if (overlayOpen()) return
+    quickGenerateAndPlay(topicEl.value, collectOptions())
+  }
 
   view.querySelector('[data-generate]')!.addEventListener('click', submit)
   view.querySelector('[data-quick]')!.addEventListener('click', quick)
   view.querySelector('[data-sample]')!.addEventListener('click', () => navigate('#/play/sample'))
   view.querySelector('[data-templates]')!.addEventListener('click', () => navigate('#/templates'))
   topicEl.addEventListener('keydown', (e) => {
+    if (e.repeat) return
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') quick()
   })
   const examplesEl = view.querySelector<HTMLElement>('[data-examples]')!
@@ -232,6 +284,7 @@ export function renderHome(view: HTMLElement): () => void {
     const chip = (e.target as HTMLElement).closest<HTMLElement>('[data-example]')
     if (!chip) return
     topicEl.value = chip.dataset.example ?? ''
+    persistComposer()
     topicEl.focus()
   })
   view.querySelector('[data-shuffle]')!.addEventListener('click', renderChips)
@@ -260,6 +313,7 @@ export function renderHome(view: HTMLElement): () => void {
         if (!heard) return
         const cur = topicEl.value.trim()
         topicEl.value = cur ? `${cur} ${heard}` : heard
+        persistComposer()
       }
       r.onend = () => {
         rec = null
@@ -290,6 +344,7 @@ export function renderHome(view: HTMLElement): () => void {
     materialEl.value = clampChars(merged, MATERIAL_MAX_CHARS)
     const truncated = merged.length > MATERIAL_MAX_CHARS
     if (truncated) toast(t('home.materialTruncated').replace('{n}', String(MATERIAL_MAX_CHARS)))
+    persistComposer()
     materialEl.focus()
     return truncated
   }
@@ -340,6 +395,7 @@ export function renderHome(view: HTMLElement): () => void {
           }
           const cur = topicEl.value.trim()
           topicEl.value = cur ? `${cur} ${got}` : got
+          persistComposer()
           topicEl.focus()
         })
         .catch(() => toast(t('home.pasteFailed'))) // permission denied / insecure context
@@ -379,6 +435,7 @@ export function renderHome(view: HTMLElement): () => void {
 
   return () => {
     rec?.stop()
+    window.removeEventListener('draftchange', renderDraftNote)
     thumbCleanups.forEach((fn) => fn())
   }
 }

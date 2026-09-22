@@ -31,13 +31,28 @@ export function loadDraft(): WizardDraft | null {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return null
-    const d = JSON.parse(raw) as WizardDraft
-    if (!d || typeof d !== 'object' || !d.topic || !d.structure?.sections) return null
-    if (Date.now() - (d.savedAt || 0) > TTL_MS) {
+    const d = JSON.parse(raw) as Partial<WizardDraft>
+    // Shape-check every field the wizard indexes into: a hand-edited or
+    // half-written draft used to pass, then throw after the overlay was on
+    // screen — a blank dialog with no way out. A bad draft is simply dropped.
+    const valid =
+      !!d &&
+      typeof d === 'object' &&
+      typeof d.topic === 'string' &&
+      d.topic.trim().length > 0 &&
+      !!d.opts &&
+      typeof d.opts === 'object' &&
+      !!d.structure &&
+      typeof d.structure === 'object' &&
+      Array.isArray(d.structure.sections) &&
+      Array.isArray(d.results) &&
+      Number.isInteger(d.step) &&
+      (d.step as number) >= 0
+    if (!valid || Date.now() - (d.savedAt || 0) > TTL_MS) {
       localStorage.removeItem(KEY)
       return null
     }
-    return d
+    return d as WizardDraft
   } catch {
     return null
   }

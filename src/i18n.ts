@@ -209,6 +209,8 @@ const DICT: Record<string, Entry> = {
   'home.custom': { zh: '逐步定制', en: 'Step-by-step' },
   'home.customHint': { zh: '引导问题 → 结构确认 → 逐环节大纲 → 成片', en: 'Guided questions → structure → per-part outline → deck' },
   'home.draftTitle': { zh: '有未完成的课件草稿', en: 'Unfinished deck draft' },
+  'home.draftBroken': { zh: '这份草稿已损坏，无法继续，已清除。', en: 'This draft is damaged and cannot be resumed — it has been cleared.' },
+  'gen.cancelConfirm': { zh: '正在生成中，确定要取消吗？', en: 'Generation is in progress — cancel it?' },
   'home.draftResume': { zh: '继续制作', en: 'Resume' },
   'home.draftDiscard': { zh: '丢弃', en: 'Discard' },
   'home.titlePre': { zh: '一句话，生成', en: 'One line becomes a ' },

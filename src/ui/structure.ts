@@ -6,6 +6,7 @@ import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
 import { liveTitles, renderLive, renderThinking } from '../lib/live'
+import { openOverlay } from '../lib/overlay'
 import { t } from '../i18n'
 import type { GenerateOptions, Section, Structure, ThemeName } from '../types'
 
@@ -38,15 +39,20 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
 
   const minutes = opts.durationMinutes
 
-  const el = document.createElement('div')
-  el.className = 'overlay'
-  el.innerHTML = `<div class="outline card"><div data-body></div></div>`
-  document.body.appendChild(el)
-  const body = el.querySelector<HTMLElement>('[data-body]')!
-  const close = () => el.remove()
+  const ov = openOverlay(`<div class="outline card"><div data-body></div></div>`, () => close())
+  const body = ov.el.querySelector<HTMLElement>('[data-body]')!
+  const close = () => {
+    controller.abort()
+    ov.dispose()
+  }
   let controller = new AbortController()
+  // What the last run was asked for, so Retry repeats THAT (the edited
+  // structure + the adjustment instruction), and what was on screen before a
+  // re-plan, so Cancel / Close during one returns there instead of nuking
+  // the editor.
+  let last: { base?: Structure; instruction?: string; pre?: Structure } = {}
 
-  const showLoading = () => {
+  const showLoading = (pre?: Structure) => {
     body.innerHTML = `
       <div class="gen" style="padding:8px">
         <div class="gen__spinner"></div>
@@ -55,26 +61,31 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
         <ol class="gen-live" data-live><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
         <div class="gen__actions"><button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button></div>
       </div>`
-    body.querySelector('[data-cancel]')!.addEventListener('click', () => {
+    const cancel = (): void => {
       controller.abort()
-      close()
-    })
+      if (pre) showEditor(pre)
+      else close()
+    }
+    ov.escape = cancel
+    body.querySelector('[data-cancel]')!.addEventListener('click', cancel)
   }
 
-  const showError = (msg: string) => {
+  const showError = (msg: string, pre?: Structure) => {
     body.innerHTML = `
       <div class="gen" style="padding:8px">
         <h2 class="gen__error">${t('struct.failed')}</h2>
         <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>
         <div class="gen__actions">
-          <button class="btn btn--ghost" data-cancel>${t('common.close')}</button>
+          <button class="btn btn--ghost" data-cancel>${pre ? t('outline.backStep') : t('common.close')}</button>
           <button class="btn btn--primary" data-retry>${t('common.retry')}</button>
         </div>
       </div>`
-    body.querySelector('[data-cancel]')!.addEventListener('click', close)
+    const back = (): void => (pre ? showEditor(pre) : close())
+    ov.escape = back
+    body.querySelector('[data-cancel]')!.addEventListener('click', back)
     body.querySelector('[data-retry]')!.addEventListener('click', () => {
       controller = new AbortController()
-      run()
+      run(last.base, last.instruction, last.pre)
     })
   }
 
@@ -82,6 +93,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
 
   const showEditor = (structure: Structure) => {
     body.innerHTML = renderEditor(structure, rich)
+    ov.escape = close
     wireEditor(body, minutes, {
       onCancel: close,
       onRegen: () => {
@@ -91,7 +103,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
         const instruction = body.querySelector<HTMLInputElement>('[data-adjust]')?.value.trim() || undefined
         const base = collectStructure(body, trimmed)
         controller = new AbortController()
-        run(base.sections.length ? base : undefined, instruction)
+        run(base.sections.length ? base : undefined, instruction, base)
       },
       onNext: () => {
         const edited = collectStructure(body, trimmed)
@@ -106,8 +118,9 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
     })
   }
 
-  const run = (base?: Structure, instruction?: string) => {
-    showLoading()
+  const run = (base?: Structure, instruction?: string, pre?: Structure) => {
+    last = { base, instruction, pre }
+    showLoading(pre)
     const liveEl = body.querySelector<HTMLElement>('[data-live]')!
     generateStructure(
       trimmed,
@@ -125,7 +138,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
         if (!controller.signal.aborted) showEditor(structure)
       })
       .catch((err: unknown) => {
-        if (!controller.signal.aborted) showError(err instanceof Error ? err.message : String(err))
+        if (!controller.signal.aborted) showError(err instanceof Error ? err.message : String(err), pre)
       })
   }
 

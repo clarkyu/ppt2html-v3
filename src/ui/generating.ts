@@ -10,6 +10,8 @@ import { navigate } from '../router'
 import { toast } from '../lib/toast'
 import { escapeHtml } from '../lib/markdown'
 import { clearDraft } from '../lib/draft'
+import { clearComposer } from '../lib/composer'
+import { openOverlay, overlayOpen } from '../lib/overlay'
 import { t } from '../i18n'
 import type { Deck, GenerateOptions, Outline } from '../types'
 
@@ -48,9 +50,8 @@ export function generateAndPlay(
   const total = outline.slides.length
   const model = activeConfig(settings).model
 
-  const el = document.createElement('div')
-  el.className = 'overlay'
-  el.innerHTML = `
+  const ov = openOverlay(
+    `
     <div class="gen card gen--film" style="padding:28px">
       <h2>${t('gen.title')}</h2>
       <p data-progress>${t('gen.subtitle').replace('{topic}', escapeHtml(trimmed)).replace('{n}', String(total))}</p>
@@ -69,8 +70,10 @@ export function generateAndPlay(
       <div class="gen__actions" data-actions>
         <button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button>
       </div>
-    </div>`
-  document.body.appendChild(el)
+    </div>`,
+    () => dismiss(),
+  )
+  const el = ov.el
 
   const filmEl = el.querySelector<HTMLElement>('[data-film]')!
   const progressEl = el.querySelector<HTMLElement>('[data-progress]')!
@@ -81,11 +84,24 @@ export function generateAndPlay(
   const slides: Array<Record<string, unknown>> = [] // completed segments only
   const segDone: number[] = [] // how many slides each completed segment contributed
   let revealed = 0
+  // Each thumbnail owns a ResizeObserver; re-mounting a cell (a retry, a
+  // late reveal) and tearing the wall down must disconnect them, or every
+  // resize keeps firing into detached previews.
+  const cellCleanups = new Map<number, () => void>()
+  const disconnectAll = (): void => {
+    cellCleanups.forEach((fn) => fn())
+    cellCleanups.clear()
+  }
 
   const dismiss = () => {
     controller.abort()
-    el.remove()
+    disconnectAll()
+    ov.dispose()
     hooks.onDismiss?.()
+  }
+  // Escape asks first: this is an expensive, in-flight generation.
+  ov.escape = () => {
+    if (confirm(t('gen.cancelConfirm'))) dismiss()
   }
   el.querySelector('[data-cancel]')!.addEventListener('click', dismiss)
 
@@ -106,7 +122,8 @@ export function generateAndPlay(
       revealed++
       setProgress()
     }
-    mountSlidePreview(cell.querySelector<HTMLElement>('[data-mount]')!, outline.theme, norm)
+    cellCleanups.get(index)?.()
+    cellCleanups.set(index, mountSlidePreview(cell.querySelector<HTMLElement>('[data-mount]')!, outline.theme, norm))
     cell.scrollIntoView({ block: 'nearest' })
   }
 
@@ -127,7 +144,9 @@ export function generateAndPlay(
       saveDeck(deck)
         .then(() => {
           clearDraft()
-          el.remove()
+          clearComposer()
+          disconnectAll()
+          ov.dispose()
           hooks.onDone?.()
           navigate(`#/play/${deck.id}`)
         })
@@ -184,6 +203,7 @@ export function generateAndPlay(
       for (; si < segments.length; si++) {
         const base = segments.slice(0, si).reduce((n, s) => n + s.length, 0)
         let seen = 0
+        let lastLen = 0
         const segSlides = await generateSegmentSlides(
           trimmed,
           opts,
@@ -195,6 +215,11 @@ export function generateAndPlay(
           {
             signal: controller.signal,
             onToken: (full) => {
+              // A retry inside genJson starts a fresh stream: the text shrinks
+              // back to nothing, so the reveal cursor must restart too, or the
+              // failed attempt's thumbnails stay while the new pages are skipped.
+              if (full.length < lastLen) seen = 0
+              lastLen = full.length
               // Reveal each page the moment its JSON object closes.
               const parsed = completeSlides(full)
               for (; seen < parsed.length && seen < segments[si].length; seen++) {
@@ -239,10 +264,12 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
   }
   const model = activeConfig(settings).model
   const theme = opts.theme ?? 'aurora'
+  // One generation at a time (a launcher's key auto-repeat used to open
+  // several parallel, billed runs).
+  if (overlayOpen()) return
 
-  const el = document.createElement('div')
-  el.className = 'overlay'
-  el.innerHTML = `
+  const ov = openOverlay(
+    `
     <div class="gen card gen--film" style="padding:28px">
       <h2>${t('gen.title')}</h2>
       <p data-progress>${t('gen.quickNote').replace('{topic}', escapeHtml(trimmed))}</p>
@@ -251,8 +278,10 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
       <div class="gen__actions" data-actions>
         <button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button>
       </div>
-    </div>`
-  document.body.appendChild(el)
+    </div>`,
+    () => dismiss(),
+  )
+  const el = ov.el
 
   const filmEl = el.querySelector<HTMLElement>('[data-film]')!
   const progressEl = el.querySelector<HTMLElement>('[data-progress]')!
@@ -260,9 +289,18 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
   const actionsEl = el.querySelector<HTMLElement>('[data-actions]')!
 
   let controller = new AbortController()
+  const cellCleanups = new Map<number, () => void>()
+  const disconnectAll = (): void => {
+    cellCleanups.forEach((fn) => fn())
+    cellCleanups.clear()
+  }
   const dismiss = () => {
     controller.abort()
-    el.remove()
+    disconnectAll()
+    ov.dispose()
+  }
+  ov.escape = () => {
+    if (confirm(t('gen.cancelConfirm'))) dismiss()
   }
   el.querySelector('[data-cancel]')!.addEventListener('click', dismiss)
 
@@ -277,7 +315,8 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
       )
       cell = filmEl.querySelector<HTMLElement>(`[data-cell="${index}"]`)!
     }
-    mountSlidePreview(cell.querySelector<HTMLElement>('[data-mount]')!, theme, norm)
+    cellCleanups.get(index)?.()
+    cellCleanups.set(index, mountSlidePreview(cell.querySelector<HTMLElement>('[data-mount]')!, theme, norm))
     progressEl.textContent = t('gen.pageCount').replace('{x}', String(index + 1))
     cell.scrollIntoView({ block: 'nearest' })
   }
@@ -287,7 +326,9 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
   // was the old behaviour.
   const saveAndOpen = (deck: Deck): Promise<void> =>
     saveDeck(deck).then(() => {
-      el.remove()
+      clearComposer()
+      disconnectAll()
+      ov.dispose()
       navigate(`#/play/${deck.id}`)
     })
   const showSaveFail = (deck: Deck): void => {
@@ -309,9 +350,12 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
     controller = new AbortController()
     errEl.hidden = true
     let seen = 0
+    let lastLen = 0
     generateDeckSpec(trimmed, opts, settings, {
       signal: controller.signal,
       onToken: (full) => {
+        if (full.length < lastLen) seen = 0 // fresh attempt → fresh reveal cursor
+        lastLen = full.length
         const parsed = completeSlides(full)
         for (; seen < parsed.length; seen++) reveal(parsed[seen], seen)
       },

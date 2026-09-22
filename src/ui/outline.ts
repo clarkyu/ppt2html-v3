@@ -7,6 +7,7 @@ import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
 import { liveTitles, renderLive, renderThinking } from '../lib/live'
 import { saveDraft } from '../lib/draft'
+import { openOverlay } from '../lib/overlay'
 import { t } from '../i18n'
 import {
   LAYOUTS,
@@ -87,15 +88,21 @@ export function startPageOutline(
     return
   }
 
-  const el = document.createElement('div')
-  el.className = 'overlay'
-  el.innerHTML = `<div class="outline card"><div data-body></div></div>`
-  document.body.appendChild(el)
+  // Torn down by a route change (back button, app-bar link): keep what the
+  // user has on screen in the draft first — the same exit the Cancel button
+  // offers, minus the confirm.
+  const ov = openOverlay(`<div class="outline card"><div data-body></div></div>`, () => {
+    snapshotCurrent()
+    persist()
+    close()
+    window.dispatchEvent(new CustomEvent('draftchange'))
+  })
+  const el = ov.el
   const body = el.querySelector<HTMLElement>('[data-body]')!
   const close = () => {
     controller.abort()
     prefetch?.controller.abort()
-    el.remove()
+    ov.dispose()
   }
   let controller = new AbortController()
 
@@ -120,12 +127,28 @@ export function startPageOutline(
     saveDraft({ topic: trimmed, opts, structure, results: Array.from(results, (g) => g ?? null), step: current })
   }
 
-  // Exit deliberately: progress stays in the draft, resumable from Home.
+  /** Fold whatever is being edited right now into `results` / `structure`:
+   * the overview's rows + title / subtitle / theme, or a step editor's rows.
+   * (Leaving from a step editor used to drop that step's unsaved edits.) */
+  const snapshotCurrent = () => {
+    if (body.querySelector('[data-ov]')) {
+      syncOverviewIntoResults()
+    } else if (body.querySelector('[data-list]') && !body.querySelector('[data-live]')) {
+      const rows = collectRows(body)
+      if (rows.length) results[current] = rows
+    }
+  }
+
+  // Exit deliberately: progress stays in the draft, resumable from Home —
+  // and Home's draft card appears right away, not on its next render.
   const confirmExit = () => {
     if (!confirm(t('outline.exitConfirm'))) return
+    snapshotCurrent()
     persist()
     close()
+    window.dispatchEvent(new CustomEvent('draftchange'))
   }
+  ov.escape = confirmExit
 
   /* ------------------------- next-part prefetch ------------------------- */
   // While the user reviews a part, the NEXT part is generated in the
@@ -146,11 +169,14 @@ export function startPageOutline(
       .filter((g): g is OutlineSlide[] => Array.isArray(g))
       .flat()
 
+  // Set by "back" from a streaming view: the user just walked away from
+  // exactly the request a prefetch would now re-issue.
+  let suppressPrefetchFor = -1
+
   const startPrefetch = (stepIdx: number, shownSlides: OutlineSlide[]) => {
     const nxt = stepIdx + 1
     const st = steps[nxt]
     if (!st || st.kind !== 'part' || results[nxt]) return
-    prefetch?.controller.abort()
     const step = steps[stepIdx]
     const ctx = [
       ...results
@@ -159,10 +185,20 @@ export function startPageOutline(
         .flat(),
       ...(step.kind === 'part' ? shownSlides : []),
     ]
+    const sig = JSON.stringify(ctx)
+    // Still valid for the same next step and context (the user came back to
+    // this step without editing)? Keep it — aborting and re-issuing it was
+    // a second billed request for the same answer.
+    if (prefetch && prefetch.step === nxt && prefetch.sig === sig && !prefetch.controller.signal.aborted) return
+    if (suppressPrefetchFor === nxt) {
+      suppressPrefetchFor = -1
+      return
+    }
+    prefetch?.controller.abort()
     const pc = new AbortController()
     prefetch = {
       step: nxt,
-      sig: JSON.stringify(ctx),
+      sig,
       controller: pc,
       promise: generatePartPages(trimmed, opts, structure, st.index, loadSettings(), { signal: pc.signal }, undefined, ctx),
     }
@@ -222,9 +258,11 @@ export function startPageOutline(
         <button class="btn btn--ghost" data-back>${t('outline.backStep')}</button>
       </div>`
     // Backing out of a stream returns to the previous step — it must not nuke
-    // the wizard (confirmed parts live in `results`).
+    // the wizard (confirmed parts live in `results`), and the previous step
+    // must not quietly restart the very request just abandoned.
     body.querySelector('[data-back]')!.addEventListener('click', () => {
       controller.abort()
+      suppressPrefetchFor = i
       runStep(Math.max(0, i - 1))
     })
   }
@@ -346,8 +384,21 @@ export function startPageOutline(
     return t('outline.partN').replace('{n}', String(step.index + 1)).replace('{title}', structure.sections[step.index].title)
   }
 
+  // The overview's deck title / subtitle / theme live in `structure` once
+  // typed — every re-render (add / delete part, go-edit, back) and every
+  // draft save used to revert them to the model's values.
+  const syncOverviewMeta = () => {
+    const titleEl = body.querySelector<HTMLInputElement>('[data-deck-title]')
+    if (!titleEl) return
+    structure.title = titleEl.value.trim() || structure.title
+    structure.subtitle = body.querySelector<HTMLInputElement>('[data-deck-subtitle]')?.value.trim() || undefined
+    const th = body.querySelector<HTMLElement>('[data-theme].active')?.dataset.theme as ThemeName | undefined
+    if (th) structure.theme = th
+  }
+
   // Sync any edits made in the overview back into the per-step results.
   const syncOverviewIntoResults = () => {
+    syncOverviewMeta()
     body.querySelectorAll<HTMLElement>('.ov-group').forEach((g, i) => {
       results[i] = collectRows(g)
     })
@@ -355,7 +406,7 @@ export function startPageOutline(
 
   const showOverview = () => {
     const groups = steps.map((step, i) => ({ label: groupLabel(step), kind: step.kind, slides: results[i] ?? [] }))
-    const title = assembleOutline(structure, results.map((r) => r ?? [])).title
+    const title = structure.title || assembleOutline(structure, results.map((r) => r ?? [])).title
     body.innerHTML = renderOverview(structure, title, groups)
     wireOverview(body, {
       onCancel: confirmExit,
