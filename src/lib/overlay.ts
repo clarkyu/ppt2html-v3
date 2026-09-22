@@ -70,6 +70,53 @@ export function openOverlay(cardHtml: string, onClose: () => void): Overlay {
   return ov
 }
 
+let labelSeq = 0
+
+/**
+ * Make an already-built panel (share / style / AI panels / rehearse recap /
+ * help card / the library's import choice) behave as a modal dialog: role +
+ * aria-modal + aria-labelledby (its heading), focus moved to the first
+ * control, Tab trapped inside, Escape → `onClose` (captured on window, so
+ * reveal underneath never sees it — it used to flip into overview), and focus
+ * handed back to the invoker on release. Call the returned release from the
+ * panel's own close.
+ */
+export function dialogize(el: HTMLElement, onClose: () => void): () => void {
+  el.setAttribute('role', 'dialog')
+  el.setAttribute('aria-modal', 'true')
+  const heading = el.querySelector<HTMLElement>('h1, h2, h3')
+  if (heading) {
+    if (!heading.id) heading.id = `dlg-title-${++labelSeq}`
+    el.setAttribute('aria-labelledby', heading.id)
+  }
+  if (!el.hasAttribute('tabindex')) el.tabIndex = -1
+  const restoreTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  const onKey = (e: KeyboardEvent): void => {
+    if (!el.isConnected) return
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
+    } else if (e.key === 'Tab' && el.contains(document.activeElement)) {
+      trapTab(el, e)
+    }
+  }
+  window.addEventListener('keydown', onKey, true)
+  // Deferred: callers keep filling the card after appending it.
+  requestAnimationFrame(() => {
+    if (!el.isConnected || el.contains(document.activeElement)) return
+    ;(el.querySelector<HTMLElement>(FOCUSABLE) ?? el).focus()
+  })
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    window.removeEventListener('keydown', onKey, true)
+    const active = document.activeElement
+    if (restoreTo?.isConnected && (active === document.body || active === null || el.contains(active))) restoreTo.focus()
+  }
+}
+
 function trapTab(el: HTMLElement, e: KeyboardEvent): void {
   const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((n) => n.offsetParent !== null)
   if (!items.length) {

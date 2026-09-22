@@ -419,12 +419,13 @@ export function renderHome(view: HTMLElement): () => void {
         const card = document.createElement('div')
         card.className = 'deck-card'
         card.innerHTML = `
-          <div class="thumb"></div>
-          <div class="deck-card__body">
-            <div class="deck-card__title">${escapeHtml(deck.title)}</div>
-            <div class="deck-card__meta"><span>${deck.slides.length} ${t('unit.pages')} · ${formatDate(deck.createdAt)}</span></div>
-          </div>`
-        card.addEventListener('click', () => navigate(`#/play/${deck.id}`))
+          <a class="deck-card__link" href="#/play/${deck.id}">
+            <div class="thumb"></div>
+            <div class="deck-card__body">
+              <div class="deck-card__title">${escapeHtml(deck.title)}</div>
+              <div class="deck-card__meta"><span>${deck.slides.length} ${t('unit.pages')} · ${formatDate(deck.createdAt)}</span></div>
+            </div>
+          </a>`
         grid.appendChild(card)
         thumbCleanups.push(mountThumb(card.querySelector<HTMLElement>('.thumb')!, deck))
       }

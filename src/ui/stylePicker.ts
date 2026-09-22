@@ -8,6 +8,7 @@ import { loadStyles, addStyle, removeStyle } from '../lib/styles'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
 import { t } from '../i18n'
+import { dialogize } from '../lib/overlay'
 
 export type StyleSelection = { kind: 'builtin'; theme: ThemeName } | { kind: 'custom'; theme: CustomTheme }
 
@@ -92,16 +93,10 @@ export function openStylePicker(
   }
   render()
   host.appendChild(wrap)
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') {
-      e.stopPropagation()
-      close()
-    }
-  }
-  window.addEventListener('keydown', onKey)
+  const release = dialogize(wrap, () => close())
   const close = (): void => {
-    window.removeEventListener('keydown', onKey)
     wrap.remove()
+    release()
   }
 
   const openForm = (): void => {

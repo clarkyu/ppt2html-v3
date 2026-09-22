@@ -13,7 +13,9 @@
   --text: #e8ecff;
   --text-strong: #ffffff;
   --text-muted: #9aa4c8;
-  --text-dim: #6b7495;
+  /* 12–13px hint copy: ≥4.7:1 on every app surface, including the #1a2350
+     gradient hotspot (#6b7495 was 4.1:1 on the backdrop, 3.3:1 there). */
+  --text-dim: #8c95b4;
 
   --brand: #8b7cff;
   --brand-2: #22d3ee;

@@ -54,7 +54,7 @@ export function generateAndPlay(
     `
     <div class="gen card gen--film" style="padding:28px">
       <h2>${t('gen.title')}</h2>
-      <p data-progress>${t('gen.subtitle').replace('{topic}', escapeHtml(trimmed)).replace('{n}', String(total))}</p>
+      <p data-progress role="status" aria-live="polite">${t('gen.subtitle').replace('{topic}', escapeHtml(trimmed)).replace('{n}', String(total))}</p>
       <div class="gen-film" data-film>
         ${outline.slides
           .map(
@@ -158,7 +158,7 @@ export function generateAndPlay(
   const showSaveError = (retry: () => void) => {
     errEl.hidden = false
     errEl.innerHTML = `
-      <h2 class="gen__error">${t('gen.saveFailed')}</h2>
+      <h2 class="gen__error" role="alert">${t('gen.saveFailed')}</h2>
       <p style="color:var(--text-muted)">${t('gen.saveFailedHint')}</p>`
     actionsEl.innerHTML = `
       <button class="btn btn--ghost" data-back>${t('gen.backToOutline')}</button>
@@ -176,7 +176,7 @@ export function generateAndPlay(
   const showError = (segIdx: number, msg: string) => {
     errEl.hidden = false
     errEl.innerHTML = `
-      <h2 class="gen__error">${t('gen.segmentFailed').replace('{i}', String(segIdx + 1))}</h2>
+      <h2 class="gen__error" role="alert">${t('gen.segmentFailed').replace('{i}', String(segIdx + 1))}</h2>
       <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>`
     actionsEl.innerHTML = `
       <button class="btn btn--ghost" data-back>${t('gen.backToOutline')}</button>
@@ -272,7 +272,7 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
     `
     <div class="gen card gen--film" style="padding:28px">
       <h2>${t('gen.title')}</h2>
-      <p data-progress>${t('gen.quickNote').replace('{topic}', escapeHtml(trimmed))}</p>
+      <p data-progress role="status" aria-live="polite">${t('gen.quickNote').replace('{topic}', escapeHtml(trimmed))}</p>
       <div class="gen-film" data-film></div>
       <div data-err hidden></div>
       <div class="gen__actions" data-actions>
@@ -334,7 +334,7 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
   const showSaveFail = (deck: Deck): void => {
     errEl.hidden = false
     errEl.innerHTML = `
-      <h2 class="gen__error">${t('gen.saveFailed')}</h2>
+      <h2 class="gen__error" role="alert">${t('gen.saveFailed')}</h2>
       <p style="color:var(--text-muted)">${t('gen.saveFailedHint')}</p>`
     actionsEl.innerHTML = `
       <button class="btn btn--ghost" data-close>${t('common.close')}</button>
@@ -373,7 +373,7 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
         if (controller.signal.aborted) return
         errEl.hidden = false
         errEl.innerHTML = `
-          <h2 class="gen__error">${t('gen.failed')}</h2>
+          <h2 class="gen__error" role="alert">${t('gen.failed')}</h2>
           <p style="color:var(--text-muted)">${escapeHtml(err instanceof Error ? err.message : String(err))}</p>`
         actionsEl.innerHTML = `
           <button class="btn btn--ghost" data-close>${t('common.close')}</button>

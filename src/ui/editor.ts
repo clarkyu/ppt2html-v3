@@ -128,7 +128,8 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
         <label class="f"><span>Logo</span>
           <span style="display:flex; gap:8px">
             <input class="form-input" data-meta="brand.logo" value="${escapeHtml(deck.branding?.logo ?? '')}" placeholder="${escapeHtml(t('ed.logoPlaceholder'))}" style="flex:1; min-width:0">
-            <label class="btn btn--ghost btn--sm" style="flex:none">${t('settings.upload')}<input type="file" accept="image/*" data-brand-logo-file hidden></label>
+            <button type="button" class="btn btn--ghost btn--sm" style="flex:none" data-brand-logo-btn>${t('settings.upload')}</button>
+            <input type="file" accept="image/*" data-brand-logo-file hidden>
           </span>
         </label>
       </div>
@@ -291,6 +292,12 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
       refreshPreview(card)
       setStatus(t('ed.unsaved'))
     }
+  })
+
+  // A <label> wrapping a hidden file input is mouse-only; the button is
+  // reachable by keyboard and opens the same picker.
+  root.querySelector('[data-brand-logo-btn]')?.addEventListener('click', () => {
+    root.querySelector<HTMLInputElement>('[data-brand-logo-file]')?.click()
   })
 
   // ---- selects (theme / layout) ----
@@ -617,9 +624,9 @@ function renderCard(s: Slide, i: number, total: number): string {
         <span class="slide-card__n">${i + 1}</span>
         <select class="select slide-card__layout" data-layout>${layoutOptions(s.layout)}</select>
         <div class="slide-card__ops">
-          <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}"${i === 0 ? ' disabled' : ''}>${icons.up}</button>
-          <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}"${i === total - 1 ? ' disabled' : ''}>${icons.down}</button>
-          <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
+          <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}" aria-label="${escapeHtml(t('common.moveUp'))}"${i === 0 ? ' disabled' : ''}>${icons.up}</button>
+          <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}" aria-label="${escapeHtml(t('common.moveDown'))}"${i === total - 1 ? ' disabled' : ''}>${icons.down}</button>
+          <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}" aria-label="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
         </div>
       </div>
       <div class="slide-card__body">
@@ -718,7 +725,7 @@ function renderCompareItem(item: CompareItem): string {
         <select class="select" data-f="tone">${tones
           .map(([v, l]) => `<option value="${v}"${(item.tone ?? 'neutral') === v ? ' selected' : ''}>${l}</option>`)
           .join('')}</select>
-        <button class="icon-btn" data-del-sub title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
+        <button class="icon-btn" data-del-sub title="${escapeHtml(t('lib.action.delete'))}" aria-label="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
       </div>
       <textarea class="form-input" data-f="points" rows="3" placeholder="${escapeHtml(t('ed.f.pointsPerLine'))}">${escapeHtml((item.points ?? []).join('\n'))}</textarea>
     </div>`
@@ -729,7 +736,7 @@ function renderStep(step: { label: string; text?: string }): string {
     <div class="f-sub" data-step>
       <div class="f-sub__head">
         <input class="form-input" data-f="label" value="${escapeHtml(step.label ?? '')}" placeholder="${escapeHtml(t('ed.f.stepLabel'))}">
-        <button class="icon-btn" data-del-sub title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
+        <button class="icon-btn" data-del-sub title="${escapeHtml(t('lib.action.delete'))}" aria-label="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
       </div>
       <input class="form-input" data-f="text" value="${escapeHtml(step.text ?? '')}" placeholder="${escapeHtml(t('ed.f.stepText'))}">
     </div>`

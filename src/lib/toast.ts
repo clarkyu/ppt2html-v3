@@ -19,6 +19,10 @@ function container(): HTMLElement {
   if (!el) {
     el = document.createElement('div')
     el.className = 'toasts'
+    // The one live region in the app (the whole #app used to be aria-live,
+    // which read every route's markup and the player clock every second
+    // while these notices stayed silent).
+    el.setAttribute('role', 'status')
     el.setAttribute('aria-live', 'polite')
     document.body.appendChild(el)
   }

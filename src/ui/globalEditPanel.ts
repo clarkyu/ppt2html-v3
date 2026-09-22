@@ -16,6 +16,7 @@ import { regenerateSlide, relayoutSlide, generateNewSlide } from '../llm/edit'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { LAYOUT_KEYS } from './editor'
 import { t } from '../i18n'
+import { dialogize } from '../lib/overlay'
 import { toast } from '../lib/toast'
 import { navigate } from '../router'
 import { escapeHtml } from '../lib/markdown'
@@ -80,18 +81,23 @@ export function openGlobalEditPanel(host: HTMLElement, deck: Deck, hooks: Global
   const close = (): void => {
     controller?.abort()
     wrap.remove()
+    release()
   }
   // While a run is in flight, the panel must stay open (it owns the undo
-  // snapshot): backdrop clicks are inert, and the cancel button only ABORTS —
-  // the run loop then reports what was already applied and reveals undo.
-  wrap.addEventListener('click', (e) => {
-    const onClose = !!(e.target as HTMLElement).closest('[data-ge-close]')
-    if (e.target !== wrap && !onClose) return
+  // snapshot): backdrop clicks are inert, and the cancel button / Escape only
+  // ABORT — the run loop then reports what was already applied and reveals undo.
+  const requestClose = (explicit: boolean): void => {
     if (running) {
-      if (onClose) controller?.abort()
+      if (explicit) controller?.abort()
       return
     }
     close()
+  }
+  const release = dialogize(wrap, () => requestClose(true))
+  wrap.addEventListener('click', (e) => {
+    const onClose = !!(e.target as HTMLElement).closest('[data-ge-close]')
+    if (e.target !== wrap && !onClose) return
+    requestClose(onClose)
   })
 
   const input = wrap.querySelector<HTMLTextAreaElement>('[data-ge-input]')!

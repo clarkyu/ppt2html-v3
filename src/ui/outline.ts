@@ -254,7 +254,7 @@ export function startPageOutline(
         <h2>${t('outline.detailing').replace('{title}', escapeHtml(partTitle))}</h2>
         <p>${t('outline.detailingSub').replace('{pages}', String(pages))}</p>
       </div>
-      <ol class="gen-live" data-live><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
+      <ol class="gen-live" data-live role="status" aria-live="polite"><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
       <div class="outline__actions">
         <button class="btn btn--ghost" data-back>${t('outline.backStep')}</button>
       </div>`
@@ -271,7 +271,7 @@ export function startPageOutline(
   const showStepError = (i: number, msg: string) => {
     body.innerHTML = `
       <div class="gen" style="padding:8px">
-        <h2 class="gen__error">${t('outline.partFailed')}</h2>
+        <h2 class="gen__error" role="alert">${t('outline.partFailed')}</h2>
         <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>
         <div class="gen__actions">
           <button class="btn btn--ghost" data-back>${t('outline.backStep')}</button>
@@ -484,9 +484,9 @@ function renderRow(s: OutlineSlide): string {
           <select class="ol-row__layout" data-layout title="${escapeHtml(t('outline.pickLayout'))}">${layoutOptions(s.layout)}</select>
           <input class="ol-row__title" data-title value="${escapeHtml(s.title)}" placeholder="${escapeHtml(t('outline.rowTitle'))}">
           <div class="ol-row__ops">
-            <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}">${icons.up}</button>
-            <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}">${icons.down}</button>
-            <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
+            <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}" aria-label="${escapeHtml(t('common.moveUp'))}">${icons.up}</button>
+            <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}" aria-label="${escapeHtml(t('common.moveDown'))}">${icons.down}</button>
+            <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}" aria-label="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
           </div>
         </div>
         <input class="ol-row__brief" data-brief value="${escapeHtml(s.brief ?? '')}" placeholder="${escapeHtml(t('outline.rowBrief'))}">
@@ -522,11 +522,11 @@ function renderOverview(structure: Structure, title: string, groups: OvGroup[]):
         (g, i) => `
       <div class="ov-group" data-group="${i}">
         <div class="ov-group__head">
-          <button class="icon-btn ov-group__fold" data-fold title="${escapeHtml(t('outline.foldTitle'))}">${icons.down}</button>
+          <button class="icon-btn ov-group__fold" data-fold title="${escapeHtml(t('outline.foldTitle'))}" aria-label="${escapeHtml(t('outline.foldTitle'))}">${icons.down}</button>
           <span class="ov-group__label">${escapeHtml(g.label)}</span>
           <span class="ov-group__count">${g.slides.length} ${t('unit.pages')}</span>
           <button class="btn btn--ghost btn--sm ov-group__goto" data-goto="${i}">${icons.edit} ${t('outline.goEdit')}</button>
-          ${g.kind === 'part' ? `<button class="icon-btn ov-group__del" data-del-group title="${escapeHtml(t('outline.delPart'))}">${icons.trash}</button>` : ''}
+          ${g.kind === 'part' ? `<button class="icon-btn ov-group__del" data-del-group title="${escapeHtml(t('outline.delPart'))}" aria-label="${escapeHtml(t('outline.delPart'))}">${icons.trash}</button>` : ''}
         </div>
         <div class="ov-group__body">
           <ol class="outline__list" data-list>${g.slides.map(renderRow).join('')}</ol>

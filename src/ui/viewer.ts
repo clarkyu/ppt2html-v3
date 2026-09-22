@@ -12,6 +12,7 @@ import { downloadStandalone } from '../export/standalone'
 import { openPresenter, type PresenterHandle } from '../player/presenter'
 import { startNarration, type NarratorHandle } from '../player/narrate'
 import { deckBudget, fmtClock, formatElapsed } from '../player/rehearse'
+import { dialogize } from '../lib/overlay'
 import { openStylePicker } from './stylePicker'
 import { openSharePanel } from './sharePanel'
 import { openRewritePanel } from './rewritePanel'
@@ -77,29 +78,29 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
       <div class="viewer__bar show">
         <button class="btn btn--sm" data-back>${icons.back} ${t('common.back')}</button>
         <div class="viewer__title" data-title></div>
-        <span class="viewer__timer" data-timer title="${t('viewer.timerTitle')}">${icons.clock}<b>00:00</b></span>
-        <button class="btn btn--sm viewer__more" data-more title="${t('viewer.more')}">⋯</button>
+        <button type="button" class="viewer__timer" data-timer title="${t('viewer.timerTitle')}"><span aria-hidden="true">${icons.clock}</span><b>00:00</b></button>
+        <button class="btn btn--sm viewer__more" data-more title="${t('viewer.more')}" aria-label="${t('viewer.more')}">⋯</button>
         <div class="viewer__tools" data-tools>
           <button class="btn btn--primary btn--sm" data-save-shared hidden>${icons.save} ${t('share.saveCopy')}</button>
           <button class="btn btn--primary btn--sm" data-make-own hidden>${icons.sparkles} ${t('share.makeOwn')}</button>
-          <button class="btn btn--sm" data-step title="${t('viewer.stepMode')}">${icons.steps}</button>
-          <button class="btn btn--sm" data-narrate title="${t('viewer.narrate')}">${icons.speaker}</button>
-          <button class="btn btn--sm" data-rehearse title="${t('reh.button')}">${icons.stopwatch}</button>
-          <button class="btn btn--sm" data-notes title="${t('viewer.notes')}">${icons.note}</button>
-          <button class="btn btn--sm" data-notes-gen title="${t('viewer.genNotes')}">${icons.mic}</button>
-          <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}">${icons.presenter}</button>
-          <button class="btn btn--sm" data-overview title="${t('viewer.overview')}">${icons.grid}</button>
-          <button class="btn btn--sm" data-rewrite title="${t('rw.button')}" hidden>${icons.sparkles}</button>
-          <button class="btn btn--sm" data-refine title="${t('refine.button')}" hidden>${icons.wand}</button>
-          <button class="btn btn--sm" data-gedit title="${t('ge.button')}" hidden>${icons.deckMagic}</button>
-          <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
-          <button class="btn btn--sm" data-print title="${t('viewer.print')}">${icons.print}</button>
-          <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}">${icons.download}</button>
-          <button class="btn btn--sm" data-pptx title="${t('viewer.exportPptx')}">${icons.pptx}</button>
-          <button class="btn btn--sm" data-style title="${t('style.button')}">${icons.palette}</button>
-          <button class="btn btn--sm" data-share title="${t('share.button')}">${icons.share}</button>
-          <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}">${icons.expand}</button>
-          <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}">${icons.keyboard}</button>
+          <button class="btn btn--sm" data-step title="${t('viewer.stepMode')}" aria-label="${t('viewer.stepMode')}">${icons.steps}</button>
+          <button class="btn btn--sm" data-narrate title="${t('viewer.narrate')}" aria-label="${t('viewer.narrate')}">${icons.speaker}</button>
+          <button class="btn btn--sm" data-rehearse title="${t('reh.button')}" aria-label="${t('reh.button')}">${icons.stopwatch}</button>
+          <button class="btn btn--sm" data-notes title="${t('viewer.notes')}" aria-label="${t('viewer.notes')}">${icons.note}</button>
+          <button class="btn btn--sm" data-notes-gen title="${t('viewer.genNotes')}" aria-label="${t('viewer.genNotes')}">${icons.mic}</button>
+          <button class="btn btn--sm" data-presenter title="${t('viewer.presenter')}" aria-label="${t('viewer.presenter')}">${icons.presenter}</button>
+          <button class="btn btn--sm" data-overview title="${t('viewer.overview')}" aria-label="${t('viewer.overview')}">${icons.grid}</button>
+          <button class="btn btn--sm" data-rewrite title="${t('rw.button')}" aria-label="${t('rw.button')}" hidden>${icons.sparkles}</button>
+          <button class="btn btn--sm" data-refine title="${t('refine.button')}" aria-label="${t('refine.button')}" hidden>${icons.wand}</button>
+          <button class="btn btn--sm" data-gedit title="${t('ge.button')}" aria-label="${t('ge.button')}" hidden>${icons.deckMagic}</button>
+          <button class="btn btn--sm" data-edit title="${t('viewer.editDeck')}" aria-label="${t('viewer.editDeck')}" hidden>${icons.edit} ${t('lib.action.edit')}</button>
+          <button class="btn btn--sm" data-print title="${t('viewer.print')}" aria-label="${t('viewer.print')}">${icons.print}</button>
+          <button class="btn btn--sm" data-export title="${t('viewer.exportHtml')}" aria-label="${t('viewer.exportHtml')}">${icons.download}</button>
+          <button class="btn btn--sm" data-pptx title="${t('viewer.exportPptx')}" aria-label="${t('viewer.exportPptx')}">${icons.pptx}</button>
+          <button class="btn btn--sm" data-style title="${t('style.button')}" aria-label="${t('style.button')}">${icons.palette}</button>
+          <button class="btn btn--sm" data-share title="${t('share.button')}" aria-label="${t('share.button')}">${icons.share}</button>
+          <button class="btn btn--sm" data-full title="${t('viewer.fullscreen')}" aria-label="${t('viewer.fullscreen')}">${icons.expand}</button>
+          <button class="btn btn--sm" data-help title="${t('viewer.shortcuts')}" aria-label="${t('viewer.shortcuts')}">${icons.keyboard}</button>
         </div>
       </div>
       <div class="viewer__notes" data-notes-panel hidden></div>
@@ -142,6 +143,11 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   // Auto-hide the top bar; reveal handles cursor hiding for the deck itself.
   // Also nudge on tap (pointerdown) so touch users — who fire no mousemove —
   // can bring the bar back to reach 返回 / 总览 after it hides.
+  // Toggle buttons expose their state, not just a CSS class.
+  const pressed = (btn: HTMLElement, on: boolean): void => {
+    btn.classList.toggle('active', on)
+    btn.setAttribute('aria-pressed', String(on))
+  }
   const nudgeBar = () => {
     bar.classList.add('show')
     window.clearTimeout(hideTimer)
@@ -149,6 +155,9 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   }
   viewerEl.addEventListener('mousemove', nudgeBar)
   viewerEl.addEventListener('pointerdown', nudgeBar)
+  // Tab landing on a bar button shows the bar (it used to stay invisible and
+  // pointer-events:none with focus inside it).
+  bar.addEventListener('focusin', nudgeBar)
   nudgeBar()
 
   // Narrow screens tuck the secondary tools behind a "⋯" menu; any tool click
@@ -307,12 +316,21 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
   notesBtn.addEventListener('click', () => {
     notesOn = !notesOn
     notesPanel.hidden = !notesOn
-    notesBtn.classList.toggle('active', notesOn)
+    pressed(notesBtn, notesOn)
   })
 
   // Keyboard-shortcuts help overlay.
   const helpPanel = view.querySelector<HTMLElement>('[data-help-panel]')!
-  const toggleHelp = (show: boolean) => (helpPanel.hidden = !show)
+  let releaseHelp: (() => void) | null = null
+  const toggleHelp = (show: boolean): void => {
+    if (show === !helpPanel.hidden) return
+    helpPanel.hidden = !show
+    if (show) releaseHelp = dialogize(helpPanel, () => toggleHelp(false))
+    else {
+      releaseHelp?.()
+      releaseHelp = null
+    }
+  }
   view.querySelector('[data-help]')!.addEventListener('click', () => toggleHelp(!!helpPanel.hidden))
   view.querySelector('[data-help-close]')!.addEventListener('click', () => toggleHelp(false))
   helpPanel.addEventListener('click', (e) => {
@@ -394,11 +412,11 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         presenter?.refresh(player)
       }
       const stepBtn = view.querySelector<HTMLButtonElement>('[data-step]')!
-      stepBtn.classList.toggle('active', player.stepMode())
+      pressed(stepBtn, player.stepMode())
       stepBtn.addEventListener('click', () => {
         const on = !player!.stepMode()
         player!.setStepMode(on)
-        stepBtn.classList.toggle('active', on)
+        pressed(stepBtn, on)
         toast(on ? t('viewer.stepOn') : t('viewer.stepOff'))
       })
 
@@ -407,7 +425,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
       const narrateBtn = view.querySelector<HTMLButtonElement>('[data-narrate]')!
       const narrateStopped = (msg: string): void => {
         narrator = null
-        narrateBtn.classList.remove('active')
+        pressed(narrateBtn, false)
         toast(msg)
       }
       narrateBtn.addEventListener('click', () => {
@@ -423,7 +441,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           toast(t('viewer.narrateNoTts'))
           return
         }
-        narrateBtn.classList.add('active')
+        pressed(narrateBtn, true)
         toast(t('viewer.narrateOn'))
       })
 
@@ -494,8 +512,13 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             <button class="btn btn--sm" data-reh-close>${t('common.gotIt')}</button>
           </div>`
         viewerEl.appendChild(wrap)
+        const dismiss = (): void => {
+          wrap.remove()
+          release()
+        }
+        const release = dialogize(wrap, dismiss)
         wrap.addEventListener('click', (e) => {
-          if (e.target === wrap || (e.target as HTMLElement).closest('[data-reh-close]')) wrap.remove()
+          if (e.target === wrap || (e.target as HTMLElement).closest('[data-reh-close]')) dismiss()
         })
       }
 
@@ -505,7 +528,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           rehearsing = false
           window.clearInterval(rehInterval)
           rehHud.hidden = true
-          rehBtn.classList.remove('active')
+          pressed(rehBtn, false)
           rehSummary()
           return
         }
@@ -517,7 +540,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         rehStart = Date.now()
         rehearsing = true
         rehHud.hidden = false
-        rehBtn.classList.add('active')
+        pressed(rehBtn, true)
         // Rehearsing means reading the script — surface it.
         if (!notesOn) notesBtn.click()
         rehPaint()

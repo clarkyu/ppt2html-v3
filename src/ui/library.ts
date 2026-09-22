@@ -6,6 +6,7 @@ import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
 import { toast } from '../lib/toast'
 import { t } from '../i18n'
+import { dialogize } from '../lib/overlay'
 import { buildBackup, backupFilename, downloadText, parseBackupFile, restoreDecks } from '../lib/backup'
 import type { Deck } from '../types'
 
@@ -47,14 +48,19 @@ function offerRestyle(host: HTMLElement, deck: Deck): void {
       </div>
     </div>`
   host.appendChild(wrap)
+  const dismiss = (): void => {
+    wrap.remove()
+    release()
+  }
+  const release = dialogize(wrap, dismiss)
   wrap.addEventListener('click', (e) => {
     const el = e.target as HTMLElement
-    if (e.target === wrap) wrap.remove() // dismiss = stay in the library
+    if (e.target === wrap) dismiss() // dismiss = stay in the library
     else if (el.closest('[data-imp-edit]')) {
-      wrap.remove()
+      dismiss()
       navigate(`#/edit/${deck.id}`)
     } else if (el.closest('[data-imp-rebuild]')) {
-      wrap.remove()
+      dismiss()
       void Promise.all([import('../lib/deckMaterial'), import('./guided')]).then(
         ([{ deckToMaterial }, { startGuidedGeneration }]) => {
           const mat = deckToMaterial(deck)
@@ -203,23 +209,29 @@ export function renderLibrary(view: HTMLElement): () => void {
     for (const deck of decks) {
       const card = document.createElement('div')
       card.className = 'deck-card'
+      // The playable part is a real link: a click-only <div> left keyboard and
+      // screen-reader users with no way to open a deck.
       card.innerHTML = `
-        <div class="thumb"></div>
-        <div class="deck-card__body">
-          <div class="deck-card__title">${escapeHtml(deck.title)}</div>
+        <a class="deck-card__link" href="#/play/${deck.id}">
+          <div class="thumb"></div>
+          <div class="deck-card__body">
+            <div class="deck-card__title">${escapeHtml(deck.title)}</div>
+          </div>
+        </a>
+        <div class="deck-card__body deck-card__body--foot">
           <div class="deck-card__meta">
             <span>${deck.slides.length} ${t('unit.pages')} · ${formatDate(deck.createdAt)}</span>
             <div class="deck-card__actions">
-              <button class="icon-btn" data-edit title="${t('lib.action.edit')}">${icons.edit}</button>
-              <button class="icon-btn" data-rename title="${t('lib.action.rename')}">${icons.rename}</button>
-              <button class="icon-btn" data-copy title="${t('lib.action.copy')}">${icons.copy}</button>
-              <button class="icon-btn" data-del title="${t('lib.action.delete')}">${icons.trash}</button>
+              <button class="icon-btn" data-edit title="${t('lib.action.edit')}" aria-label="${t('lib.action.edit')}">${icons.edit}</button>
+              <button class="icon-btn" data-rename title="${t('lib.action.rename')}" aria-label="${t('lib.action.rename')}">${icons.rename}</button>
+              <button class="icon-btn" data-copy title="${t('lib.action.copy')}" aria-label="${t('lib.action.copy')}">${icons.copy}</button>
+              <button class="icon-btn" data-del title="${t('lib.action.delete')}" aria-label="${t('lib.action.delete')}">${icons.trash}</button>
             </div>
           </div>
         </div>`
 
       card.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).closest('.deck-card__actions')) return
+        if ((e.target as HTMLElement).closest('.deck-card__actions, a')) return
         navigate(`#/play/${deck.id}`)
       })
       card.querySelector('[data-edit]')!.addEventListener('click', (e) => {

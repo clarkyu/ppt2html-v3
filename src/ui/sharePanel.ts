@@ -6,6 +6,7 @@
 import type { Deck } from '../types'
 import { shareUrl, shareSupported, shareOmissions, QR_MAX_CHARS } from '../lib/share'
 import { t } from '../i18n'
+import { dialogize } from '../lib/overlay'
 import { toast } from '../lib/toast'
 
 export function openSharePanel(host: HTMLElement, deck: Deck): () => void {
@@ -34,19 +35,13 @@ export function openSharePanel(host: HTMLElement, deck: Deck): () => void {
   host.appendChild(wrap)
   let cardObjUrl = ''
   let closed = false
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') {
-      e.stopPropagation()
-      close()
-    }
-  }
-  window.addEventListener('keydown', onKey)
+  const release = dialogize(wrap, () => close())
   const close = (): void => {
     if (closed) return
     closed = true
-    window.removeEventListener('keydown', onKey)
     if (cardObjUrl) URL.revokeObjectURL(cardObjUrl)
     wrap.remove()
+    release()
   }
   wrap.addEventListener('click', (e) => {
     if (e.target === wrap || (e.target as HTMLElement).closest('[data-share-close]')) close()

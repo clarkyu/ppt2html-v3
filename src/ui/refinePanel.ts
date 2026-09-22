@@ -9,6 +9,7 @@ import { deckIssues, issueText, refineInstruction } from '../lib/quality'
 import { regenerateSlide } from '../llm/edit'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { t } from '../i18n'
+import { dialogize } from '../lib/overlay'
 import { toast } from '../lib/toast'
 import { navigate } from '../router'
 import { escapeHtml } from '../lib/markdown'
@@ -64,19 +65,24 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
   const close = (): void => {
     controller?.abort()
     wrap.remove()
+    release()
   }
   // While a batch runs the panel must stay open (it owns the undo snapshot):
-  // backdrop taps are inert and Cancel only ABORTS — the loop then reports
-  // what already landed and offers undo. Closing used to leave the pages
-  // rewritten so far on disk with no way back.
-  wrap.addEventListener('click', (e) => {
-    const onClose = !!(e.target as HTMLElement).closest('[data-rf-close]')
-    if (e.target !== wrap && !onClose) return
+  // backdrop taps are inert and Cancel / Escape only ABORT — the loop then
+  // reports what already landed and offers undo. Closing used to leave the
+  // pages rewritten so far on disk with no way back.
+  const requestClose = (explicit: boolean): void => {
     if (running) {
-      if (onClose) controller?.abort()
+      if (explicit) controller?.abort()
       return
     }
     close()
+  }
+  const release = dialogize(wrap, () => requestClose(true))
+  wrap.addEventListener('click', (e) => {
+    const onClose = !!(e.target as HTMLElement).closest('[data-rf-close]')
+    if (e.target !== wrap && !onClose) return
+    requestClose(onClose)
   })
   if (!found.length) return close
 

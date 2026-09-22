@@ -59,7 +59,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
         <div class="gen__spinner"></div>
         <h2>${t('struct.loading')}</h2>
         <p>「${escapeHtml(trimmed)}」</p>
-        <ol class="gen-live" data-live><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
+        <ol class="gen-live" data-live role="status" aria-live="polite"><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
         <div class="gen__actions"><button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button></div>
       </div>`
     const cancel = (): void => {
@@ -74,7 +74,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
   const showError = (msg: string, pre?: Structure) => {
     body.innerHTML = `
       <div class="gen" style="padding:8px">
-        <h2 class="gen__error">${t('struct.failed')}</h2>
+        <h2 class="gen__error" role="alert">${t('struct.failed')}</h2>
         <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>
         <div class="gen__actions">
           <button class="btn btn--ghost" data-cancel>${pre ? t('outline.backStep') : t('common.close')}</button>
@@ -163,9 +163,9 @@ function renderSecRow(s: Section): string {
             <span class="sec-row__time" data-time></span>
           </div>
           <div class="ol-row__ops">
-            <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}">${icons.up}</button>
-            <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}">${icons.down}</button>
-            <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
+            <button class="icon-btn" data-up title="${escapeHtml(t('common.moveUp'))}" aria-label="${escapeHtml(t('common.moveUp'))}">${icons.up}</button>
+            <button class="icon-btn" data-down title="${escapeHtml(t('common.moveDown'))}" aria-label="${escapeHtml(t('common.moveDown'))}">${icons.down}</button>
+            <button class="icon-btn" data-del title="${escapeHtml(t('lib.action.delete'))}" aria-label="${escapeHtml(t('lib.action.delete'))}">${icons.trash}</button>
           </div>
         </div>
         <input class="ol-row__brief" data-brief value="${escapeHtml(s.brief ?? '')}" placeholder="${escapeHtml(t('struct.partBrief'))}">

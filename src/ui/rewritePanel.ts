@@ -8,6 +8,7 @@ import type { Deck, Slide } from '../types'
 import { regenerateSlide } from '../llm/edit'
 import { loadSettings, isConfigured } from '../llm/settings'
 import { t } from '../i18n'
+import { dialogize } from '../lib/overlay'
 import { toast } from '../lib/toast'
 import { navigate } from '../router'
 import { escapeHtml } from '../lib/markdown'
@@ -47,9 +48,11 @@ export function openRewritePanel(host: HTMLElement, deck: Deck, index: number, h
       </div>
     </div>`
   host.appendChild(wrap)
+  const release = dialogize(wrap, () => close())
   const close = (): void => {
     controller?.abort()
     wrap.remove()
+    release()
   }
   wrap.addEventListener('click', (e) => {
     if (e.target === wrap || (e.target as HTMLElement).closest('[data-rw-close]')) close()
