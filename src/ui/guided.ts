@@ -103,7 +103,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     body.innerHTML = `
       <div class="clarify__head">
         <h2>${t('guided.pickModel')}</h2>
-        <p>${t('guided.pickModelSub').replace('{topic}', escapeHtml(trimmed))}</p>
+        <p>${t('guided.pickModelSub', { topic: escapeHtml(trimmed) })}</p>
         ${hasSystemKey ? `<p class="clarify__hint">${t('guided.systemKeyHint')}</p>` : ''}
       </div>
       <div class="modelpick">
@@ -188,8 +188,8 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
 
       noteEl.textContent = ready
         ? systemCovers
-          ? t('guided.willUseSystem').replace('{model}', cfg.model)
-          : t('guided.willUse').replace('{host}', hostOf(cfg.baseUrl) || cfg.baseUrl).replace('{model}', cfg.model)
+          ? t('guided.willUseSystem', { model: cfg.model })
+          : t('guided.willUse', { host: hostOf(cfg.baseUrl) || cfg.baseUrl, model: cfg.model })
         : t('guided.warnNoKey')
       noteEl.classList.toggle('modelpick__note--warn', !ready)
       goBtn.disabled = !ready
@@ -255,7 +255,7 @@ export function startGuidedGeneration(topic: string, opts: GenerateOptions): voi
     // Still loading (or failed): show generic defaults instantly, then upgrade
     // to the AI-tailored questions once they arrive (unless the user engaged).
     touched = false
-    showQuestions(defaultQuestions(), true)
+    showQuestions(defaultQuestions(trimmed), true)
     // Whatever happens to the prefetch, the "optimizing…" line must not stay
     // up forever: it clears when the tailored questions land, when there are
     // none, when the request fails, or once the user has started answering.

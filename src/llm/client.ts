@@ -531,6 +531,6 @@ function httpErrorFrom(status: number, statusText: string, text: string, cfg: Re
                 ? t('err.http5xx')
                 : ''
   const raw = detail.trim().slice(0, 160)
-  const prefix = t('err.httpPrefix').replace('{status}', String(s))
+  const prefix = t('err.httpPrefix', { status: String(s) })
   return new LlmError(prefix + (advice ? withDetail(advice, raw) : detail.trim().slice(0, 300)), 'http', s)
 }

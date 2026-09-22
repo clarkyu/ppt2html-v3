@@ -13,6 +13,7 @@ import { openPresenter, type PresenterHandle } from '../player/presenter'
 import { startNarration, type NarratorHandle } from '../player/narrate'
 import { deckBudget, fmtClock, formatElapsed } from '../player/rehearse'
 import { dialogize } from '../lib/overlay'
+import { deckIsChinese } from '../lib/lang'
 import { openStylePicker } from './stylePicker'
 import { openSharePanel } from './sharePanel'
 import { openRewritePanel } from './rewritePanel'
@@ -492,9 +493,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         wrap.innerHTML = `
           <div class="rehearse-summary__card">
             <h3>${t('reh.summaryTitle')}</h3>
-            <p class="rehearse-summary__total">${t('reh.summaryTotal')
-              .replace('{a}', fmtClock(totalSpent))
-              .replace('{b}', fmtClock(rehTotal))}</p>
+            <p class="rehearse-summary__total">${t('reh.summaryTotal', { a: fmtClock(totalSpent), b: fmtClock(rehTotal) })}</p>
             <div class="rehearse-summary__rows">
               ${rows
                 .map((r) => {
@@ -545,7 +544,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         if (!notesOn) notesBtn.click()
         rehPaint()
         rehInterval = window.setInterval(rehPaint, 500)
-        toast(t('reh.on').replace('{t}', fmtClock(rehTotal)))
+        toast(t('reh.on', { t: fmtClock(rehTotal) }))
       })
 
       // One-click restyle: swap the theme (built-in class OR a custom inline
@@ -587,7 +586,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           }
           if (persistable) void persistDeck(deck)
           presenter?.refresh()
-          toast(t('style.applied').replace('{name}', label))
+          toast(t('style.applied', { name: label }))
         })
       })
 
@@ -632,7 +631,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
         const sec = mount.querySelectorAll<HTMLElement>('.reveal .slides > section')[i]
         const sEl = sec?.querySelector('.s')
         if (sec && sEl) {
-          sEl.outerHTML = renderSlideInner(next)
+          sEl.outerHTML = renderSlideInner(next, { zh: deckIsChinese(deck) })
           sec.querySelector('aside.notes')?.remove()
           if (next.note) {
             const aside = document.createElement('aside')
@@ -730,7 +729,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
           .then(({ missing }) => {
             // A reply that skipped pages is re-requested inside; whatever is
             // still missing is said out loud instead of a blanket "done".
-            toast(missing.length ? t('viewer.genNotesPartial').replace('{n}', String(missing.length)) : t('viewer.genNotesDone'))
+            toast(missing.length ? t('viewer.genNotesPartial', { n: String(missing.length) }) : t('viewer.genNotesDone'))
             // Surface the result right away.
             if (!notesOn) notesBtn.click()
             setNote(loadedDeck!.slides[curNum - 1]?.note)
@@ -775,7 +774,7 @@ export function renderViewer(view: HTMLElement, id: string, shareData?: string):
             presenterRefreshSoon()
           },
           onTransient: (n) => {
-            if (!disposed) toast(t('viewer.photosUnavailable').replace('{n}', String(n)))
+            if (!disposed) toast(t('viewer.photosUnavailable', { n: String(n) }))
           },
         })
           .then(() => {

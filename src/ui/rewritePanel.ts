@@ -36,7 +36,7 @@ export function openRewritePanel(host: HTMLElement, deck: Deck, index: number, h
   wrap.className = 'sharepanel rewritepanel'
   wrap.innerHTML = `
     <div class="sharepanel__card">
-      <h3>${t('rw.title').replace('{n}', String(index + 1))}</h3>
+      <h3>${t('rw.title', { n: String(index + 1) })}</h3>
       <p class="sharepanel__hint">${t('rw.hint')}</p>
       <textarea class="form-input rewritepanel__input" data-rw-input rows="3"
         placeholder="${escapeHtml(t('rw.placeholder'))}"></textarea>

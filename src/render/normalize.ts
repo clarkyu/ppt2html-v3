@@ -13,7 +13,7 @@ import {
   THEMES,
 } from '../types'
 import { genId } from '../lib/dom'
-import { deckIsCjk } from '../lib/lang'
+import { deckIsChinese, deckText, hasHan } from '../lib/lang'
 import { mdPlain } from '../lib/markdown'
 import { semIconKey } from './semanticIcons'
 import { sanitizeCustomTheme } from './customTheme'
@@ -261,7 +261,9 @@ export function normalizeDeck(
   // The deck title is shown as TEXT (library, app bar, exports): a model that
   // bolded the cover title must not leak `**` into it.
   const title =
-    mdPlain(asString(spec.title) || firstCover?.title) || meta.prompt.slice(0, 40) || '未命名课件'
+    mdPlain(asString(spec.title) || firstCover?.title) ||
+    meta.prompt.slice(0, 40) ||
+    deckText(hasHan(meta.prompt) || slides.some((s) => hasHan(s.title)), 'untitledDeck')
 
   // Guarantee a title slide up front and a closing slide (in the deck's own
   // language) — for fresh model output only (`fill` defaults on). A stored
@@ -278,7 +280,7 @@ export function normalizeDeck(
       slides.unshift(firstCover)
     }
     if (slides.length && slides[slides.length - 1].layout !== 'end') {
-      slides.push({ layout: 'end', title: deckIsCjk({ title, slides }) ? '谢谢观看' : 'Thank You' })
+      slides.push({ layout: 'end', title: deckText(deckIsChinese({ title, slides }), 'thanks') })
     }
   }
 

@@ -1,6 +1,6 @@
 import type { Slide, SlideBg, Column, CompareItem, TimelineStep } from '../types'
 import { mdInline, mdProse, escapeHtml } from '../lib/markdown'
-import { hasCjk } from '../lib/lang'
+import { deckText, hasHan } from '../lib/lang'
 import { highlightCode } from '../lib/highlight'
 import { semIcon } from './semanticIcons'
 
@@ -51,9 +51,9 @@ function cover(s: Slide): string {
   </div>`
 }
 
-function section(s: Slide): string {
+function section(s: Slide, zh?: boolean): string {
   return `<div class="s s-section">
-    ${eyebrow(s.eyebrow ?? (hasCjk(s.title) ? '章节' : 'Chapter'))}
+    ${eyebrow(s.eyebrow ?? deckText(zh ?? hasHan(s.title), 'chapter'))}
     <h2 class="s-section__title">${mdInline(s.title)}</h2>
     ${s.subtitle ? `<p class="s-section__subtitle">${mdInline(s.subtitle)}</p>` : ''}
   </div>`
@@ -189,15 +189,15 @@ function imageText(s: Slide): string {
   </div>`
 }
 
-function end(s: Slide): string {
+function end(s: Slide, zh?: boolean): string {
   return `<div class="s s-end">
     <div class="s-end__mark" aria-hidden="true"></div>
-    <h2 class="s-end__title">${mdInline(s.title ?? (hasCjk(s.subtitle) ? '谢谢观看' : 'Thank You'))}</h2>
+    <h2 class="s-end__title">${mdInline(s.title ?? deckText(zh ?? hasHan(s.subtitle), 'thanks'))}</h2>
     ${s.subtitle ? `<p class="s-end__subtitle">${mdInline(s.subtitle)}</p>` : ''}
   </div>`
 }
 
-const RENDERERS: Record<Slide['layout'], (s: Slide) => string> = {
+const RENDERERS: Record<Slide['layout'], (s: Slide, zh?: boolean) => string> = {
   cover,
   section,
   bullets,
@@ -212,10 +212,13 @@ const RENDERERS: Record<Slide['layout'], (s: Slide) => string> = {
   end,
 }
 
-/** Render one slide's inner HTML based on its layout. */
-export function renderSlideInner(slide: Slide): string {
+/** Render one slide's inner HTML based on its layout. `zh` is the DECK's
+ * language, resolved once by the caller (renderDeckSlides); without it the
+ * few baked-in labels fall back to the slide's own text — a Chinese deck with
+ * a section titled "OKR" used to show a 'Chapter' eyebrow beside its 环节 label. */
+export function renderSlideInner(slide: Slide, opts: { zh?: boolean } = {}): string {
   const renderer = RENDERERS[slide.layout] ?? bullets
-  return renderer(slide)
+  return renderer(slide, opts.zh)
 }
 
 /**

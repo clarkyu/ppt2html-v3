@@ -11,7 +11,7 @@
 // deck used to pull the rewrite towards Chinese).
 
 import type { Deck } from '../types'
-import { deckIsCjk } from './lang'
+import { deckIsChinese } from './lang'
 import { getLang, t } from '../i18n'
 import { slideIssues as checkSlide, formatIssue, strip, type QualityIssue } from './qualityContract.js'
 
@@ -35,7 +35,7 @@ export function deckIssues(deck: Deck): SlideIssues[] {
   deck.slides.forEach((s, i) => {
     const issues = checkSlide(s)
     if (issues.length) {
-      const title = strip(s.title || s.value || s.text) || t('refine.pageN').replace('{n}', String(i + 1))
+      const title = strip(s.title || s.value || s.text) || t('refine.pageN', { n: String(i + 1) })
       out.push({ index: i, title, issues })
     }
   })
@@ -49,7 +49,7 @@ export function issueText(issue: QualityIssue): string {
 
 /** The rewrite instruction for one flagged page, in the DECK's language. */
 export function refineInstruction(deck: Deck, issues: QualityIssue[]): string {
-  const lang = deckIsCjk(deck) ? 'zh' : 'en'
+  const lang = deckIsChinese(deck) ? 'zh' : 'en'
   const head =
     lang === 'zh'
       ? '按以下质量问题清单修复本页，其余内容保持原意与信息量，不要顺手改动没有问题的部分：'

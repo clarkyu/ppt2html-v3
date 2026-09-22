@@ -9,7 +9,7 @@ import type { Deck } from '../types'
 import { renderDeckSlides } from '../render/renderDeck'
 import { customThemeStyleAttr } from '../render/customTheme'
 import { TARGETS } from '../render/fit'
-import { deckIsCjk } from '../lib/lang'
+import { deckIsChinese } from '../lib/lang'
 import { escapeHtml } from '../lib/markdown'
 import { downloadText } from '../lib/backup'
 import themesCss from '../render/themes.css?raw'
@@ -130,7 +130,7 @@ export function standaloneHtml(deck: Deck): string {
   // app's fonts. A custom theme adds its derived palette as inline vars.
   const customStyle = deck.customTheme ? ` style="${escapeHtml(customThemeStyleAttr(deck.customTheme))}"` : ''
   // Document language and the nav buttons' accessible names follow the deck.
-  const cjk = deckIsCjk(deck)
+  const cjk = deckIsChinese(deck)
   const prevLabel = cjk ? '上一页' : 'Previous'
   const nextLabel = cjk ? '下一页' : 'Next'
   return `<!doctype html>

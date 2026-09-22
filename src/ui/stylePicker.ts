@@ -135,7 +135,7 @@ export function openStylePicker(
       // shows against the base still makes weak rules, bars and gradients.
       const worst = Math.min(contrastRatio(ct.bg, ct.accent), contrastRatio(ct.bg, ct.accent2))
       warn.hidden = worst >= 3
-      if (!warn.hidden) warn.textContent = t('style.lowContrast').replace('{r}', worst.toFixed(1))
+      if (!warn.hidden) warn.textContent = t('style.lowContrast', { r: worst.toFixed(1) })
     }
     repaint()
     card.querySelectorAll('input').forEach((el) => el.addEventListener('input', repaint))
@@ -163,7 +163,7 @@ export function openStylePicker(
       // now always visible on touch, so a stray tap is a real risk).
       const id = del.dataset.del!
       const name = loadStyles().find((s) => s.id === id)?.name ?? ''
-      if (!confirm(t('style.deleteConfirm').replace('{name}', name))) return
+      if (!confirm(t('style.deleteConfirm', { name: name }))) return
       removeStyle(id)
       render()
       return

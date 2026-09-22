@@ -13,6 +13,7 @@
 import type { DeckSpec, Slide } from '../types'
 import { LAYOUTS } from '../types'
 import { t } from '../i18n'
+import { deckText, isChineseText } from '../lib/lang'
 
 const NS_A = 'http://schemas.openxmlformats.org/drawingml/2006/main'
 const NS_P = 'http://schemas.openxmlformats.org/presentationml/2006/main'
@@ -377,6 +378,7 @@ export async function importPptx(data: ArrayBuffer, fileName: string): Promise<I
   if (!paths.length) throw new Error(t('imp.notPptx'))
 
   const slides: Array<Partial<Slide> & { layout: string }> = []
+  const untitled: number[] = []
   let skippedVisuals = 0
   for (let i = 0; i < paths.length; i++) {
     const doc = await parseXml(zip, paths[i])
@@ -385,13 +387,16 @@ export async function importPptx(data: ArrayBuffer, fileName: string): Promise<I
     skippedVisuals += visuals
     const note = await notesFor(zip, paths[i])
     // Fully empty pages (pure imagery) still become an editable placeholder.
-    slides.push(
-      shapes.length
-        ? toSlide(shapes, note, i, paths.length)
-        : { layout: 'bullets', title: `${t('imp.untitledPage')} ${i + 1}`, bullets: [], note: note || undefined },
-    )
+    if (shapes.length) slides.push(toSlide(shapes, note, i, paths.length))
+    else {
+      untitled.push(slides.length)
+      slides.push({ layout: 'bullets', title: '', bullets: [], note: note || undefined })
+    }
   }
   if (!slides.length) throw new Error(t('imp.noSlides'))
+  // Placeholder titles follow the FILE's language (the UI's used to leak in).
+  const zh = isChineseText(slides.map((s) => s.title).join('\n'))
+  for (const i of untitled) slides[i].title = `${deckText(zh, 'untitledPage')} ${i + 1}`
 
   const coverTitle = slides[0]?.title
   return {

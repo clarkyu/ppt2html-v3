@@ -1,7 +1,7 @@
 import type { Deck, Branding } from '../types'
 import { renderSlideInner, slideBgHtml, slideCreditHtml } from './layouts'
 import { escapeHtml, mdPlain } from '../lib/markdown'
-import { deckIsCjk } from '../lib/lang'
+import { deckIsChinese, deckText } from '../lib/lang'
 
 function validLogo(u?: string): string {
   const s = (u ?? '').trim()
@@ -27,7 +27,8 @@ export function renderDeckSlides(deck: Deck): string {
   let sectionTitle = ''
   // Baked-in labels follow the deck's language (an English deck must not get
   // a Chinese "环节" corner label).
-  const partWord = deckIsCjk(deck) ? '环节' : 'Part'
+  const zh = deckIsChinese(deck)
+  const partWord = deckText(zh, 'part')
 
   const logo = validLogo(deck.branding?.logo)
   const logoHtml = logo ? `<img class="deck-slide__logo" src="${escapeHtml(logo)}" alt="">` : ''
@@ -80,7 +81,7 @@ export function renderDeckSlides(deck: Deck): string {
         `<section data-layout="${escapeHtml(slide.layout)}" class="deck-slide"${transition}>` +
         slideBgHtml(slide) +
         ghostHtml +
-        renderSlideInner(slide) +
+        renderSlideInner(slide, { zh }) +
         logoHtml +
         sectionHtml +
         pageHtml +

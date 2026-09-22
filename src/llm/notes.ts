@@ -12,7 +12,7 @@ import type { LlmSettings } from './settings'
 import { streamText } from './client'
 import { extractJson } from './extractJson'
 import { LlmError, backoff, isAbort } from './errors'
-import { deckIsCjk } from '../lib/lang'
+import { deckIsChinese } from '../lib/lang'
 import { sliceMaterial, SLICE_THRESHOLD } from '../lib/materialSlice'
 import { fencedMaterial, MATERIAL_RULE } from './prompt'
 import { t } from '../i18n'
@@ -84,7 +84,7 @@ function batchPrompt(deck: Deck, pages: number[]): string {
   const overview = deck.slides.map((s, i) => slideBrief(s, i)).join('\n')
   const picked = pages.filter((p) => deck.slides[p - 1])
   const details = picked.map((p) => slideDigest(deck.slides[p - 1], p - 1)).join('\n\n')
-  const lang = deckIsCjk(deck) ? '中文' : 'English'
+  const lang = deckIsChinese(deck) ? '中文' : 'English'
   // Generation material rides along so scripts can quote real facts the
   // slides had no room for. Long material is sliced to this batch's pages.
   let materialBlock = ''

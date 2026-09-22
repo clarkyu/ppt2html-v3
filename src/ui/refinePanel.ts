@@ -48,15 +48,13 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
       <h3>${t('refine.title')}</h3>
       ${
         found.length
-          ? `<p class="sharepanel__hint">${t('refine.found')
-              .replace('{n}', String(found.length))
-              .replace('{m}', String(found.reduce((a, f) => a + f.issues.length, 0)))}</p>
+          ? `<p class="sharepanel__hint">${t('refine.found', { n: String(found.length), m: String(found.reduce((a, f) => a + f.issues.length, 0)) })}</p>
              <ol class="refinepanel__list" data-rf-list>${listHtml}</ol>
              <p class="rewritepanel__status" data-rf-status hidden></p>`
           : `<p class="sharepanel__hint">${t('refine.clean')}</p>`
       }
       <div class="sharepanel__actions">
-        ${found.length ? `<button class="btn btn--primary btn--sm" data-rf-go>${t('refine.go').replace('{n}', String(found.length))}</button>` : ''}
+        ${found.length ? `<button class="btn btn--primary btn--sm" data-rf-go>${t('refine.go', { n: String(found.length) })}</button>` : ''}
         <button class="btn btn--sm" data-rf-undo hidden>${t('refine.undoAll')}</button>
         <button class="btn btn--sm" data-rf-close>${found.length ? t('common.cancel') : t('common.gotIt')}</button>
       </div>
@@ -102,9 +100,7 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
     const halted = (): boolean => signal.aborted || !wrap.isConnected
     for (const f of found) {
       if (halted()) break
-      status.textContent = t('refine.busy')
-        .replace('{i}', String(done + skipped + 1))
-        .replace('{n}', String(found.length))
+      status.textContent = t('refine.busy', { i: String(done + skipped + 1), n: String(found.length) })
       try {
         const next = await regenerateSlide(deck, f.index, refineInstruction(deck, f.issues), settings, signal)
         if (halted()) break
@@ -118,8 +114,8 @@ export function openRefinePanel(host: HTMLElement, deck: Deck, hooks: RefineHook
     running = false
     if (!wrap.isConnected) return
     status.textContent = signal.aborted
-      ? t('refine.aborted').replace('{k}', String(done))
-      : t('refine.done').replace('{x}', String(done)).replace('{y}', String(skipped))
+      ? t('refine.aborted', { k: String(done) })
+      : t('refine.done', { x: String(done), y: String(skipped) })
     goBtn.hidden = true
     undoBtn.hidden = done === 0
     closeBtn.textContent = t('common.gotIt')

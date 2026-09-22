@@ -3,6 +3,7 @@ import type { LlmSettings } from './settings'
 import { requestText } from './client'
 import { extractJson } from './extractJson'
 import { getLang } from '../i18n'
+import { hasHan } from '../lib/lang'
 import { fencedMaterial, MATERIAL_RULE } from './prompt'
 
 const CLARIFY_SYSTEM = `你是课件需求分析助手。用户给出一个较粗略的主题，你只提出 **1~2 个最关键**的问题——问那些最能改变课件方向、缺了就没法动笔的点，其余一律不问。
@@ -34,8 +35,11 @@ function buildClarifyUser(topic: string, opts: GenerateOptions): string {
  * Instant, generic fallback questions shown while the AI-tailored ones load
  * (or if that call is slow / fails). Keeps the guided step feeling immediate.
  */
-export function defaultQuestions(): ClarifyQuestion[] {
-  if (getLang() === 'en') {
+/** `topic` picks the language (the AI set follows the topic too); without one
+ * the UI language decides. */
+export function defaultQuestions(topic?: string): ClarifyQuestion[] {
+  const zh = topic?.trim() ? hasHan(topic) : getLang() === 'zh'
+  if (!zh) {
     return [
       { question: 'Who is this deck mainly for?', options: ['Complete beginners', 'Some background', 'Advanced / pro', 'Managers / decision-makers'] },
       { question: 'What should the deck focus on?', options: ['Explaining concepts', 'Hands-on steps', 'Case studies', 'Making an argument'] },

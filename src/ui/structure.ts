@@ -58,7 +58,7 @@ export function startStructure(topic: string, opts: GenerateOptions): void {
       <div class="gen" style="padding:8px">
         <div class="gen__spinner"></div>
         <h2>${t('struct.loading')}</h2>
-        <p>「${escapeHtml(trimmed)}」</p>
+        <p>${t('common.quoted', { s: escapeHtml(trimmed) })}</p>
         <ol class="gen-live" data-live role="status" aria-live="polite"><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
         <div class="gen__actions"><button class="btn btn--ghost" data-cancel>${t('common.cancel')}</button></div>
       </div>`
@@ -280,7 +280,7 @@ function wireEditor(
     const v = Number(input.value)
     if (Number.isFinite(v) && v > MAX_PART_PAGES) {
       input.value = String(MAX_PART_PAGES)
-      toast(t('struct.pagesClamped').replace('{max}', String(MAX_PART_PAGES)))
+      toast(t('struct.pagesClamped', { max: String(MAX_PART_PAGES) }))
       recalc()
     }
   })

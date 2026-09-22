@@ -15,7 +15,7 @@ import { extractJson } from './extractJson'
 import { LlmError, backoff, isAbort } from './errors'
 import { DECK_SCHEMA_GUIDE, contextBlock } from './prompt'
 import { slidesForMinutes } from '../lib/duration'
-import { deckIsCjk } from '../lib/lang'
+import { deckIsChinese, deckText, fallbackSections, hasHan } from '../lib/lang'
 import { sliceMaterial, SLICE_THRESHOLD } from '../lib/materialSlice'
 
 const LAYOUT_SET = new Set<string>(LAYOUTS)
@@ -162,7 +162,7 @@ function normalizeStructure(raw: unknown, topic: string, opts: GenerateOptions, 
     if (sections.length >= 8) break
   }
   if (!sections.length) {
-    sections.push({ title: '背景与概念' }, { title: '核心内容' }, { title: '应用与小结' })
+    for (const title of fallbackSections(hasHan(topic))) sections.push({ title })
     weights.push(1, 1, 1)
   }
 
@@ -306,7 +306,7 @@ export function normalizeOutline(raw: unknown, topic: string, themeHint?: ThemeN
     slides.unshift({ layout: 'cover', title })
   }
   if (!slides.length || slides[slides.length - 1].layout !== 'end') {
-    slides.push({ layout: 'end', title: deckIsCjk({ title, slides }) ? '谢谢观看' : 'Thank You' })
+    slides.push({ layout: 'end', title: deckText(deckIsChinese({ title, slides }), 'thanks') })
   }
 
   return {

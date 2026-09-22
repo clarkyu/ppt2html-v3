@@ -4,13 +4,13 @@
 // hash-fragment share URL never reaches a server, so a static host can't give
 // it a rich link preview — the card IS the preview, and the QR rides along.
 //
-// Baked-in captions follow the deck's language (deckIsCjk), not the UI locale,
+// Baked-in captions follow the deck's language (deckIsChinese), not the UI locale,
 // same as the rendered slides.
 
 import type { Deck } from '../types'
 import { themePalette, type Pal } from '../images/abstract'
 import { customAbstractPalette } from '../render/customTheme'
-import { deckIsCjk } from './lang'
+import { deckIsChinese } from './lang'
 
 const W = 1080
 const H = 1440
@@ -148,7 +148,7 @@ export async function buildShareCard(deck: Deck, url: string): Promise<Blob> {
   if (!ctx) throw new Error('no canvas 2d context')
 
   const p: Pal = deck.customTheme ? customAbstractPalette(deck.customTheme) : themePalette(deck.theme)
-  const cjk = deckIsCjk(deck)
+  const cjk = deckIsChinese(deck)
   const fg = p.light ? '#1a1a22' : '#ffffff'
   const mutedBase = p.light ? '#000000' : '#ffffff'
   const title = stripMd(deck.title || (cjk ? '未命名课件' : 'Untitled deck'))

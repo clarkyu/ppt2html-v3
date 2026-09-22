@@ -6,7 +6,7 @@
 
 import type { Deck, Slide } from '../types'
 import type { PlayerHandle } from './player'
-import { deckIsCjk, hasCjk } from '../lib/lang'
+import { deckIsChinese, hasCjk } from '../lib/lang'
 
 export interface NarratorHandle {
   stop: () => void
@@ -64,7 +64,7 @@ export function startNarration(deck: Deck, player: PlayerHandle, hooks: NarrateH
   const synth = window.speechSynthesis
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return null
 
-  const cjk = deckIsCjk(deck)
+  const cjk = deckIsChinese(deck)
   const total = deck.slides.length
   let live = true
   let seq = 0

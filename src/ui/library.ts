@@ -5,7 +5,7 @@ import { mountThumb } from '../render/preview'
 import { formatDate } from '../lib/dom'
 import { escapeHtml } from '../lib/markdown'
 import { toast } from '../lib/toast'
-import { t } from '../i18n'
+import { t, tn, pages } from '../i18n'
 import { dialogize } from '../lib/overlay'
 import { buildBackup, backupFilename, downloadText, parseBackupFile, restoreDecks } from '../lib/backup'
 import type { Deck } from '../types'
@@ -40,7 +40,7 @@ function offerRestyle(host: HTMLElement, deck: Deck): void {
   wrap.className = 'sharepanel sharepanel--fixed'
   wrap.innerHTML = `
     <div class="sharepanel__card">
-      <h3>${t('imp.doneTitle').replace('{n}', String(deck.slides.length))}</h3>
+      <h3>${tn('imp.doneTitle', deck.slides.length)}</h3>
       <p class="sharepanel__hint">${t('imp.choiceHint')}</p>
       <div class="sharepanel__actions">
         <button class="btn btn--primary btn--sm" data-imp-rebuild>${icons.deckMagic} ${t('imp.rebuild')}</button>
@@ -118,7 +118,7 @@ export function renderLibrary(view: HTMLElement): () => void {
     }
     const backup = await buildBackup(Date.now())
     downloadText(backupFilename(Date.now()), JSON.stringify(backup, null, 2))
-    toast(t('lib.backupDone').replace('{n}', String(backup.decks.length)))
+    toast(tn('lib.backupDone', backup.decks.length))
   })
   view.querySelector('[data-restore]')!.addEventListener('click', () => restoreFileEl.click())
 
@@ -141,8 +141,8 @@ export function renderLibrary(view: HTMLElement): () => void {
       const deck = normalizeDeck(spec, { prompt: '', id: crypto.randomUUID() })
       await saveDeck(deck)
       toast(
-        t('imp.done').replace('{n}', String(deck.slides.length)) +
-          (spec.skippedVisuals ? ` ${t('imp.skippedVisuals').replace('{n}', String(spec.skippedVisuals))}` : ''),
+        t('imp.done', { n: String(deck.slides.length) }) +
+          (spec.skippedVisuals ? ` ${t('imp.skippedVisuals', { n: String(spec.skippedVisuals) })}` : ''),
       )
       // The deck is saved either way; the follow-up choice belongs to the
       // library screen only.
@@ -166,7 +166,7 @@ export function renderLibrary(view: HTMLElement): () => void {
         return !!cur && cur.updatedAt > d.updatedAt
       })
       let skipped = 0
-      if (newer.length && !confirm(t('lib.restoreOverwrite').replace('{n}', String(newer.length)))) {
+      if (newer.length && !confirm(t('lib.restoreOverwrite', { n: String(newer.length) }))) {
         const ids = new Set(newer.map((d) => d.id))
         decks = decks.filter((d) => !ids.has(d.id))
         skipped = newer.length
@@ -174,8 +174,8 @@ export function renderLibrary(view: HTMLElement): () => void {
       const n = decks.length ? await restoreDecks(decks) : 0
       toast(
         skipped
-          ? t('lib.restoreDoneSkipped').replace('{n}', String(n)).replace('{s}', String(skipped))
-          : t('lib.restoreDone').replace('{n}', String(n)),
+          ? t('lib.restoreDoneSkipped', { n: String(n), s: String(skipped) })
+          : tn('lib.restoreDone', n),
       )
       await reload()
     } catch {
@@ -220,7 +220,7 @@ export function renderLibrary(view: HTMLElement): () => void {
         </a>
         <div class="deck-card__body deck-card__body--foot">
           <div class="deck-card__meta">
-            <span>${deck.slides.length} ${t('unit.pages')} · ${formatDate(deck.createdAt)}</span>
+            <span>${pages(deck.slides.length)} · ${formatDate(deck.createdAt)}</span>
             <div class="deck-card__actions">
               <button class="icon-btn" data-edit title="${t('lib.action.edit')}" aria-label="${t('lib.action.edit')}">${icons.edit}</button>
               <button class="icon-btn" data-rename title="${t('lib.action.rename')}" aria-label="${t('lib.action.rename')}">${icons.rename}</button>
@@ -252,13 +252,13 @@ export function renderLibrary(view: HTMLElement): () => void {
       })
       card.querySelector('[data-copy]')!.addEventListener('click', async (e) => {
         e.stopPropagation()
-        const copy = await duplicateDeck(deck.id)
+        const copy = await duplicateDeck(deck.id, t('lib.copySuffix'))
         toast(copy ? t('lib.copied') : t('lib.copyFailed'))
         await reload()
       })
       card.querySelector('[data-del]')!.addEventListener('click', async (e) => {
         e.stopPropagation()
-        if (!confirm(t('lib.deleteConfirm').replace('{title}', deck.title))) return
+        if (!confirm(t('lib.deleteConfirm', { title: deck.title }))) return
         await deleteDeck(deck.id)
         toast(t('lib.deleted'))
         await reload()

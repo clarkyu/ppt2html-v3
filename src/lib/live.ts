@@ -64,5 +64,5 @@ export function renderLive(el: HTMLElement, titles: string[]): void {
 export function renderThinking(el: HTMLElement, chars: number): void {
   const wait = el.querySelector<HTMLElement>('.gen-live__wait')
   if (!wait) return
-  wait.textContent = t('gen.thinking').replace('{n}', String(chars))
+  wait.textContent = t('gen.thinking', { n: String(chars) })
 }

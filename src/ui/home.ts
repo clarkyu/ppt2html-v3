@@ -9,7 +9,7 @@ import { startPageOutline } from './outline'
 import { quickGenerateAndPlay } from './generating'
 import { loadDraft, clearDraft } from '../lib/draft'
 import { durationOptions, slidesForMinutes } from '../lib/duration'
-import { getLang, t } from '../i18n'
+import { getLang, t, pages } from '../i18n'
 import { toast } from '../lib/toast'
 import { MATERIAL_MAX_CHARS } from '../llm/prompt'
 import { clampChars } from '../lib/materialSlice'
@@ -149,7 +149,7 @@ export function renderHome(view: HTMLElement): () => void {
           </select>
         </label>
         <div class="composer__actions">
-          <button class="btn btn--ghost" data-sample>${icons.play} ${t('home.sample')}</button>
+          <button class="btn btn--ghost" data-sample${t('home.sampleZh') ? ` title="${escapeHtml(t('home.sampleZh'))}"` : ''}>${icons.play} ${t('home.sample')}</button>
           <button class="btn btn--ghost" data-templates title="${escapeHtml(t('home.templatesHint'))}">${icons.library} ${t('home.templates')}</button>
           <button class="btn btn--ghost" data-generate title="${escapeHtml(t('home.customHint'))}">${icons.settings} ${t('home.custom')}</button>
           <button class="btn btn--primary" data-quick title="${escapeHtml(t('home.quickHint'))}">${icons.sparkles} ${t('home.quick')}</button>
@@ -343,7 +343,7 @@ export function renderHome(view: HTMLElement): () => void {
     const merged = cur ? `${cur}${sep}${text}` : text
     materialEl.value = clampChars(merged, MATERIAL_MAX_CHARS)
     const truncated = merged.length > MATERIAL_MAX_CHARS
-    if (truncated) toast(t('home.materialTruncated').replace('{n}', String(MATERIAL_MAX_CHARS)))
+    if (truncated) toast(t('home.materialTruncated', { n: String(MATERIAL_MAX_CHARS) }))
     persistComposer()
     materialEl.focus()
     return truncated
@@ -366,7 +366,7 @@ export function renderHome(view: HTMLElement): () => void {
       .then(({ text, decodedAs }) => {
         const truncated = appendMaterial(text)
         if (decodedAs === 'gbk') toast(t('home.materialDecodedGbk'))
-        else if (!truncated) toast(t('home.materialParsed').replace('{n}', String(text.length)))
+        else if (!truncated) toast(t('home.materialParsed', { n: String(text.length) }))
       })
       .catch((err: Error) => toast(err.message || t('home.materialParseFailed')))
       .finally(() => {
@@ -423,7 +423,7 @@ export function renderHome(view: HTMLElement): () => void {
             <div class="thumb"></div>
             <div class="deck-card__body">
               <div class="deck-card__title">${escapeHtml(deck.title)}</div>
-              <div class="deck-card__meta"><span>${deck.slides.length} ${t('unit.pages')} · ${formatDate(deck.createdAt)}</span></div>
+              <div class="deck-card__meta"><span>${pages(deck.slides.length)} · ${formatDate(deck.createdAt)}</span></div>
             </div>
           </a>`
         grid.appendChild(card)

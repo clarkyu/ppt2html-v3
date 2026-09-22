@@ -14,7 +14,7 @@ import { renderDeckSlides } from '../render/renderDeck'
 import { customThemeStyleAttr } from '../render/customTheme'
 import { fitSlide } from '../render/fit'
 import { escapeHtml, mdPlain } from '../lib/markdown'
-import { deckIsCjk } from '../lib/lang'
+import { deckIsChinese } from '../lib/lang'
 import { formatElapsed } from './rehearse'
 import { t } from '../i18n'
 import themesCss from '../render/themes.css?raw'
@@ -99,7 +99,7 @@ export function openPresenter(deck: Deck, player: PlayerHandle): PresenterHandle
   const customStyle = deck.customTheme ? ` style="${escapeHtml(customThemeStyleAttr(deck.customTheme))}"` : ''
   win.document.open()
   win.document.write(
-    `<!doctype html><html lang="${deckIsCjk(deck) ? 'zh-CN' : 'en'}" class="player theme-${escapeHtml(deck.theme)}"${customStyle}><head>` +
+    `<!doctype html><html lang="${deckIsChinese(deck) ? 'zh-CN' : 'en'}" class="player theme-${escapeHtml(deck.theme)}"${customStyle}><head>` +
       `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
       `<title>${title}</title><style>${themesCss}\n${slidesCss}\n${PRES_CSS}</style></head>` +
       `<body>` +

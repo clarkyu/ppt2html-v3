@@ -13,6 +13,7 @@ import { toast } from '../lib/toast'
 import { icons } from '../lib/icons'
 import { escapeHtml } from '../lib/markdown'
 import { t } from '../i18n'
+import { deckIsChinese, deckText } from '../lib/lang'
 import {
   LAYOUTS,
   THEMES,
@@ -383,7 +384,7 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
       return
     }
     if (btn.dataset.addSlide !== undefined) {
-      deck.slides.push({ layout: 'bullets', title: t('ed.newSlide'), bullets: [t('ed.newBullet')] })
+      deck.slides.push({ layout: 'bullets', title: deckText(deckIsChinese(deck), 'newSlide'), bullets: [deckText(deckIsChinese(deck), 'newBullet')] })
       const list = root.querySelector<HTMLElement>('[data-list]')!
       const n = deck.slides.length - 1
       list.insertAdjacentHTML('beforeend', renderCard(deck.slides[n], n, deck.slides.length))
@@ -589,13 +590,13 @@ function mountEditor(root: HTMLElement, deck: Deck, cleanups: Array<() => void>,
       setStatus(t('ed.unsaved'))
     } else if (btn.dataset.addItem !== undefined) {
       const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
-      ;(slide.items ??= []).push({ heading: t('ed.newCard'), points: [''] })
+      ;(slide.items ??= []).push({ heading: deckText(deckIsChinese(deck), 'newCard'), points: [''] })
       deck.slides[i] = slide
       replaceCard(card, i)
       setStatus(t('ed.unsaved'))
     } else if (btn.dataset.addStep !== undefined) {
       const slide = collectSlide(card, deck.slides[i].layout, deck.slides[i])
-      ;(slide.steps ??= []).push({ label: t('ed.newStep'), text: '' })
+      ;(slide.steps ??= []).push({ label: deckText(deckIsChinese(deck), 'newStep'), text: '' })
       deck.slides[i] = slide
       replaceCard(card, i)
       setStatus(t('ed.unsaved'))

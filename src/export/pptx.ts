@@ -13,7 +13,7 @@
 // weighs down the main bundle.
 
 import type { CustomTheme, Deck, Slide, ThemeName } from '../types'
-import { deckIsCjk } from '../lib/lang'
+import { deckIsChinese, deckText } from '../lib/lang'
 import { mdPlain, mdPlainKeepBold } from '../lib/markdown'
 import { customPalette } from '../render/customTheme'
 
@@ -186,8 +186,8 @@ export async function exportPptx(deck: Deck): Promise<void> {
   pptx.title = deck.title
 
   const C = deck.customTheme ? paletteFromCustom(deck.customTheme) : (THEME_PPT[deck.theme] ?? THEME_PPT.aurora)
-  const cjk = deckIsCjk(deck)
-  const partWord = cjk ? '环节' : 'Part'
+  const cjk = deckIsChinese(deck)
+  const partWord = deckText(cjk, 'part')
   const serif = deck.customTheme?.serif ?? false
   const font = cjk ? (serif ? 'SimSun' : 'Microsoft YaHei') : serif ? 'Georgia' : 'Calibri'
   const base = { fontFace: font }
@@ -255,7 +255,7 @@ export async function exportPptx(deck: Deck): Promise<void> {
           x: X(700), y: X(230), w: X(520), h: X(430), fontSize: 230, bold: true, align: 'right',
           color: blend(C.accent, C.bg, 0.22),
         })
-        text(plain(slide.eyebrow) || (cjk ? '章节' : 'Chapter'), { x: X(92), y: X(255), w: X(700), h: X(34), fontSize: 14, bold: true, color: C.accent }, slide.eyebrow ? 'eyebrow' : 'chrome')
+        text(plain(slide.eyebrow) || deckText(cjk, 'chapter'), { x: X(92), y: X(255), w: X(700), h: X(34), fontSize: 14, bold: true, color: C.accent }, slide.eyebrow ? 'eyebrow' : 'chrome')
         text(plain(slide.title), { x: X(92), y: X(300), w: X(1000), h: X(130), fontSize: 48, bold: true, color: C.strong }, 'title')
         if (slide.subtitle) text(runs(slide.subtitle, { fontSize: 22, color: C.muted }, C.accent2), { x: X(92), y: X(445), w: X(900), h: X(70) }, 'subtitle')
         break
@@ -395,7 +395,7 @@ export async function exportPptx(deck: Deck): Promise<void> {
         break
       }
       case 'end': {
-        text(plain(slide.title) || (cjk ? '谢谢观看' : 'Thank You'), { x: X(92), y: X(270), w: X(1096), h: X(120), align: 'center', fontSize: 50, bold: true, color: C.strong }, 'title')
+        text(plain(slide.title) || deckText(cjk, 'thanks'), { x: X(92), y: X(270), w: X(1096), h: X(120), align: 'center', fontSize: 50, bold: true, color: C.strong }, 'title')
         if (slide.subtitle) text(runs(slide.subtitle, { fontSize: 22, color: C.muted, align: 'center' }, C.accent2), { x: X(190), y: X(405), w: X(900), h: X(60) }, 'subtitle')
         if (chapterTitles.length >= 2) {
           text(chapterTitles.slice(0, 4).join('   ·   '), { x: X(92), y: X(560), w: X(1096), h: X(36), align: 'center', fontSize: 13, color: C.muted })

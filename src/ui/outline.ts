@@ -9,7 +9,8 @@ import { escapeHtml } from '../lib/markdown'
 import { liveTitles, renderLive, renderThinking } from '../lib/live'
 import { saveDraft } from '../lib/draft'
 import { openOverlay } from '../lib/overlay'
-import { t } from '../i18n'
+import { t, pages } from '../i18n'
+import { deckText, hasHan } from '../lib/lang'
 import {
   LAYOUTS,
   type GenerateOptions,
@@ -210,7 +211,9 @@ export function startPageOutline(
   const coverSlides = (): OutlineSlide[] => [
     { layout: 'cover', title: structure.title, brief: structure.subtitle },
   ]
-  const endSlides = (): OutlineSlide[] => [{ layout: 'end', title: t('deck.thanks') }]
+  // Deck-content strings follow the deck's language, never the UI's.
+  const deckZh = (): boolean => hasHan(structure.title) || hasHan(trimmed)
+  const endSlides = (): OutlineSlide[] => [{ layout: 'end', title: deckText(deckZh(), 'thanks') }]
 
   /* ----------------------------- streaming a part ----------------------------- */
 
@@ -250,9 +253,9 @@ export function startPageOutline(
   const showStreaming = (i: number, partTitle: string, pages: number) => {
     body.innerHTML = `
       <div class="wizard__head">
-        <div class="wizard__crumb">${t('outline.crumb').replace('{i}', String(i + 1)).replace('{n}', String(stepCount()))}</div>
-        <h2>${t('outline.detailing').replace('{title}', escapeHtml(partTitle))}</h2>
-        <p>${t('outline.detailingSub').replace('{pages}', String(pages))}</p>
+        <div class="wizard__crumb">${t('outline.crumb', { i: String(i + 1), n: String(stepCount()) })}</div>
+        <h2>${t('outline.detailing', { title: escapeHtml(partTitle) })}</h2>
+        <p>${t('outline.detailingSub', { pages: String(pages) })}</p>
       </div>
       <ol class="gen-live" data-live role="status" aria-live="polite"><li class="gen-live__wait">${t('gen.connecting')}</li></ol>
       <div class="outline__actions">
@@ -317,13 +320,13 @@ export function startPageOutline(
 
   const stepMeta = (i: number): { title: string; sub: string; canRegen: boolean } => {
     const step = steps[i]
-    const nth = t('outline.stepNth').replace('{i}', String(i + 1)).replace('{n}', String(stepCount()))
+    const nth = t('outline.stepNth', { i: String(i + 1), n: String(stepCount()) })
     if (step.kind === 'cover') return { title: t('outline.coverTitle'), sub: `${t('outline.coverSub')} · ${nth}`, canRegen: false }
     if (step.kind === 'end') return { title: t('outline.endTitle'), sub: `${t('outline.endSub')} · ${nth}`, canRegen: false }
     const sec = structure.sections[step.index]
     return {
-      title: t('outline.partN').replace('{n}', String(step.index + 1)).replace('{title}', sec.title),
-      sub: `${t('outline.partSub').replace('{pages}', String(sec.pages ?? 3))} · ${nth}`,
+      title: t('outline.partN', { n: String(step.index + 1), title: sec.title }),
+      sub: `${t('outline.partSub', { pages: String(sec.pages ?? 3) })} · ${nth}`,
       canRegen: true,
     }
   }
@@ -333,7 +336,7 @@ export function startPageOutline(
     const last = i === steps.length - 1
     body.innerHTML = `
       <div class="wizard__head">
-        <div class="wizard__crumb">${t('outline.crumb').replace('{i}', String(i + 1)).replace('{n}', String(stepCount()))}</div>
+        <div class="wizard__crumb">${t('outline.crumb', { i: String(i + 1), n: String(stepCount()) })}</div>
         <h2>${escapeHtml(meta.title)}</h2>
         <p>${escapeHtml(meta.sub)}</p>
       </div>
@@ -382,7 +385,7 @@ export function startPageOutline(
   const groupLabel = (step: Step): string => {
     if (step.kind === 'cover') return t('layout.cover')
     if (step.kind === 'end') return t('outline.endTitle')
-    return t('outline.partN').replace('{n}', String(step.index + 1)).replace('{title}', structure.sections[step.index].title)
+    return t('outline.partN', { n: String(step.index + 1), title: structure.sections[step.index].title })
   }
 
   // The overview's deck title / subtitle / theme live in `structure` once
@@ -433,9 +436,9 @@ export function startPageOutline(
       },
       onAddPart: () => {
         syncOverviewIntoResults()
-        structure.sections.push({ title: t('struct.newPart'), pages: 3 })
+        structure.sections.push({ title: deckText(deckZh(), 'newPart'), pages: 3 })
         // Insert the new part's pages just before the 结束 group.
-        results.splice(Math.max(1, results.length - 1), 0, [{ layout: 'section', title: t('struct.newPart') }])
+        results.splice(Math.max(1, results.length - 1), 0, [{ layout: 'section', title: deckText(deckZh(), 'newPart') }])
         steps = buildSteps()
         persist()
         showOverview()
@@ -524,7 +527,7 @@ function renderOverview(structure: Structure, title: string, groups: OvGroup[]):
         <div class="ov-group__head">
           <button class="icon-btn ov-group__fold" data-fold title="${escapeHtml(t('outline.foldTitle'))}" aria-label="${escapeHtml(t('outline.foldTitle'))}">${icons.down}</button>
           <span class="ov-group__label">${escapeHtml(g.label)}</span>
-          <span class="ov-group__count">${g.slides.length} ${t('unit.pages')}</span>
+          <span class="ov-group__count">${pages(g.slides.length)}</span>
           <button class="btn btn--ghost btn--sm ov-group__goto" data-goto="${i}">${icons.edit} ${t('outline.goEdit')}</button>
           ${g.kind === 'part' ? `<button class="icon-btn ov-group__del" data-del-group title="${escapeHtml(t('outline.delPart'))}" aria-label="${escapeHtml(t('outline.delPart'))}">${icons.trash}</button>` : ''}
         </div>
@@ -621,7 +624,7 @@ function wireOverview(
         if (down) down.disabled = i === rows.length - 1
       })
       const c = group.querySelector<HTMLElement>('.ov-group__count')
-      if (c) c.textContent = `${rows.length} ${t('unit.pages')}`
+      if (c) c.textContent = pages(rows.length)
     })
     const total = body.querySelector<HTMLElement>('[data-count]')
     if (total) total.textContent = String(idx)

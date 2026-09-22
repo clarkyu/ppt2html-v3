@@ -54,7 +54,7 @@ export function generateAndPlay(
     `
     <div class="gen card gen--film" style="padding:28px">
       <h2>${t('gen.title')}</h2>
-      <p data-progress role="status" aria-live="polite">${t('gen.subtitle').replace('{topic}', escapeHtml(trimmed)).replace('{n}', String(total))}</p>
+      <p data-progress role="status" aria-live="polite">${t('gen.subtitle', { topic: escapeHtml(trimmed), n: String(total) })}</p>
       <div class="gen-film" data-film>
         ${outline.slides
           .map(
@@ -106,9 +106,7 @@ export function generateAndPlay(
   el.querySelector('[data-cancel]')!.addEventListener('click', dismiss)
 
   const setProgress = () => {
-    progressEl.textContent = t('gen.pageProgress')
-      .replace('{x}', String(revealed))
-      .replace('{n}', String(total))
+    progressEl.textContent = t('gen.pageProgress', { x: String(revealed), n: String(total) })
   }
 
   /** Pop slide `index`'s thumbnail into the wall (idempotent per cell). */
@@ -176,7 +174,7 @@ export function generateAndPlay(
   const showError = (segIdx: number, msg: string) => {
     errEl.hidden = false
     errEl.innerHTML = `
-      <h2 class="gen__error" role="alert">${t('gen.segmentFailed').replace('{i}', String(segIdx + 1))}</h2>
+      <h2 class="gen__error" role="alert">${t('gen.segmentFailed', { i: String(segIdx + 1) })}</h2>
       <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>`
     actionsEl.innerHTML = `
       <button class="btn btn--ghost" data-back>${t('gen.backToOutline')}</button>
@@ -272,7 +270,7 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
     `
     <div class="gen card gen--film" style="padding:28px">
       <h2>${t('gen.title')}</h2>
-      <p data-progress role="status" aria-live="polite">${t('gen.quickNote').replace('{topic}', escapeHtml(trimmed))}</p>
+      <p data-progress role="status" aria-live="polite">${t('gen.quickNote', { topic: escapeHtml(trimmed) })}</p>
       <div class="gen-film" data-film></div>
       <div data-err hidden></div>
       <div class="gen__actions" data-actions>
@@ -317,7 +315,7 @@ export function quickGenerateAndPlay(topic: string, opts: GenerateOptions): void
     }
     cellCleanups.get(index)?.()
     cellCleanups.set(index, mountSlidePreview(cell.querySelector<HTMLElement>('[data-mount]')!, theme, norm))
-    progressEl.textContent = t('gen.pageCount').replace('{x}', String(index + 1))
+    progressEl.textContent = t('gen.pageCount', { x: String(index + 1) })
     cell.scrollIntoView({ block: 'nearest' })
   }
 

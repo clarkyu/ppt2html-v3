@@ -42,7 +42,7 @@ export function renderSettings(view: HTMLElement): () => void {
     <div class="form">
       ${
         hasSystemKey
-          ? `<div class="notice notice--ok">${t('settings.systemNotice').replace('{model}', escapeHtml(SYSTEM_DEEPSEEK.model))}</div>`
+          ? `<div class="notice notice--ok">${t('settings.systemNotice', { model: escapeHtml(SYSTEM_DEEPSEEK.model) })}</div>`
           : ''
       }
       <div class="form-group">
@@ -267,7 +267,7 @@ export function renderSettings(view: HTMLElement): () => void {
     state[p.provider].model = p.models[0]
     customModel = false
     paint()
-    toast(t('settings.switchedTo').replace('{label}', p.label))
+    toast(t('settings.switchedTo', { label: p.label }))
   })
 
   baseEl.addEventListener('input', () => {

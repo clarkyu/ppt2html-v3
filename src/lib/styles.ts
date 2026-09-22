@@ -3,6 +3,7 @@
 // `customTheme` (which is a snapshot copied in when applied).
 
 import type { CustomTheme } from '../types'
+import { t } from '../i18n'
 import { sanitizeCustomTheme } from '../render/customTheme'
 
 const KEY = 'ppt2html.styles.v1'
@@ -40,7 +41,7 @@ function persist(list: SavedStyle[]): void {
 }
 
 export function addStyle(name: string, theme: CustomTheme): SavedStyle {
-  const style: SavedStyle = { id: crypto.randomUUID(), name: name.trim() || '我的风格', theme }
+  const style: SavedStyle = { id: crypto.randomUUID(), name: name.trim() || t('style.defaultName'), theme }
   persist([...loadStyles(), style])
   return style
 }

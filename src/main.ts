@@ -28,6 +28,10 @@ app.innerHTML = `<header class="appbar" id="appbar"></header><main class="view" 
 const appbar = document.getElementById('appbar')!
 
 function renderAppbar(route?: Route): void {
+  // Tab title, description and app-bar text all follow the UI language (the
+  // tab used to stay Chinese after switching to English).
+  document.title = t('app.title')
+  document.querySelector('meta[name="description"]')?.setAttribute('content', t('app.description'))
   appbar.innerHTML = `
     <a class="brand" href="#/">
       <span class="brand__logo">${icons.play}</span>

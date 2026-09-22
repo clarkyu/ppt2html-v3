@@ -53,6 +53,11 @@ interface Entry {
 const DICT: Record<string, Entry> = {
   // App shell / nav
   'app.name': { zh: '课件生成器', en: 'Deck Maker' },
+  'app.title': { zh: '课件生成器 · 一句话变精美 PPT', en: 'Deck Maker · One line to a polished deck' },
+  'app.description': { zh: '输入一句话，AI 生成精美 HTML 课件，浏览器里像 PPT 一样播放。', en: 'Type one line and AI builds a polished HTML deck that plays like PowerPoint in the browser.' },
+  'common.detail': { zh: '（{d}）', en: ' ({d})' },
+  'common.quoted': { zh: '「{s}」', en: '“{s}”' },
+  'common.colon': { zh: '：', en: ': ' },
   'nav.home': { zh: '首页', en: 'Home' },
   'nav.library': { zh: '我的课件', en: 'My Decks' },
   'nav.settings': { zh: '设置', en: 'Settings' },
@@ -61,7 +66,6 @@ const DICT: Record<string, Entry> = {
 
   // Common
   'common.cancel': { zh: '取消', en: 'Cancel' },
-  'common.confirm': { zh: '确定', en: 'OK' },
   'common.back': { zh: '返回', en: 'Back' },
   'common.save': { zh: '保存', en: 'Save' },
   'common.loading': { zh: '加载中…', en: 'Loading…' },
@@ -72,10 +76,10 @@ const DICT: Record<string, Entry> = {
   'common.retry': { zh: '重试', en: 'Retry' },
   'common.next': { zh: '下一步 →', en: 'Next →' },
   'common.prevStep': { zh: '← 上一步', en: '← Back' },
-  'common.skip': { zh: '跳过', en: 'Skip' },
   'common.moveUp': { zh: '上移', en: 'Move up' },
   'common.moveDown': { zh: '下移', en: 'Move down' },
   'unit.pages': { zh: '页', en: 'slides' },
+  'unit.page': { zh: '页', en: 'slide' },
   'unit.min': { zh: '分钟', en: 'min' },
 
   // Structure step
@@ -229,7 +233,6 @@ const DICT: Record<string, Entry> = {
   'home.field.duration': { zh: '分享时长', en: 'Length' },
   'home.field.tone': { zh: '语气', en: 'Tone' },
   'home.sample': { zh: '看示例', en: 'View sample' },
-  'home.generate': { zh: '生成课件', en: 'Generate' },
   'home.examplesLabel': { zh: '试试这些主题：', en: 'Try a topic:' },
   'home.shuffle': { zh: '换一批', en: 'Shuffle' },
   'home.voice': { zh: '语音输入主题（再点一次结束）', en: 'Speak your topic (tap again to stop)' },
@@ -330,7 +333,10 @@ const DICT: Record<string, Entry> = {
   'lib.restoreHint': { zh: '从备份文件恢复课件', en: 'Restore decks from a backup file' },
   'lib.backupEmpty': { zh: '还没有课件可备份', en: 'No decks to back up yet' },
   'lib.backupDone': { zh: '已备份 {n} 份课件', en: 'Backed up {n} decks' },
+  'lib.backupDone.one': { zh: '已备份 1 份课件', en: 'Backed up 1 deck' },
   'lib.restoreDone': { zh: '已恢复 {n} 份课件', en: 'Restored {n} decks' },
+  'lib.restoreDone.one': { zh: '已恢复 1 份课件', en: 'Restored 1 deck' },
+  'lib.copySuffix': { zh: '（副本）', en: ' (copy)' },
   'lib.restoreFailed': { zh: '恢复失败:不是有效的备份文件', en: 'Restore failed: not a valid backup file' },
   'lib.restoreOverwrite': {
     zh: '备份里有 {n} 份课件比你库里的版本更旧，恢复会覆盖你之后的修改。要覆盖吗？（取消 = 跳过这些，只恢复其余的）',
@@ -403,6 +409,7 @@ const DICT: Record<string, Entry> = {
   'imp.start': { zh: '正在解析 PPTX…', en: 'Parsing the PPTX…' },
   'imp.done': { zh: '已导入 {n} 页,版式为自动识别——可在编辑器里调整。', en: 'Imported {n} pages (layouts auto-detected) — adjust in the editor.' },
   'imp.doneTitle': { zh: '已导入 {n} 页', en: '{n} slides imported' },
+  'imp.doneTitle.one': { zh: '已导入 1 页', en: '1 slide imported' },
   'imp.skippedVisuals': { zh: '{n} 处图片 / 图表 / 图形只有画面没有文字,未导入。', en: '{n} picture(s)/chart(s) had no text and were not imported.' },
   'imp.choiceHint': {
     zh: '直接编辑保持原样；「AI 重构」会把这份课件的内容与结构作为素材，重新生成一份更精炼、版式更合理的新课件（原导入件保留在课件库，不受影响）。',
@@ -413,7 +420,6 @@ const DICT: Record<string, Entry> = {
   'imp.failed': { zh: 'PPTX 导入失败,请确认文件完好。', en: 'PPTX import failed — please check the file.' },
   'imp.notPptx': { zh: '这不是有效的 .pptx 文件。', en: 'Not a valid .pptx file.' },
   'imp.noSlides': { zh: '文件里没有可导入的页面。', en: 'No importable slides in this file.' },
-  'imp.untitledPage': { zh: '未命名页', en: 'Untitled page' },
   'home.templates': { zh: '从模板开始', en: 'Start from a template' },
   'home.templatesHint': {
     zh: '培训 / 汇报 / 发布 / 课堂等场景骨架，选一个直接改',
@@ -425,6 +431,8 @@ const DICT: Record<string, Entry> = {
     en: 'Each template is a polished scenario structure — page flow, writing prompts and speaking notes included. Pick one and replace the placeholders with your content.',
   },
   'tpl.use': { zh: '用这个模板', en: 'Use template' },
+  'tpl.zhContent': { zh: '', en: 'Chinese-language template: the writing prompts inside are in Chinese.' },
+  'home.sampleZh': { zh: '', en: 'The sample deck is in Chinese' },
   'tpl.created': { zh: '已从「{name}」创建课件，开始编辑吧。', en: 'Deck created from “{name}” — start editing.' },
   'viewer.timerTitle': { zh: '已用时间（点击归零）', en: 'Elapsed time (click to reset)' },
   'viewer.notes': { zh: '演讲者备注', en: 'Speaker notes' },
@@ -471,6 +479,7 @@ const DICT: Record<string, Entry> = {
   },
   'style.applied': { zh: '已换装为「{name}」。', en: 'Restyled to “{name}”.' },
   'style.mine': { zh: '我的风格', en: 'My styles' },
+  'style.defaultName': { zh: '我的风格', en: 'My style' },
   'style.new': { zh: '新建风格', en: 'New style' },
   'style.newTitle': { zh: '自定义一套风格', en: 'Create a custom style' },
   'style.name': { zh: '名称', en: 'Name' },
@@ -555,6 +564,7 @@ const DICT: Record<string, Entry> = {
   'ge.actDrop': { zh: '删除这一页', en: 'Drop this page' },
   'ge.actMove': { zh: '移到第 {to} 页', en: 'Move to position {to}' },
   'ge.addHead': { zh: '{a}之后 · 新增一页', en: 'New page after {a}' },
+  'ge.pageRef': { zh: 'P{n}《{t}》', en: 'P{n} “{t}”' },
   'ge.actRelayout': { zh: '换版式为「{layout}」', en: 'Switch layout to “{layout}”' },
   'ge.ignored': {
     zh: '（另有 {n} 项操作不被允许，已忽略：封面/结束页受保护）',
@@ -648,8 +658,6 @@ const DICT: Record<string, Entry> = {
   'presenter.nextBtn': { zh: '下一页 ›', en: 'Next ›' },
 
   // Deck default text
-  'deck.thanks': { zh: '谢谢观看', en: 'Thank you' },
-  'struct.newPart': { zh: '新部分', en: 'New part' },
 
   // Layout names
   'layout.cover': { zh: '封面', en: 'Cover' },
@@ -840,10 +848,6 @@ const DICT: Record<string, Entry> = {
   'ed.play': { zh: '播放', en: 'Play' },
   'ed.unsaved': { zh: '未保存', en: 'Unsaved' },
   'ed.saved': { zh: '已保存', en: 'Saved' },
-  'ed.newSlide': { zh: '新的一页', en: 'New slide' },
-  'ed.newBullet': { zh: '要点一', en: 'Point one' },
-  'ed.newCard': { zh: '新方案', en: 'New option' },
-  'ed.newStep': { zh: '新步骤', en: 'New step' },
   'ed.writeInstruction': { zh: '先写下想怎么改这一页', en: 'Describe how to change this slide first' },
   'ed.rewriting': { zh: 'AI 重写中…', en: 'Rewriting…' },
   'ed.rewritten': { zh: '已重写这一页', en: 'Slide rewritten' },
@@ -923,14 +927,36 @@ const DICT: Record<string, Entry> = {
   'theme.rose': { zh: '玫瑰', en: 'Rose' },
 }
 
-export function t(key: string): string {
-  const e = DICT[key]
-  if (!e) return key
-  return e[lang]
+/**
+ * Fill `{name}` placeholders with a function replacer: every occurrence, and
+ * the value is inserted verbatim — `String.replace(string, string)` used to
+ * interpret `$&` / `$$` / `$'` inside user or model text ("Save $$ on taxes"
+ * came out as "Save $ on taxes") and a value containing `{n}` got a later
+ * placeholder injected into it. Unknown placeholders stay as they are.
+ */
+export function interpolate(s: string, params: Record<string, unknown>): string {
+  return s.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m))
 }
 
-/** Register more entries (per-screen dictionaries live next to their screens is
- * also fine, but we keep them centralized here). */
-export function addEntries(entries: Record<string, Entry>): void {
-  Object.assign(DICT, entries)
+export function t(key: string, params?: Record<string, unknown>): string {
+  const e = DICT[key]
+  const s = e ? e[lang] : key
+  return params ? interpolate(s, params) : s
+}
+
+/** Count-aware lookup: `key.one` (when present) for exactly one, else `key`;
+ * `{n}` is filled from `n`. English needs the singular, Chinese doesn't. */
+export function tn(key: string, n: number, params: Record<string, unknown> = {}): string {
+  const one = `${key}.one`
+  return t(n === 1 && DICT[one] ? one : key, { n, ...params })
+}
+
+/** "3 slides" / "1 slide" / "3 页". */
+export function pages(n: number): string {
+  return `${n} ${n === 1 ? t('unit.page') : t('unit.pages')}`
+}
+
+/** Every dictionary key — for the i18n check script and tests. */
+export function dictKeys(): string[] {
+  return Object.keys(DICT)
 }
